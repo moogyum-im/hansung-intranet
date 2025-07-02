@@ -1,0 +1,148 @@
+/* src/components/TaskModal.module.css */
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.65); /* 배경 더 어둡게 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050; /* 토스트보다 위에, 사이드바 등보다 위에 */
+    padding: 20px; /* 모바일 화면 고려 */
+}
+
+.modalContent {
+    background-color: white;
+    padding: 25px 30px; /* 패딩 조정 */
+    border-radius: 8px; /* 모서리 둥글게 */
+    width: 100%;
+    max-width: 500px; /* 모달 너비 */
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modalContent h2 {
+    margin-top: 0;
+    margin-bottom: 25px;
+    font-size: 1.5rem; /* 제목 크기 조정 */
+    font-weight: 600;
+    color: #2d3748; /* 글자색 변경 */
+    text-align: center;
+}
+
+.formGroup {
+    margin-bottom: 18px; /* 간격 조정 */
+}
+
+.formGroup label {
+    display: block;
+    margin-bottom: 6px; /* 간격 조정 */
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #4a5568; /* 글자색 변경 */
+}
+.required {
+    color: #e53e3e; /* 빨간색 */
+    margin-left: 3px;
+}
+
+.formGroup input[type="text"],
+.formGroup input[type="date"],
+.formGroup textarea,
+.formGroup select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cbd5e0; /* 테두리색 변경 */
+    border-radius: 6px; /* 모서리 약간 더 둥글게 */
+    font-size: 0.95rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.formGroup input[type="text"]:focus,
+.formGroup input[type="date"]:focus,
+.formGroup textarea:focus,
+.formGroup select:focus {
+    outline: none;
+    border-color: #4299e1; /* 파란색 포커스 */
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+}
+.formGroup textarea {
+    resize: vertical;
+    min-height: 80px; /* 최소 높이 */
+}
+
+/* 날짜 필드 가로 배치용 */
+.dateGroup {
+    display: flex;
+    gap: 15px;
+}
+.dateGroup > .formGroup {
+    flex: 1; /* 공간 동일하게 차지 */
+}
+
+
+.formActions {
+    margin-top: 25px;
+    padding-top: 20px; /* 구분선 효과 */
+    border-top: 1px solid #e2e8f0; /* 연한 구분선 */
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.formActions button {
+    padding: 9px 18px; /* 패딩 조정 */
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 0.9rem; /* 폰트 크기 조정 */
+    cursor: pointer;
+    border: 1px solid transparent; /* 테두리 기본 투명 */
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 90px;
+}
+
+.cancelButton {
+    background-color: #edf2f7; /* 연한 회색 배경 */
+    color: #4a5568;
+    border-color: #e2e8f0; /* 테두리 */
+}
+.cancelButton:hover {
+    background-color: #e2e8f0;
+}
+.cancelButton:disabled {
+    background-color: #f7fafc;
+    color: #a0aec0;
+    border-color: #edf2f7;
+    cursor: not-allowed;
+}
+
+.saveButton {
+    background-color: #4299e1; /* 파란색 계열 */
+    color: white;
+}
+.saveButton:hover {
+    background-color: #2b6cb0;
+}
+.saveButton:disabled {
+    background-color: #90cdf4;
+    cursor: not-allowed;
+}
+
+.buttonSpinner { /* 이전과 동일 */
+    width: 16px; /* 크기 약간 줄임 */
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

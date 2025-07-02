@@ -1,7 +1,17 @@
+// 파일 경로: jsconfig.json (프로젝트 루트 폴더)
 {
   "compilerOptions": {
+    "baseUrl": ".", // 기준 경로
     "paths": {
-      "@/*": ["./src/*"]
-    }
-  }
+      "@/components/*": ["./src/components/*"], // src/components 폴더를 @/components로 매핑
+      "@/lib/*": ["./src/lib/*"],
+      "@/contexts/*": ["./src/contexts/*"],
+      "@/actions/*": ["./src/actions/*"],
+      "@/app/*": ["./src/app/*"] 
+    },
+    // JSX 파일을 처리하기 위해 "jsx" 옵션을 추가하거나 확인합니다.
+    "jsx": "react" // 또는 "react-jsx" (Next.js 12+의 기본값)
+  },
+  "include": ["next-env.d.ts", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"], // .jsx 파일 포함 확인
+  "exclude": ["node_modules"]
 }

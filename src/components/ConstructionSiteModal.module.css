@@ -1,0 +1,126 @@
+/* src/components/ConstructionSiteModal.module.css */
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000; /* 다른 요소 위에 오도록 */
+}
+
+.modalContent {
+    background-color: white;
+    padding: 30px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 550px; /* 모달 최대 너비 */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    max-height: 80vh; /* 모달 최대 높이 */
+    overflow-y: auto; /* 내용 많으면 스크롤 */
+}
+
+.modalContent h2 {
+    margin-top: 0;
+    margin-bottom: 25px;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.formGroup {
+    margin-bottom: 20px;
+}
+
+.formGroup label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #555;
+}
+.required {
+    color: red;
+    margin-left: 2px;
+}
+
+.formGroup input[type="text"],
+.formGroup textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 0.95rem;
+    box-sizing: border-box; /* 패딩 포함한 크기 계산 */
+}
+.formGroup input[type="text"]:focus,
+.formGroup textarea:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0,123,255,.2);
+}
+.formGroup textarea {
+    resize: vertical; /* 세로 크기만 조절 가능 */
+}
+
+.formActions {
+    margin-top: 30px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.formActions button {
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-weight: 500;
+    font-size: 0.95rem;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 100px; /* 버튼 최소 너비 */
+}
+
+.cancelButton {
+    background-color: #6c757d;
+    color: white;
+}
+.cancelButton:hover {
+    background-color: #5a6268;
+}
+.cancelButton:disabled {
+    background-color: #adb5bd;
+    cursor: not-allowed;
+}
+
+
+.saveButton {
+    background-color: #007bff;
+    color: white;
+}
+.saveButton:hover {
+    background-color: #0056b3;
+}
+.saveButton:disabled {
+    background-color: #6caeff;
+    cursor: not-allowed;
+}
+
+.buttonSpinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

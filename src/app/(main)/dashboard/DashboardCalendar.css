@@ -1,0 +1,20 @@
+/* 전체 컨테이너 */
+.dashboard-calendar { width: 100%; background: transparent; border: none; font-family: inherit; }
+/* 상단 네비게이션 (e.g., < 2024년 7월 >) */
+.dashboard-calendar .react-calendar__navigation { display: flex; align-items: center; height: 44px; margin-bottom: 0.5rem; }
+.dashboard-calendar .react-calendar__navigation__label { font-weight: 700; font-size: 1.25rem; }
+.dashboard-calendar .react-calendar__navigation__arrow { font-size: 1.5rem; color: #4b5563; }
+/* 요일 표시 (일, 월, 화...) */
+.dashboard-calendar .react-calendar__month-view__weekdays__weekday abbr { text-decoration: none; font-weight: 600; color: #6b7280; }
+/* 날짜 타일(1, 2, 3...) */
+.dashboard-calendar .react-calendar__tile { display: flex; align-items: center; justify-content: center; height: 44px; border-radius: 9999px; border: none; font-size: 0.9rem; }
+/* 오늘 날짜 */
+.dashboard-calendar .react-calendar__tile--now { background: #eff6ff; font-weight: 700; color: #1d4ed8; }
+.dashboard-calendar .react-calendar__tile--now:hover { background: #dbeafe; }
+/* 선택된 날짜 */
+.dashboard-calendar .react-calendar__tile--active { background: #17482b; color: white; font-weight: 700; }
+.dashboard-calendar .react-calendar__tile--active:hover { background: #113822; }
+/* 마우스 올렸을 때 */
+.dashboard-calendar .react-calendar__tile:enabled:hover { background-color: #f3f4f6; }
+/* 이전/다음 달 날짜 */
+.dashboard-calendar .react-calendar__month-view__days__day--neighboringMonth { color: #d1d5db; }

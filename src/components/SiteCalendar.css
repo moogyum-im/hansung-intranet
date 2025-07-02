@@ -1,0 +1,39 @@
+/* 파일 경로: src/components/SiteCalendar.css */
+
+/* 캘린더의 '오늘' 날짜 타일 기본 스타일 */
+.react-calendar__tile--now {
+  background: #e6f7ff !important; /* 연한 하늘색 배경 */
+  color: #1890ff !important; /* 파란색 텍스트 */
+  font-weight: bold;
+}
+
+/* '오늘' 날짜 타일에 마우스를 올렸을 때 */
+.react-calendar__tile--now:hover {
+  background: #bae7ff !important;
+}
+
+/* '오늘' 날짜가 선택되었을 때 (active) */
+.react-calendar__tile--now:focus,
+.react-calendar__tile--now:active {
+    background: #096dd9 !important; /* 더 진한 파란색 배경 */
+    color: white !important;
+}
+
+/* 캘린더에 일정을 점으로 표시하기 위한 스타일 */
+.schedule-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    right: 0;
+    gap: 3px;
+}
+
+.schedule-dot {
+    width: 5px;
+    height: 5px;
+    background-color: #10b981; /* green-500 */
+    border-radius: 50%;
+}

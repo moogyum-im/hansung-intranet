@@ -1,0 +1,219 @@
+/* src/app/(main)/national-construction-status/NationalConstructionStatusPage.module.css */
+.container {
+    padding: 25px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+                 Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    max-width: 1400px; /* 조금 더 넓게 */
+    margin: 0 auto;
+    background-color: #f8f9fa;
+    min-height: calc(100vh - 60px);
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+}
+
+.pageHeader {
+    margin-bottom: 30px;
+    display: flex;
+    flex-direction: column; /* 제목과 컨트롤을 세로로 배치 */
+    gap: 20px; /* 제목과 컨트롤 사이 간격 */
+}
+
+.pageTitle {
+    font-size: 2.3rem;
+    color: #343a40;
+    font-weight: 700;
+    text-align: left; /* 제목 왼쪽 정렬 */
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.headerControls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.searchInput {
+    flex-grow: 1;
+    padding: 10px 15px; /* 검색창 패딩 */
+    border: 1px solid #ced4da; /* 검색창 테두리 */
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+.searchInput:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.actionButton {
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    border: 1px solid transparent;
+    white-space: nowrap; /* 버튼 내 글자 줄바꿈 방지 */
+}
+
+.refreshButton {
+    background-color: #007bff;
+    color: white;
+}
+.refreshButton:hover {
+    background-color: #0056b3;
+}
+.refreshButton:disabled { /* isLoading일 때의 스타일 */
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+/* 로딩, 에러, 정보 메시지 스타일 */
+.loadingMessage, .infoMessage, .errorMessage {
+    text-align: center;
+    padding: 20px;
+    margin-top: 20px;
+    border-radius: 6px;
+}
+.loadingMessage {
+    color: #495057;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+}
+.spinner {
+    border: 5px solid #e5e7eb;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border-top-color: #007bff;
+    margin-bottom: 15px;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.infoMessage {
+    color: #0c5460;
+    background-color: #d1ecf1;
+    border: 1px solid #bee5eb;
+}
+.errorMessage {
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+}
+
+
+.tableContainer {
+    overflow-x: auto;
+    background-color: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem; /* 테이블 폰트 약간 작게 */
+}
+
+.table th,
+.table td {
+    padding: 10px 12px; /* 셀 패딩 약간 줄임 */
+    border-bottom: 1px solid #e9ecef;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.th {
+    background-color: #f8f9fa; /* 헤더 배경색 변경 */
+    color: #495057;
+    font-weight: 600;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1; /* 스크롤 시 다른 요소 위에 오도록 */
+}
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.sortableHeader {
+    cursor: pointer;
+    user-select: none;
+}
+.sortableHeader:hover {
+    background-color: #e2e6ea;
+}
+.sortIcon, .sortIconPlaceholder {
+    margin-left: 6px; /* 아이콘과 텍스트 간격 */
+    font-size: 0.8em;
+    color: #6c757d;
+    display: inline-block; /* 수직 정렬을 위해 */
+    width: 10px; /* 아이콘 영역 고정 */
+    text-align: center;
+}
+.sortIconPlaceholder {
+    opacity: 0.4;
+}
+
+.td {
+    color: #212529;
+}
+
+.link {
+    color: #007bff;
+    text-decoration: none;
+}
+.link:hover {
+    text-decoration: underline;
+}
+
+.actionsCell {
+    text-align: center !important;
+    white-space: nowrap;
+}
+.actionButtonSmall {
+    padding: 5px 8px; /* 버튼 크기 더 작게 */
+    font-size: 0.75rem; /* 버튼 폰트 크기 더 작게 */
+    border-radius: 4px;
+    border: 1px solid #adb5bd; /* 테두리 색상 연하게 */
+    background-color: transparent; /* 기본 배경 투명 */
+    color: #495057;
+    cursor: pointer;
+    margin-right: 4px;
+    transition: all 0.15s ease;
+}
+.actionButtonSmall:hover {
+    background-color: #f1f3f5; /* 연한 회색 배경 */
+    border-color: #495057;
+}
+.deleteButton { /* 삭제 버튼은 특별히 색상 강조 안 함, 필요시 추가 */
+    /* color: #dc3545; */
+    /* border-color: #dc3545; */
+}
+.deleteButton:hover {
+    /* background-color: #f8d7da; */
+    /* color: #721c24; */
+    /* border-color: #f5c6cb; */
+}
+/* NationalConstructionStatusPage.module.css 에 추가 */
+.addButton {
+    background-color: #28a745; /* 초록색 계열 */
+    color: white;
+}
+.addButton:hover {
+    background-color: #1e7e34;
+}
+.addButton:disabled {
+    background-color: #a3d7b0;
+    cursor: not-allowed;
+
+    
+}
