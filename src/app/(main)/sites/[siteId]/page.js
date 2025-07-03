@@ -2,8 +2,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '@/contexts/EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { useEmployee } from '../../../../contexts/EmployeeContext'; 
+import { supabase } from '../../../../lib/supabase/client';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import DailyReportSection from '@/components/DailyReportSection'; 
@@ -54,7 +54,7 @@ const OverviewTab = ({ site }) => (
 
 export default function SiteDetailPage({ params }) {
     const { siteId } = params;
-    const supabase = createClient();
+ 
     const { employee } = useEmployee();
 
     const [site, setSite] = useState(null);

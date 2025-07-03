@@ -2,14 +2,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '@/contexts/EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { useEmployee } from '../../../contexts/EmployeeContext';
+import { supabase } from '../../../lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import ApprovalItem from '@/components/ApprovalItem'; // 이 컴포넌트가 있는지 다시 확인
+import ApprovalItem from '../../../components/ApprovalItem';
 
 export default function ApprovalsPage() {
-    const supabase = createClient();
+
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
 

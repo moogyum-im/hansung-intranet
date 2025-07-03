@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from 'lib/supabase/client'; // (../ 또는 ../../ 사라짐)
 import { useEmployee } from '@/contexts/EmployeeContext';
 import Link from 'next/link';
 
@@ -18,7 +18,7 @@ const BellIcon = ({ hasUnread }) => (
 );
 
 export default function GlobalNotificationManager() {
-    const supabase = createClient();
+
     const { employee: currentUser } = useEmployee();
     const [notifications, setNotifications] = useState([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);

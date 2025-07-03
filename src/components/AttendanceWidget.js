@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useTransition, useContext } from 'react';
 import { EmployeeContext } from '@/contexts/EmployeeContext';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from'../../lib/supabase/client';
 import { checkInAction, checkOutAction } from '@/actions/attendanceActions';
 import StatusChanger from './StatusChanger';
 

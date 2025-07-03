@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useContext } from 'react';
-import { createClient } from '@/lib/supabaseClient'; 
+import { supabase } from '../lib/supabase/client'; 
 import styles from './ChatWindow.module.css'; 
 import { useEmployee } from '@/contexts/EmployeeContext'; 
 import InvitationModal from './InvitationModal';
@@ -37,7 +37,7 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null); 
     const channelRef = useRef(null);
-    const supabase = createClient(); 
+   
     
     const currentRoomId = serverChatRoom?.id;
     const currentUserId = currentEmployee?.id;

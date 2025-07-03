@@ -2,9 +2,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useContext } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '../lib/supabase/client';
 import styles from './ChatWindow.module.css'; // ★★★ 새로 만든 CSS 파일을 import 합니다 ★★★
-import { EmployeeContext } from '@/contexts/EmployeeContext';
+import { useEmployee } from '../contexts/EmployeeContext';
 import InvitationModal from './InvitationModal';
 
 export default function GroupChatWindow({ chatRoom }) {

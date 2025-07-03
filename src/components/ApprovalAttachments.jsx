@@ -1,10 +1,10 @@
 // 파일 경로: src/components/ApprovalAttachments.jsx
 'use client'; // 이 컴포넌트는 클라이언트 전용입니다.
 
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '../lib/supabase/client';
 
 export default function ApprovalAttachments({ attachments }) {
-    const supabase = createClient();
+
 
     const handleDownload = async (filePath, fileName) => {
         try {

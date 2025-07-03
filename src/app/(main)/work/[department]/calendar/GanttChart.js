@@ -66,7 +66,7 @@ export default function GanttChart({ tasks }) {
             <div className="p-4 overflow-x-auto h-full relative" ref={ganttRef}>
                 {(!tasks || tasks.length === 0) && (
                     <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                        <p>등록된 업무가 없습니다. '업무 등록' 버튼으로 시작하세요.</p>
+                        <p>등록된 업무가 없습니다. &apos;업무 등록&apos; 버튼으로 시작하세요.</p>
                     </div>
                 )}
             </div>

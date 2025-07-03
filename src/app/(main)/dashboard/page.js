@@ -2,10 +2,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '@/contexts/EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { useEmployee } from '../../../contexts/EmployeeContext';
+import { supabase } from 'lib/supabase/client'; // (../../../ 사라짐)
 import Link from 'next/link';
-import MyAttendanceWidget from '@/components/MyAttendanceWidget';
+import MyAttendanceWidget from '../../../components/MyAttendanceWidget';
 import LeaveCalendar from '../mypage/LeaveCalendar'; 
 import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
 
@@ -45,7 +45,7 @@ const KpiCard = ({ title, value, icon, unit }) => (
 
 
 export default function DashboardPage() {
-    const supabase = createClient();
+    
     const { employee: currentUser, loading: employeeLoading } = useEmployee();
     
     const [pendingApprovals, setPendingApprovals] = useState([]);

@@ -2,8 +2,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabaseClient';
-
+// 수정 후 코드
+import { supabase } from 'lib/supabase/client';
+import { useEmployee } from 'contexts/EmployeeContext';
 // 대시보드 위젯 공통 컴포넌트
 const Widget = ({ title, icon, children }) => (
     <div className="bg-white rounded-lg shadow p-6 flex flex-col">
@@ -23,7 +24,7 @@ const ClockIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 
 export default function MyAttendanceWidget({ currentUser }) {
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+
 
   const fetchTodayAttendance = useCallback(async () => {
     if (!currentUser?.id) {

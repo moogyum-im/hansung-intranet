@@ -2,8 +2,8 @@
 'use client'; 
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '@/contexts/EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { useEmployee } from 'contexts/EmployeeContext';
+import { supabase } from 'lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link'; 
 
@@ -117,7 +117,7 @@ function WorkLogItem({ log, onEdit, onDelete, canManageThisLog, isExpanded, onTo
 // 이 페이지 컴포넌트의 실제 내용을 정의하는 함수
 function MyPageContent() { 
     const router = useRouter();
-    const supabase = createClient();
+ 
     const { employee, loading: employeeLoading, isAdmin } = useEmployee();
 
     // --- 업무일지 관련 상태 및 로직 ---

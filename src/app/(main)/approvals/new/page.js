@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'; // ★★★ useRef 추가 ★★★
 import { useEmployee } from '@/contexts/EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { v4 as uuidv4 } from 'uuid';
@@ -41,7 +41,7 @@ const DynamicFormField = ({ field, value, onChange }) => {
 };
 
 export default function NewApprovalPage() {
-    const supabase = createClient();
+  
     const router = useRouter();
     const { employee: currentUser } = useEmployee();
 

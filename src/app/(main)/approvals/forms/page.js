@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '../../../../lib/supabase/client';
 import Link from 'next/link';
 
 // 새 양식 생성/수정 모달
@@ -116,7 +116,7 @@ function FormModal({ isOpen, onClose, onSave, formToEdit }) {
 
 // 메인 양식 관리 페이지
 export default function AllFormsPage() {
-    const supabase = createClient();
+ 
     const [forms, setForms] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);

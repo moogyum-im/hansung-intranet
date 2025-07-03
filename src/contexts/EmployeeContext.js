@@ -2,7 +2,8 @@
 'use client';
 
 import { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import { createClient } from '@/lib/supabaseClient';
+// 수정 후 코드
+import { supabase } from 'lib/supabase/client'; // (../../ 사라짐)
 
 const EmployeeContext = createContext();
 
@@ -10,7 +11,7 @@ export function EmployeeProvider({ children }) {
     const [employee, setEmployee] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
-    const supabase = createClient();
+
 
     const fetchEmployeeProfile = useCallback(async () => {
         const { data: { user } } = await supabase.auth.getUser();

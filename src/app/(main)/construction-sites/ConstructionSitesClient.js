@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '../../../lib/supabase/client';
 import SalesModal from '@/components/SalesModal'; // 1단계에서 분리한 모달을 import 합니다.
 
 // 이 컴포넌트는 서버에서 미리 받아온 initialSites를 props로 받습니다.

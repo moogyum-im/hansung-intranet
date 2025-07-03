@@ -5,13 +5,14 @@ import { useState, useEffect, useCallback } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css'; // react-calendar의 기본 스타일
 import './LeaveCalendar.css'; // 사용자 정의 스타일 (기존 파일)
-import { createClient } from '@/lib/supabaseClient';
+// 수정 후 코드
+import { supabase } from 'lib/supabase/client'; // (../../../ 사라짐)
 
 export default function LeaveCalendar({ currentUser }) {
     const [leaveEvents, setLeaveEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedDate, setSelectedDate] = useState(new Date()); // 달력에서 선택된 날짜
-    const supabase = createClient();
+
 
     const fetchLeaveEvents = useCallback(async () => {
         if (!currentUser?.id) {

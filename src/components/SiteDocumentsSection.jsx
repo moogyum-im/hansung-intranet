@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '../lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -13,7 +13,7 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 
 
 
 export default function SiteDocumentsSection({ siteId }) {
-    const supabase = createClient();
+
     const { employee: currentUser } = useEmployee();
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);

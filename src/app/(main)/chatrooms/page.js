@@ -2,14 +2,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '@/contexts/EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { useEmployee } from 'contexts/EmployeeContext';
+import { supabase } from 'lib/supabase/client';
 import Link from 'next/link';
-import CreateRoomModal from '@/components/CreateRoomModal'; // 채팅방 생성 모달 임포트
+import CreateRoomModal from 'components/CreateRoomModal';
 import { useRouter } from 'next/navigation';
 
 export default function ChatRoomsPage() {
-    const supabase = createClient();
+
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
 

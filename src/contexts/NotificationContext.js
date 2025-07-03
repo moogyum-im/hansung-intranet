@@ -3,7 +3,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useEmployee } from './EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '../../lib/supabase/client';
 import ToastNotification from '@/components/ToastNotification'; // 잠시 후 만들 알림 UI 컴포넌트
 
 const NotificationContext = createContext();

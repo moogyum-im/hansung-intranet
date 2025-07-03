@@ -2,12 +2,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '../lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 
 // ★★★ 누락되었던 InviteMemberModal 컴포넌트 정의를 여기에 추가합니다. ★★★
 function InviteMemberModal({ isOpen, onClose, siteId, currentMembers, onMembersInvited }) {
-    const supabase = createClient();
+
     const [allUsers, setAllUsers] = useState([]);
     const [selectedUsers, setSelectedUsers] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -154,7 +154,7 @@ const MemberActionsDropdown = ({ member, isCurrentUserPM, onRoleChange, onRemove
 
 // 메인 참여자 관리 섹션 컴포넌트
 export default function SiteMembersSection({ siteId }) {
-    const supabase = createClient();
+
     const { employee: currentUser } = useEmployee();
     const [members, setMembers] = useState([]);
     const [loading, setLoading] = useState(true);

@@ -2,15 +2,15 @@
 'use client'; 
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '@/contexts/EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { useEmployee } from '../../../../contexts/EmployeeContext';
+import { supabase } from '../../../../lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import ApprovalAttachments from '@/components/ApprovalAttachments';
+import ApprovalAttachments from '../../../../components/ApprovalAttachments';
 
 export default function ApprovalDetailPage({ params }) {
     const { id: documentId } = params;
-    const supabase = createClient();
+ 
     const router = useRouter();
     const { employee: currentUser } = useEmployee();
 

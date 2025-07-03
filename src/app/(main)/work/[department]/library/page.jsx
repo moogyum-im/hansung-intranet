@@ -2,8 +2,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabaseClient';
-import { useEmployee } from '@/contexts/EmployeeContext';
+import { supabase } from '../../../../../lib/supabase/client'; 
+import { useEmployee } from '../../../../../contexts/EmployeeContext';
 import { useRouter } from 'next/navigation';
 
 // 업로드 모달 컴포넌트
@@ -13,7 +13,7 @@ function UploadModal({ isOpen, onClose, onUploadSuccess, department }) {
     const [file, setFile] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { employee } = useEmployee();
-    const supabase = createClient();
+   
 
     const handleFileChange = (e) => {
         if (e.target.files) {
@@ -112,7 +112,7 @@ export default function DepartmentLibraryPage({ params }) {
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const supabase = createClient();
+   
     const { employee } = useEmployee();
 
     useEffect(() => {

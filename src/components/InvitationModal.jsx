@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '../lib/supabase/client';
 
 export default function InvitationModal({ isOpen, onClose, chatRoom, currentParticipants }) {
     const [allEmployees, setAllEmployees] = useState([]);

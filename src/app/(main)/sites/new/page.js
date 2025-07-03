@@ -3,12 +3,12 @@
 
 import { useState, useEffect } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '../../../../lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function NewSitePageFinal() {
-    const supabase = createClient();
+
     const router = useRouter();
     const { employee } = useEmployee();
 

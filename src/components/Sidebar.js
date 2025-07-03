@@ -3,8 +3,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEmployee } from '@/contexts/EmployeeContext';
-import { createClient } from '@/lib/supabaseClient';
+import { useEmployee } from 'contexts/EmployeeContext'; // (@/contexts/EmployeeContext 에서 수정)
+import { supabase } from 'lib/supabase/client'; // (../../ 사라짐)
 import { useState, useEffect } from 'react';
 
 // SVG 아이콘 컴포넌트들
@@ -33,7 +33,7 @@ const MenuItem = ({ item, isActive }) => (
 export default function Sidebar() {
     const pathname = usePathname();
     const { employee, loading } = useEmployee();
-    const supabase = createClient();
+   
     const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
     const [openMenus, setOpenMenus] = useState({});
 

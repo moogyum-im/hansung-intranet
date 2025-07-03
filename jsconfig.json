@@ -1,17 +1,29 @@
 // 파일 경로: jsconfig.json (프로젝트 루트 폴더)
 {
   "compilerOptions": {
-    "baseUrl": ".", // 기준 경로
+    "baseUrl": "./src", // 모든 'import' 경로의 기준이 src 폴더가 됩니다.
     "paths": {
-      "@/components/*": ["./src/components/*"], // src/components 폴더를 @/components로 매핑
-      "@/lib/*": ["./src/lib/*"],
-      "@/contexts/*": ["./src/contexts/*"],
-      "@/actions/*": ["./src/actions/*"],
-      "@/app/*": ["./src/app/*"] 
+      "@/*": ["*"] // '@/'로 시작하는 경로는 'src/'와 동일하게 매핑됩니다.
     },
-    // JSX 파일을 처리하기 위해 "jsx" 옵션을 추가하거나 확인합니다.
-    "jsx": "react" // 또는 "react-jsx" (Next.js 12+의 기본값)
+    "jsx": "react", // 또는 "react-jsx" (Next.js 12+의 기본값)
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
-  "include": ["next-env.d.ts", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"], // .jsx 파일 포함 확인
+  "include": ["next-env.d.ts", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
 }

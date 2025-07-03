@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '../lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -129,7 +129,7 @@ function ReportModal({ isOpen, onClose, onSave }) {
 
 // 메인 일일 보고 섹션 컴포넌트
 export default function DailyReportSection({ siteId }) {
-    const supabase = createClient();
+
     const { employee: currentUser } = useEmployee();
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -228,7 +228,7 @@ export default function DailyReportSection({ siteId }) {
                 {reports.length === 0 ? (
                     <div className="text-center py-10 text-gray-500">
                         <p>작성된 일일 보고가 없습니다.</p>
-                        <p className="text-sm mt-1">오른쪽 상단의 '새 보고서 작성' 버튼을 눌러 첫 보고서를 작성해보세요.</p>
+                        <p className="text-sm mt-1">오른쪽 상단의 &apos;새 보고서 작성&apos; 버튼을 눌러 첫 보고서를 작성해보세요.</p>
                     </div>
                 ) : (
                     reports.map(report => (

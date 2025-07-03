@@ -1,19 +1,27 @@
 // 파일 경로: src/app/(main)/layout.js
 'use client';
 
+
+
 import { useEffect } from 'react';
-import { createClient } from '@/lib/supabaseClient';
-import { EmployeeProvider, useEmployee } from '@/contexts/EmployeeContext';
+
+
+import { supabase } from 'lib/supabase/client'; // (../../ 사라짐)
+import Sidebar from 'components/Sidebar'; // (혹시 Sidebar import도 있다면 수정)
+// [수정!] ../../contexts/EmployeeContext
+import { EmployeeProvider, useEmployee } from 'contexts/EmployeeContext'; // (../../ 사라짐)
+
 import { usePathname } from 'next/navigation';
-import { Toaster, toast } from 'react-hot-toast'; // react-hot-toast 직접 임포트
+import { Toaster, toast } from 'react-hot-toast';
+import ClientSideOnlyWrapper from 'components/ClientSideOnlyWrapper'; // <--- 이 줄을 추가!
+import GlobalNotificationManager from 'components/GlobalNotificationManager'; // <--- 이 줄도 추가! (아마 이것도 빠져있을 가능성 높음)
 
-import Sidebar from '@/components/Sidebar'; 
-import GlobalNotificationManager from '@/components/GlobalNotificationManager'; 
-import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper'; 
+// ... (rest of the code)
 
+// ... (이하 나머지 코드는 그대로)
 // 레이아웃의 실제 콘텐츠와 로직을 담당하는 내부 컴포넌트
 function LayoutContent({ children }) {
-    const supabase = createClient();
+
     const { employee: currentUser } = useEmployee();
     const pathname = usePathname();
 

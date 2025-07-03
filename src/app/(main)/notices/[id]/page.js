@@ -4,14 +4,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from '../../../../lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 
 export default function NoticeDetailPage({ params }) {
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
+
   const { employee } = useEmployee();
   const noticeId = params.id;
 

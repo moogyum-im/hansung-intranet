@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { createClient } from '@/lib/supabaseClient';
+import { supabase } from 'lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { useRouter } from 'next/navigation';
 
