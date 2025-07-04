@@ -7,7 +7,7 @@ import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import { useState, useEffect } from 'react';
 
-// SVG 아이콘 컴포넌트들 (기존과 동일)
+// SVG 아이콘 컴포넌트들 (생략)
 const DashboardIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> );
 const NoticeIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-2.236 9.168-5.518" /></svg> );
 const OrgIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg> );
@@ -25,7 +25,7 @@ const MenuItem = ({ item, isActive }) => (
 );
 
 export default function Sidebar() {
-    const pathname = usePathname() || ''; // pathname이 null일 경우를 대비
+    const pathname = usePathname() || '';
     const { employee, loading } = useEmployee();
    
     const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
@@ -36,11 +36,10 @@ export default function Sidebar() {
         if (pathSegments.length > 0 && pathSegments[0] === 'work') {
             const newOpenMenus = { work: true };
             if(pathSegments.length > 1) {
-                newOpenMenus[pathSegments[1]] = true; // 부서 메뉴 열기
+                const deptName = decodeURIComponent(pathSegments[1]);
+                newOpenMenus[deptName] = true;
             }
             setOpenMenus(newOpenMenus);
-        } else {
-             setOpenMenus({}); // 다른 최상위 메뉴로 이동시 업무 메뉴 닫기
         }
     }, [pathname]);
 
@@ -70,7 +69,7 @@ export default function Sidebar() {
         { href: '/dashboard', label: '대시보드', icon: <DashboardIcon /> },
         { href: '/notices', label: '공지사항', icon: <NoticeIcon /> },
         { href: '/organization', label: '조직도', icon: <OrgIcon /> },
-        { href: '/sites', label: '현장 관리', icon: <SiteManagementIcon /> },
+        { href: '/sites', label: '현장 관리', icon: <SiteManagementIcon /> }, // ★★★ 이 부분을 /sites로 변경했습니다. ★★★
         { href: '/approvals', label: '결재', icon: <ApprovalIcon /> },
     ];
     const bottomMenuItems = [
@@ -78,13 +77,7 @@ export default function Sidebar() {
         { href: '/mypage', label: '마이페이지', icon: <MyPageIcon /> },
     ];
     
-    const departments = {
-        '전략기획부': 'strategy', 
-        '공무부': 'gongmu', 
-        '공사부': 'gongsa', 
-        '관리부': 'gyeongri', // '관리부'는 보통 '경리' 업무를 포함하므로 'gyeongri'로 사용
-        '비서실': 'biseo'
-    };
+    const departments = ['전략기획부', '공무부', '공사부', '관리부', '비서실'];
 
     return (
         <aside className="w-64 bg-white flex flex-col border-r shrink-0 fixed top-0 left-0 h-screen overflow-y-auto z-50">
@@ -101,17 +94,16 @@ export default function Sidebar() {
                     </button>
                     {openMenus['work'] && ( 
                         <div className="mt-1 pl-4 space-y-1">
-                            {Object.entries(departments).map(([deptKor, deptEng]) => (
-                                <div key={deptEng}>
-                                    <button onClick={() => toggleMenu(deptEng)} className={`w-full text-left flex items-center justify-between py-1.5 px-2 rounded-md text-sm ${pathname.includes(`/${deptEng}/`) ? 'font-semibold text-gray-800' : 'font-medium text-gray-600 hover:text-gray-800'}`}>
-                                        {deptKor}
-                                        <svg className={`w-3 h-3 text-gray-400 transform transition-transform ${openMenus[deptEng] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> 
+                            {departments.map(deptName => (
+                                <div key={deptName}>
+                                    <button onClick={() => toggleMenu(deptName)} className={`w-full text-left flex items-center justify-between py-1.5 px-2 rounded-md text-sm ${pathname.includes(`/${deptName}/`) ? 'font-semibold text-gray-800' : 'font-medium text-gray-600 hover:text-gray-800'}`}>
+                                        {deptName}
+                                        <svg className={`w-3 h-3 text-gray-400 transform transition-transform ${openMenus[deptName] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> 
                                     </button>
-                                    {openMenus[deptEng] && (
+                                    {openMenus[deptName] && (
                                         <div className="mt-1 pl-5 space-y-1 border-l-2 border-gray-200 ml-1">
-                                            <Link href={`/work/${deptEng}/calendar`} className={`block text-sm py-1 px-2 rounded-md ${pathname === `/work/${deptEng}/calendar` ? 'text-indigo-600 font-bold' : 'text-gray-600 hover:text-gray-800'}`}>업무 캘린더</Link>
-                                            <Link href={`/work/${deptEng}/library`} className={`block text-sm py-1 px-2 rounded-md ${pathname === `/work/${deptEng}/library` ? 'text-indigo-600 font-bold' : 'text-gray-600 hover:text-gray-800'}`}>자료실</Link>
-                                            <Link href={`/work/${deptEng}/logs`} className={`block text-sm py-1 px-2 rounded-md ${pathname === `/work/${deptEng}/logs` ? 'text-indigo-600 font-bold' : 'text-gray-600 hover:text-gray-800'}`}>업무일지</Link>
+                                            <Link href={`/work/${deptName}/calendar`} className={`block text-sm py-1 px-2 rounded-md ${pathname === `/work/${deptName}/calendar` ? 'text-indigo-600 font-bold' : 'text-gray-600 hover:text-gray-800'}`}>업무 캘린더</Link>
+                                            <Link href={`/work/${deptName}/library`} className={`block text-sm py-1 px-2 rounded-md ${pathname === `/work/${deptName}/library` ? 'text-indigo-600 font-bold' : 'text-gray-600 hover:text-gray-800'}`}>자료실</Link>
                                         </div>
                                     )}
                                 </div>
