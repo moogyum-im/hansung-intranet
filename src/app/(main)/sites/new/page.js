@@ -84,27 +84,27 @@ export default function NewSitePageFinal() {
                                 <div className="mt-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
                                     <div className="sm:col-span-3">
                                         <label htmlFor="name" className="block text-sm font-medium leading-6 text-gray-900">현장 이름 <span className="text-red-500">*</span></label>
-                                        <input type="text" name="name" id="name" value={formData.name} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" required />
+                                        <input type="text" name="name" id="name" value={formData.name} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" required />
                                     </div>
                                     <div className="sm:col-span-3">
                                         <label htmlFor="client" className="block text-sm font-medium leading-6 text-gray-900">발주처</label>
-                                        <input type="text" name="client" id="client" value={formData.client} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" />
+                                        <input type="text" name="client" id="client" value={formData.client} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" />
                                     </div>
                                     <div className="sm:col-span-3">
                                         <label htmlFor="site_type" className="block text-sm font-medium leading-6 text-gray-900">공사 구분</label>
-                                        <select name="site_type" id="site_type" value={formData.site_type} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                        <select name="site_type" id="site_type" value={formData.site_type} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
                                             <option>건축</option> <option>토목</option> <option>조경</option> <option>인테리어</option> <option>기타</option>
                                         </select>
                                     </div>
                                     <div className="sm:col-span-3">
                                         <label htmlFor="contract_type" className="block text-sm font-medium leading-6 text-gray-900">계약 형태</label>
-                                        <select name="contract_type" id="contract_type" value={formData.contract_type} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                        <select name="contract_type" id="contract_type" value={formData.contract_type} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
                                             <option>도급</option> <option>관급</option> <option>자체 사업</option>
                                         </select>
                                     </div>
                                     <div className="col-span-full">
                                         <label htmlFor="address" className="block text-sm font-medium leading-6 text-gray-900">현장 주소</label>
-                                        <input type="text" name="address" id="address" value={formData.address} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" />
+                                        <input type="text" name="address" id="address" value={formData.address} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" />
                                     </div>
                                 </div>
                             </div>
@@ -118,15 +118,15 @@ export default function NewSitePageFinal() {
                                 <div className="mt-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
                                     <div className="sm:col-span-3">
                                         <label htmlFor="start_date" className="block text-sm font-medium leading-6 text-gray-900">착공일</label>
-                                        <input type="date" name="start_date" id="start_date" value={formData.start_date} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" />
+                                        <input type="date" name="start_date" id="start_date" value={formData.start_date} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" />
                                     </div>
                                     <div className="sm:col-span-3">
                                         <label htmlFor="end_date" className="block text-sm font-medium leading-6 text-gray-900">준공일</label>
-                                        <input type="date" name="end_date" id="end_date" value={formData.end_date} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" />
+                                        <input type="date" name="end_date" id="end_date" value={formData.end_date} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" />
                                     </div>
                                     <div className="sm:col-span-3">
                                         <label htmlFor="pm_id" className="block text-sm font-medium leading-6 text-gray-900">현장 소장 (PM)</label>
-                                        <select name="pm_id" id="pm_id" value={formData.pm_id} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                        <select name="pm_id" id="pm_id" value={formData.pm_id} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
                                             <option value="">-- 담당자 선택 --</option>
                                             {allUsers.map(user => (
                                                 <option key={user.id} value={user.id}>{user.full_name} ({user.department})</option>
@@ -135,7 +135,7 @@ export default function NewSitePageFinal() {
                                     </div>
                                     <div className="sm:col-span-3">
                                         <label htmlFor="budget" className="block text-sm font-medium leading-6 text-gray-900">총 예산 (원)</label>
-                                        <input type="number" name="budget" id="budget" value={formData.budget} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" placeholder="숫자만 입력" />
+                                        <input type="number" name="budget" id="budget" value={formData.budget} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" placeholder="숫자만 입력" />
                                     </div>
                                 </div>
                             </div>
@@ -147,7 +147,7 @@ export default function NewSitePageFinal() {
                                 <h2 className="text-base font-semibold leading-7 text-gray-900">개요 및 특이사항</h2>
                                 <p className="mt-1 text-sm leading-6 text-gray-600">현장에 대한 상세 설명이나 전달 사항을 입력합니다.</p>
                                 <div className="mt-6">
-                                    <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows={5} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" />
+                                    <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows={5} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" />
                                 </div>
                             </div>
                         </div>

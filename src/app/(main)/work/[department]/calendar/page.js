@@ -79,7 +79,7 @@ export default async function WorkCalendarPage({ params }) {
         <header className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
             <div>
                  <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-100">{pageDepartment} - 업무 캘린더</h1>
-                 <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">부서의 전체 업무 일정을 확인하고 관리합니다.</p>
+                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">부서의 전체 업무 일정을 확인하고 관리합니다.</p>
             </div>
         </header>
         
