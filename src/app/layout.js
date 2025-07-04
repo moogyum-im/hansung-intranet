@@ -8,7 +8,14 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'HANSUNG 인트라넷',
   description: '한성 인트라넷 시스템',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false, // 사용자가 임의로 확대/축소하는 것을 막아서 레이아웃이 깨지는 것을 방지
+  },
 };
+
 
 export default function RootLayout({ children }) {
   return (
