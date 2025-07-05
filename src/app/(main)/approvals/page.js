@@ -2,146 +2,141 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '../../../contexts/EmployeeContext';
-import { supabase } from '../../../lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
+import { useEmployee } from '@/contexts/EmployeeContext';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import ApprovalItem from '../../../components/ApprovalItem';
 
-export default function ApprovalsPage() {
-
-    const { employee, loading: employeeLoading } = useEmployee();
-    const router = useRouter();
-
-    const [activeTab, setActiveTab] = useState('received');
-    const [subTab, setSubTab] = useState('pending');
-    
-    const [documents, setDocuments] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [isApprovalDetailModalOpen, setIsApprovalDetailModalOpen] = useState(false);
-    const [selectedApproval, setSelectedApproval] = useState(null);
-
-    const fetchDocuments = useCallback(async () => {
-        if (!employee?.id) { setLoading(false); return; }
-        setLoading(true);
-
-        let finalData = [];
-        let error;
-
-        // "받은 결재" 탭
-        if (activeTab === 'received') {
-            // 1단계: 내가 결재자로 지정된 행들을 가져옵니다.
-            const { data: approverRows, error: approverError } = await supabase
-                .from('approval_document_approvers')
-                .select('document_id, status')
-                .eq('approver_id', employee.id);
-
-            if (approverError) {
-                error = approverError;
-            } else if (approverRows && approverRows.length > 0) {
-                // 2단계: 상태(대기/완료)에 따라 문서 ID를 필터링합니다.
-                const targetStatus = subTab === 'pending' ? ['대기'] : ['승인', '반려'];
-                const docIds = approverRows
-                    .filter(row => targetStatus.includes(row.status))
-                    .map(row => row.document_id);
-                
-                if (docIds.length > 0) {
-                    // 3단계: 필터링된 ID로 실제 문서 정보를 가져옵니다.
-                    const { data: docsData, error: docsError } = await supabase
-                        .from('approval_documents')
-                        .select('*, form:form_id(form_name), author:author_id(full_name)')
-                        .in('id', docIds)
-                        .order('created_at', { ascending: false });
-                    
-                    if (docsError) error = docsError;
-                    else finalData = docsData;
-                }
-            }
-        } 
-        // "상신한 결재" 탭
-        else {
-            const targetStatus = subTab === 'pending' ? ['진행중'] : ['승인', '반려', '취소'];
-            const { data, error: requestError } = await supabase
-                .from('approval_documents')
-                .select('*, form:form_id(form_name), author:author_id(full_name)')
-                .eq('author_id', employee.id)
-                .in('status', targetStatus)
-                .order('created_at', { ascending: false });
-            
-            if (requestError) error = requestError;
-            else finalData = data;
+function ApprovalCard({ approval }) {
+    const getStatusStyle = (status) => {
+        switch (status) {
+            case '승인': return 'bg-blue-100 text-blue-800';
+            case '반려': return 'bg-red-100 text-red-800';
+            case '대기': return 'bg-yellow-100 text-yellow-800';
+            default: return 'bg-gray-100 text-gray-800';
         }
-        
-        if (error) {
-            console.error("결재 문서 목록 조회 실패:", error);
-            setDocuments([]);
-        } else {
-            setDocuments(finalData || []);
-        }
-        setLoading(false);
-    }, [employee?.id, activeTab, subTab, supabase]);
+    };
 
-    useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
-
-    // ... (handleApproveReject, handleCancelRequest, openApprovalDetailModal 함수는 변경 없음) ...
-    // ... (로딩 및 로그인 체크 로직도 변경 없음) ...
+    const displayStatus = approval.approver_status || approval.status;
 
     return (
-        <div className="h-full overflow-y-auto p-6">
-            <header className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-extrabold text-gray-900">전자 결재</h1>
-                <Link href="/approvals/forms" className="text-sm font-medium text-gray-600 hover:text-green-600 p-2 rounded-md bg-gray-100 hover:bg-gray-200">
-                    양식 관리
-                </Link>
-            </header>
-            
-            <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex justify-between items-center mb-6">
-                    <div className="flex border-b border-gray-200">
-                        <button onClick={() => { setActiveTab('received'); setSubTab('pending'); }} className={`px-4 py-2 text-lg font-semibold ${activeTab === 'received' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>
-                            받은 결재
-                        </button>
-                        <button onClick={() => { setActiveTab('requested'); setSubTab('pending'); }} className={`px-4 py-2 text-lg font-semibold ${activeTab === 'requested' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>
-                            상신한 결재
-                        </button>
-                    </div>
-                    <Link href="/approvals/new" className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2">
-                        + 새 결재 작성
-                    </Link>
+        <Link href={`/approvals/${approval.id}`} className="block bg-white p-4 rounded-lg shadow-sm border hover:shadow-md transition-all">
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="font-bold text-gray-800">{approval.title}</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                        유형: {approval.type || '일반'} / 작성자: {approval.author_name || 'N/A'}
+                    </p>
                 </div>
-                
-                <div className="flex items-center gap-2 mb-6">
-                    <button onClick={() => setSubTab('pending')} className={`px-3 py-1 text-sm rounded-full ${subTab === 'pending' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                        {activeTab === 'received' ? '대기' : '진행중'}
-                    </button>
-                    <button onClick={() => setSubTab('completed')} className={`px-3 py-1 text-sm rounded-full ${subTab === 'completed' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                        완료
-                    </button>
-                </div>
-
-                <div className="space-y-4">
-                    {loading ? <p className="text-center py-10">로딩 중...</p> : documents.length === 0 ? (
-                        <p className="text-center py-10 text-gray-500">해당 문서가 없습니다.</p>
-                    ) : (
-                        documents.map(doc => (
-                            <Link href={`/approvals/${doc.id}`} key={doc.id} className="block p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                                <div className="flex justify-between items-center">
-                                    <p className="font-bold text-gray-800">{doc.title}</p>
-                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                        doc.status === '승인' ? 'bg-green-100 text-green-800' :
-                                        doc.status === '반려' ? 'bg-red-100 text-red-800' :
-                                        'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                        {doc.status}
-                                    </span>
-                                </div>
-                                <p className="text-sm text-gray-600 mt-1">{doc.form.form_name} / 작성자: {doc.author.full_name}</p>
-                            </Link>
-                        ))
-                    )}
-                </div>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusStyle(displayStatus)}`}>
+                    {displayStatus}
+                </span>
             </div>
-            {/* 상세 모달은 이제 사용하지 않음 */}
+        </Link>
+    );
+}
+
+export default function ApprovalsPage() {
+    const { employee, loading: employeeLoading } = useEmployee();
+    const router = useRouter();
+    const [activeTab, setActiveTab] = useState('received');
+    const [approvals, setApprovals] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchApprovals = useCallback(async () => {
+        if (!employee) return;
+        setLoading(true);
+
+        let finalApprovals = [];
+        let error = null;
+
+        if (activeTab === 'received') {
+            // "받은 결재" 조회 로직
+            const { data: approverLinks, error: linkError } = await supabase
+                .from('approval_document_approvers')
+                .select('status, document_id')
+                .eq('approver_id', employee.id)
+                .eq('status', '대기');
+            
+            if (linkError) {
+                error = linkError;
+            } else if (approverLinks && approverLinks.length > 0) {
+                const documentIds = approverLinks.map(link => link.document_id);
+                
+                // ★★★★★ 여기서 관계를 맺지 않고, 별도로 쿼리합니다. ★★★★★
+                const { data: documents, error: docError } = await supabase
+                    .from('approval_documents')
+                    .select('*') // author 정보는 나중에 따로 붙입니다.
+                    .in('id', documentIds);
+                
+                if (docError) {
+                    error = docError;
+                } else if (documents) {
+                    // 작성자 정보를 가져오기 위한 author_id 목록
+                    const authorIds = [...new Set(documents.map(doc => doc.author_id))];
+                    const { data: authors } = await supabase.from('profiles').select('id, full_name').in('id', authorIds);
+                    
+                    // 결재 문서에 작성자 이름과 결재자 상태를 매핑
+                    finalApprovals = documents.map(doc => {
+                        const author = authors?.find(a => a.id === doc.author_id);
+                        const link = approverLinks.find(l => l.document_id === doc.id);
+                        return { 
+                            ...doc, 
+                            author_name: author?.full_name || '알 수 없음', 
+                            approver_status: link?.status 
+                        };
+                    });
+                }
+            }
+        } else {
+            // "상신한 결재" 조회 로직 (기존 코드 그대로 사용)
+            const { data, error: sentError } = await supabase
+                .from('approval_documents')
+                .select('*, author:author_id(full_name)')
+                .eq('author_id', employee.id)
+                .order('created_at', { ascending: false });
+
+            if (sentError) {
+                error = sentError;
+            } else if (data) {
+                // author 객체를 author_name으로 변환
+                finalApprovals = data.map(doc => ({ ...doc, author_name: doc.author?.full_name }));
+            }
+        }
+
+        if (error) {
+            console.error(`🔴 ${activeTab} 결재 목록 로딩 실패:`, error);
+            setApprovals([]);
+        } else {
+            setApprovals(finalApprovals);
+        }
+        setLoading(false);
+    }, [employee, activeTab]);
+
+    useEffect(() => {
+        if (!employeeLoading && employee) {
+            fetchApprovals();
+        }
+    }, [employeeLoading, employee, activeTab]);
+
+    const TabButton = ({ tabName, label }) => ( <button onClick={() => setActiveTab(tabName)} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${activeTab === tabName ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>{label}</button> );
+    
+    return (
+        <div className="p-6 bg-gray-50 min-h-full">
+            <header className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold">전자 결재</h1>
+                <div className="flex items-center gap-4">
+                    <Link href="/approvals/forms" className="text-sm font-medium">양식 관리</Link>
+                    <button onClick={() => router.push('/approvals/new')} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">+ 새 결재 작성</button>
+                </div>
+            </header>
+            <div className="bg-white p-6 rounded-xl shadow-sm border">
+                <div className="flex items-center gap-2 border-b pb-4 mb-4">
+                    <TabButton tabName="received" label="받은 결재" />
+                    <TabButton tabName="sent" label="상신한 결재" />
+                </div>
+                {loading ? <p className="text-center py-10">목록을 불러오는 중...</p> : approvals.length === 0 ? <p className="text-center py-10 text-gray-500">{activeTab === 'received' ? '처리할 결재 문서가 없습니다.' : '상신한 결재 문서가 없습니다.'}</p> : <div className="space-y-3">{approvals.map(approval => <ApprovalCard key={approval.id} approval={approval} />)}</div>}
+            </div>
         </div>
     );
 }

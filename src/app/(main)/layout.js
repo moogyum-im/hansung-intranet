@@ -1,46 +1,36 @@
 // 파일 경로: src/app/(main)/layout.js
-'use client'; // 상태 관리를 위해 클라이언트 컴포넌트로 선언
+'use client';
 
 import { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 
-// 햄버거 아이콘 컴포넌트
+// 햄버거 아이콘 컴포넌트 (생략)
 const HamburgerIcon = ({ isOpen }) => (
-  <svg
-    className="w-6 h-6 text-gray-800"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    {isOpen ? (
-      // 닫기 아이콘 (X)
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    ) : (
-      // 햄버거 아이콘
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
-    )}
+  <svg className="w-6 h-6 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    {isOpen ? (<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />) : (<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />)}
   </svg>
 );
 
 
 export default function MainLayout({ children }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 사이드바 열림/닫힘 상태
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* 1. 사이드바 컴포넌트: 열림 상태를 props로 전달 */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+    // ★★★ 전체 레이아웃을 grid 시스템으로 변경 ★★★
+    <div className="md:grid md:grid-cols-[256px_1fr] h-screen"> {/* 데스크톱에서는 '256px 1fr' 그리드로 */}
+      
+      {/* 1. 사이드바 */}
+      {/* 모바일에서는 fixed, 데스크톱에서는 그리드의 첫 번째 컬럼을 차지 */}
+      <div className="hidden md:block">
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      </div>
 
-      {/* 2. 모바일용 햄버거 버튼 (md 화면보다 작을 때만 보임) */}
-      <button
-        onClick={() => setIsSidebarOpen(true)}
-        className="fixed top-4 left-4 md:hidden z-50 p-2 rounded-lg bg-white shadow-md"
-      >
-        <HamburgerIcon isOpen={isSidebarOpen} />
-      </button>
+      {/* 모바일용 사이드바 (화면 밖에서 나타남) */}
+      <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out md:hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      </div>
 
-      {/* 3. 사이드바가 열렸을 때 모바일 화면을 덮는 오버레이 */}
+      {/* 모바일용 오버레이 */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
@@ -48,11 +38,22 @@ export default function MainLayout({ children }) {
         ></div>
       )}
 
-      {/* 4. 메인 콘텐츠 영역 */}
-      {/* md:ml-64: md 화면 이상에서는 사이드바 너비만큼 왼쪽 여백을 줘서 겹치지 않게 함 */}
-      <main className="flex-1 ml-0 md:ml-64 overflow-y-auto">
-        <div className="p-8">
-            {children}
+      {/* 2. 메인 콘텐츠 */}
+      <main className="overflow-y-auto bg-slate-50">
+        {/* 모바일용 헤더에 햄버거 버튼 추가 */}
+        <div className="md:hidden p-4 flex items-center bg-white border-b">
+            <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2 rounded-lg"
+            >
+                <HamburgerIcon isOpen={isSidebarOpen} />
+            </button>
+            <div className="ml-4 font-bold text-lg text-indigo-600">HANSUNG</div>
+        </div>
+        
+        {/* 콘텐츠 패딩 */}
+        <div className="p-4 sm:p-6 lg:p-8">
+          {children}
         </div>
       </main>
     </div>

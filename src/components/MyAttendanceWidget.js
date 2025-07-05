@@ -1,30 +1,35 @@
-// 파일 경로: src/components/MyAttendanceWidget.js
+// 파일 경로: src/components/MyAttendanceWidget.jsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-// 수정 후 코드
-import { supabase } from 'lib/supabase/client';
-import { useEmployee } from 'contexts/EmployeeContext';
-// 대시보드 위젯 공통 컴포넌트
-const Widget = ({ title, icon, children }) => (
-    <div className="bg-white rounded-lg shadow p-6 flex flex-col">
-        <div className="flex items-center gap-2 mb-4">
-            <span className="text-green-600">{icon}</span>
-            <h3 className="font-bold text-gray-800">{title}</h3>
-        </div>
-        <div className="flex-1">
-            {children}
-        </div>
-    </div>
-);
+import { supabase } from '@/lib/supabase/client';
+import { toast } from 'react-hot-toast';
+import { useEmployee } from '@/contexts/EmployeeContext';
 
-const ClockIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" /></svg>;
+const STATUS_STYLES = {
+  '업무 중': { icon: '💼', color: 'bg-green-100 text-green-800' },
+  '회의 중': { icon: '💬', color: 'bg-blue-100 text-blue-800' },
+  '외근 중': { icon: '🚗', color: 'bg-yellow-100 text-yellow-800' },
+  '휴가': { icon: '🌴', color: 'bg-purple-100 text-purple-800' },
+  '식사 중': { icon: '🍽️', color: 'bg-orange-100 text-orange-800' },
+  '오프라인': { icon: '⚫', color: 'bg-gray-200 text-gray-700' },
+};
 
+const formatDuration = (milliseconds) => {
+    if (milliseconds < 0) return "00:00:00";
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
 
 export default function MyAttendanceWidget({ currentUser }) {
-  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [todayRecord, setTodayRecord] = useState(null);
   const [loading, setLoading] = useState(true);
-
+  const { employee, updateEmployeeStatus, loading: employeeLoading } = useEmployee();
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
   const fetchTodayAttendance = useCallback(async () => {
     if (!currentUser?.id) {
@@ -32,87 +37,154 @@ export default function MyAttendanceWidget({ currentUser }) {
       return;
     }
     setLoading(true);
-    
-    // ★★★ 데이터베이스 함수(RPC)를 호출하는 방식으로 변경 ★★★
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
     const { data, error } = await supabase
-      .rpc('get_today_attendance');
+      .from('attendance_records')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .gte('check_in_time', todayStart.toISOString())
+      .lte('check_in_time', todayEnd.toISOString())
+      .order('check_in_time', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (error) {
-        console.error("오늘 출근 기록 조회 실패:", error.message);
-        setTodayAttendance(null);
-    } else {
-        // 함수는 배열을 반환하므로, 첫 번째 요소를 사용합니다.
-        setTodayAttendance(data[0] || null);
+        console.error("출퇴근 기록 조회 실패:", error);
     }
+    
+    setTodayRecord(data);
     setLoading(false);
-  }, [currentUser?.id, supabase]); 
+  }, [currentUser]);
 
   useEffect(() => {
     fetchTodayAttendance();
   }, [fetchTodayAttendance]);
+
+  useEffect(() => {
+    let timer;
+    if (todayRecord && !todayRecord.check_out_time) {
+      const checkInTime = new Date(todayRecord.check_in_time).getTime();
+      const updateElapsedTime = () => {
+        setElapsedTime(Date.now() - checkInTime);
+      };
+      updateElapsedTime();
+      timer = setInterval(updateElapsedTime, 1000);
+    } else if (todayRecord && todayRecord.check_out_time) {
+      const checkInTime = new Date(todayRecord.check_in_time).getTime();
+      const checkOutTime = new Date(todayRecord.check_out_time).getTime();
+      setElapsedTime(checkOutTime - checkInTime);
+    } else {
+        setElapsedTime(0);
+    }
+    return () => clearInterval(timer);
+  }, [todayRecord]);
   
-  const handleCheckIn = async () => {
-    if (!currentUser?.id) { alert("로그인 정보가 없습니다."); return; }
-    const { error } = await supabase
-      .from('attendance_records')
-      .insert({ user_id: currentUser.id }); // check_in_time은 DB에서 자동으로 now()로 설정됨
-    
-    if (error) {
-        alert('출근 처리 실패: ' + error.message);
-    } else {
-        fetchTodayAttendance(); // 성공 시 데이터 다시 불러오기
-    }
+  const handleStatusChange = async (newStatus) => {
+    if (!currentUser?.id || !updateEmployeeStatus) return;
+    setIsStatusDropdownOpen(false);
+    await updateEmployeeStatus(currentUser.id, newStatus);
+    toast.success(`상태가 '${newStatus}'(으)로 변경되었습니다.`);
   };
 
-  const handleCheckOut = async () => {
-    if (!currentUser?.id || !todayAttendance?.id) { alert("출근 기록이 없습니다."); return; }
-    const { error } = await supabase
-      .from('attendance_records')
-      .update({ check_out_time: new Date().toISOString() })
-      .eq('id', todayAttendance.id);
+  const handleAttendance = async () => {
+    if (loading || employeeLoading) return;
 
-    if (error) {
-        alert('퇴근 처리 실패: ' + error.message);
-    } else {
-        fetchTodayAttendance(); // 성공 시 데이터 다시 불러오기
+    const isCheckedIn = todayRecord && !todayRecord.check_out_time;
+
+    if (isCheckedIn) { // 퇴근 처리
+      const { data: updatedRecord, error } = await supabase
+        .from('attendance_records')
+        .update({ check_out_time: new Date() }) // .toISOString() 제거
+        .eq('id', todayRecord.id)
+        .select()
+        .single();
+      if (error) {
+        toast.error('퇴근 처리 실패: ' + error.message);
+      } else {
+        toast.success('퇴근 처리되었습니다.');
+        setTodayRecord(updatedRecord);
+        await handleStatusChange('오프라인');
+      }
+    } else { // 출근 처리
+      const { data: newRecord, error } = await supabase
+        .from('attendance_records')
+        .insert({ user_id: currentUser.id, check_in_time: new Date() }) // .toISOString() 제거
+        .select()
+        .single();
+      if (error) {
+        toast.error('출근 처리 실패: ' + error.message);
+      } else {
+        toast.success('출근 처리되었습니다.');
+        setTodayRecord(newRecord);
+        await handleStatusChange('업무 중');
+      }
     }
   };
-
-  const renderContent = () => {
-    if (loading) {
-        return <p className="text-center text-gray-500 py-8">출퇴근 정보 로딩 중...</p>;
-    }
-    
-    if (todayAttendance?.check_in_time) {
-        return (
-            <div className="text-center space-y-4">
-                <div>
-                    <p className="text-sm text-gray-500">출근 시간</p>
-                    <p className="text-2xl font-bold">{new Date(todayAttendance.check_in_time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</p>
-                </div>
-                {todayAttendance.check_out_time ? (
-                    <div>
-                        <p className="text-sm text-gray-500">퇴근 시간</p>
-                        <p className="text-2xl font-bold text-gray-400">{new Date(todayAttendance.check_out_time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</p>
-                    </div>
-                ) : (
-                    <button onClick={handleCheckOut} className="w-full py-3 px-4 rounded-lg bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors">퇴근하기</button>
-                )}
-            </div>
-        );
-    } else {
-        return (
-            <div className="text-center space-y-4">
-                <p className="text-gray-500">오늘 출근 기록이 없습니다.</p>
-                <button onClick={handleCheckIn} className="w-full py-3 px-4 rounded-lg bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors">출근하기</button>
-            </div>
-        );
-    }
-  };
+  
+  const currentStatus = employee?.status || '오프라인';
+  const statusStyle = STATUS_STYLES[currentStatus] || STATUS_STYLES['오프라인'];
+  const isCheckedIn = todayRecord && !todayRecord.check_out_time;
 
   return (
-    <Widget title="나의 출퇴근" icon={<ClockIcon />}>
-      {renderContent()}
-    </Widget>
+    <div className="bg-white p-5 rounded-xl border shadow-sm w-full h-full flex flex-col justify-between">
+      <div>
+        <h2 className="text-lg font-bold text-gray-800 mb-4">나의 현황</h2>
+        <div className="relative">
+          <button onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)} className="w-full flex items-center justify-between p-3 bg-gray-100 rounded-lg border hover:bg-gray-200 transition-colors">
+            <div className="flex items-center gap-3">
+              <span className={`px-2 py-0.5 text-xs font-semibold rounded-md ${statusStyle.color}`}>{statusStyle.icon}</span>
+              <span className="font-semibold text-gray-800">{currentStatus}</span>
+            </div>
+            <span className="text-gray-500">▼</span>
+          </button>
+          {isStatusDropdownOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg z-20" onMouseLeave={() => setIsStatusDropdownOpen(false)}>
+              {Object.entries(STATUS_STYLES).map(([status, style]) => (
+                <button key={status} onClick={() => handleStatusChange(status)} className="w-full flex items-center gap-3 p-3 text-left text-sm hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg">
+                  <span className={`px-2 py-0.5 text-xs font-semibold rounded-md ${style.color}`}>{style.icon}</span>
+                  <span>{status}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="my-4 text-center">
+        <p className="text-sm text-gray-500">오늘의 근무 시간</p>
+        <p className="text-3xl font-bold font-mono text-gray-800 mt-1">
+          {formatDuration(elapsedTime)}
+        </p>
+      </div>
+
+      <div className="pt-4 border-t">
+        {loading ? <div className="text-center text-sm text-gray-500 mb-4 h-9">기록 조회중...</div> : todayRecord ? (
+          <div className="grid grid-cols-2 gap-4 text-center mb-4">
+            <div>
+              <p className="text-xs text-gray-500">출근 시간</p>
+              <p className="font-semibold text-gray-700 mt-1">{new Date(todayRecord.check_in_time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">퇴근 시간</p>
+              <p className="font-semibold text-gray-700 mt-1">{todayRecord.check_out_time ? new Date(todayRecord.check_out_time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-center text-sm text-gray-500 mb-4 h-9 flex items-center justify-center">오늘 출근 기록이 없습니다.</p>
+        )}
+        <button
+          onClick={handleAttendance}
+          disabled={loading || employeeLoading || (isCheckedIn && !todayRecord.check_out_time && elapsedTime < 1000)}
+          className={`w-full font-bold text-white py-2.5 rounded-lg transition-colors disabled:opacity-50
+            ${isCheckedIn ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-500 hover:bg-green-600'}`}
+        >
+          {isCheckedIn ? '퇴근하기' : '출근하기'}
+        </button>
+      </div>
+    </div>
   );
 }

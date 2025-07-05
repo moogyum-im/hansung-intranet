@@ -9,90 +9,51 @@ import MyAttendanceWidget from '@/components/MyAttendanceWidget';
 import LeaveCalendar from '@/app/(main)/mypage/LeaveCalendar';
 import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
 
-// 컴포넌트 정의 (이전과 동일)
-const ApprovalIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-blue-500"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>);
-const NoticeIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-yellow-500"><path정을 `dashboard/page.js` 파일에 적용한 **전체 코드**를 드리겠습니다.
+// --- 아이콘 컴포넌트들 ---
+const ApprovalIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>);
+const NoticeIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>);
+const SiteIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 4h1m4-4h1m-1 4h1" /></svg>);
 
-아래 코드를 **전체 복사**해서, 기존 `src/app/(main)/dashboard/page.js` 파일의 내용을 **완전히 덮어쓰고 저장**해주세요.
-
----
-
-### **모바일 반응형이 적용된 `dashboard/page.js` 전체 코드**
-
-**파일 경로:** `src/app/(main)/dashboard/page.js`
-
-```javascript
-// 파일 경로: src/app/(main)/dashboard/page.js
-'use client';
-
-import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '@/contexts/EmployeeContext';
-import { supabase } from '@/lib/supabase/client';
-import Link from 'next/link';
-import MyAttendanceWidget from '@/components/MyAttendanceWidget';
-import LeaveCalendar from '@/app/(main)/mypage/LeaveCalendar';
-import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
-
-// 컴포넌트 정의 (이전과 동일)
-const ApprovalIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-blue-500"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>);
-const NoticeIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-yellow-500"><path d="M5.25 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM2.25 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63A13.977 13.977 0 0012 21.75a13.977 13.977 0 00-3.635-.773.75.75 0 01-.363-.63V19.125z" /></svg>);
-const SiteIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-purple-500"><path d="M19.5 21a3 3 0 003-3v-1.5a3 3 0 00-3-3h-1.5a3 3 0 00-3 3V18a3 3 0 003 3h1.5zM16.5 6.75a3 3 0 00-3-3h-1.5a3 3 0 00-3 3v1.5a3 3 0 003 3h1.5a3 3 0 003-3V6.75z" /><path d="M4.5 21a3 3 0 003-3v-1.5a3 3 0 00-3-3H3a3 3 0 00-3 3V18a3 3 0 003 3h1.5zM1.5 6.75a3 3 0 013-3h1.5a3 3 0 013 3v1.5a3 3 0 01-3 3H3a3 3 0 01-3-3V6.75z" /></svg>);
-
-const Widget = ({ title, icon, children, link, linkText = "더보기" }) => (
-    <div className="bg-white rounded-xl shadow-md flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-                {icon}
-                <h3 className="font-bold text-lg text-gray-800">{title}</h3>
-            </div>
-            {link && <Link href={link} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors">{linkText}</Link>}
+// --- 재사용 UI 컴포넌트들 ---
+const Widget = ({ title, link, children }) => (
+    <div className="bg-white rounded-lg shadow-sm flex flex-col h-full">
+        <div className="flex justify-between items-center px-5 py-4 border-b">
+            <h3 className="font-bold text-gray-800 text-lg">{title}</h3>
+            {link && <Link href={link} className="text-sm font-medium text-blue-600 hover:underline">더보기</Link>}
         </div>
-        <div className="p-4 flex-1">
+        <div className="p-5 flex-1">
             {children}
         </div>
     </div>
 );
 
-const KpiCard = ({ title, value, icon, unit }) => (
-    <div className="bg-white rounded-xl shadow-md p-5 flex items-center h-full">
-        <div className="p-3 rounded-full bg-indigo-100">{icon}</div>
-        <div className="ml-4">
-            <p className="text-sm text-gray-500">{title}</p>
-            <p className="text-2xl font-bold text-gray-900">{value ?? '...'} <span className="text-base font-medium">{unit}</span></p>
+const KpiCard = ({ title, value, unit, icon, href }) => (
+    <Link href={href} className="block h-full">
+        <div className="bg-white rounded-lg shadow-sm p-5 flex items-center h-full hover:shadow-md transition-shadow">
+            <div className="p-3.5 rounded-full bg-gray-100 flex-shrink-0">{icon}</div>
+            <div className="ml-4 flex-grow">
+                <p className="text-sm text-gray-500">{title}</p>
+                <p className="text-2xl font-bold text-gray-800">{value ?? '...'} <span className="text-base font-medium text-gray-600">{unit}</span></p>
+            </div>
         </div>
-    </div>
+    </Link>
 );
-
 
 export default function DashboardPage() {
     const { employee: currentUser, loading: employeeLoading } = useEmployee();
     const [pendingApprovalsCount, setPendingApprovalsCount] = useState(null);
     const [notices, setNotices] = useState([]);
-    const [mySites, setMySites] = useState([]);
     const [loadingData, setLoadingData] = useState(true);
 
     const fetchData = useCallback(async () => {
         if (!currentUser?.id) return;
         setLoadingData(true);
-
-        const [approvalRes, noticeRes, siteRes] = await Promise.all([
+        const [approvalRes, noticeRes] = await Promise.all([
             supabase.from('approval_document_approvers').select('document_id', { count: 'exact', head: true }).eq('approver_id', currentUser.id).eq('status', '대기'),
-            supabase.from('notices')
-              .select(`
-                id,
-                title,
-                created_at,
-                author:author_id ( full_name )
-              `)
-              .order('created_at', { ascending: false })
-              .limit(5),
-            supabase.from('construction_sites').select('id, name, progress').limit(5)
+            supabase.from('notices').select(`id, title, created_at, author:author_id(full_name)`).order('created_at', { ascending: false }).limit(5),
         ]);
-        
         setPendingApprovalsCount(approvalRes.count ?? 0);
         setNotices(noticeRes.data || []);
-        setMySites(siteRes.data || []);
-        
         setLoadingData(false);
     }, [currentUser?.id]);
 
@@ -100,70 +61,51 @@ export default function DashboardPage() {
         if (currentUser) { fetchData(); }
     }, [currentUser, fetchData]);
     
-    if (employeeLoading) return <div className="h-full flex items-center justify-center"><p>사용자 정보를 불러오는 중...</p></div>;
+    if (employeeLoading) return <div className="h-full flex items-center justify-center"><p>대시보드 정보를 불러오는 중...</p></div>;
 
     return (
-        <div>
-            <header className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-800">안녕하세요, {currentUser?.full_name || '관리자'}님! 👋</h1>
-                <p className="text-gray-600 mt-1">오늘도 힘찬 하루 보내세요.</p>
+        <div className="p-6 space-y-6 bg-gray-50 min-h-full">
+            <header>
+                <h1 className="text-3xl font-bold text-gray-900">안녕하세요, {currentUser?.full_name || '사용자'}님! 👋</h1>
+                <p className="text-gray-500 mt-1">오늘도 힘찬 하루 보내세요.</p>
             </header>
             
-            {/* KPI 카드 부분 - 모바일 1열, sm 이상 2열, lg 이상 3열 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                <Link href="/approvals" className="hover:opacity-90 transition-opacity">
-                    <KpiCard title="처리할 결재" value={pendingApprovalsCount} unit="건" icon={<ApprovalIcon />} />
-                </Link>
-            </div>
-
-            {/* 메인 위젯 영역 - 모바일 1열, md 이상 2열, xl 이상 3열 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {/* 왼쪽 영역 (최신 공지사항, 내 현장 목록) - 모바일 1열, md 이상 1열, xl 이상 2열 차지 */}
-                <div className="col-span-1 md:col-span-1 xl:col-span-2 space-y-6">
-                    <Widget title="최신 공지사항" icon={<NoticeIcon />} link="/notices">
-                         {loadingData ? <p>로딩중...</p> : notices.length > 0 ? (
-                            <ul className="divide-y divide-gray-100">
-                                {notices.map(notice => (
-                                    <li key={notice.id} className="py-3">
-                                        <Link href={`/notices/${notice.id}`} className="hover:text-indigo-600 block group">
-                                            <div className="flex justify-between items-baseline gap-4">
-                                                <p className="font-medium truncate group-hover:underline flex-1">{notice.title}</p>
-                                                <span className="text-sm text-gray-500 shrink-0">{notice.author?.full_name || '익명'}</span>
-                                                <span className="text-sm text-gray-400 shrink-0">{new Date(notice.created_at).toLocaleDateString()}</span>
-                                            </div>
-                                        </Link>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : <p className="text-center text-gray-500 py-8">등록된 공지사항이 없습니다.</p>}
-                    </Widget>
-                    <Widget title="내 현장 목록" icon={<SiteIcon />} link="/sites">
-                        {loadingData ? <p>로딩중...</p> : mySites.length > 0 ? (
-                            <ul className="space-y-4">
-                                {mySites.map(site => (
-                                    <li key={site.id}>
-                                        <Link href={`/sites/${site.id}`} className="hover:opacity-80 block group">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <p className="font-medium group-hover:underline">{site.name}</p>
-                                                <span className="text-sm font-semibold text-gray-600">{site.progress}%</span>
-                                            </div>
-                                            <div className="w-full bg-gray-200 rounded-full h-2">
-                                                <div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${site.progress}%` }}></div>
-                                            </div>
-                                        </Link>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : <p className="text-center text-gray-500 py-8">참여중인 현장이 없습니다.</p>}
-                    </Widget>
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1">
+                    <KpiCard title="처리할 결재" value={pendingApprovalsCount} unit="건" icon={<ApprovalIcon />} href="/approvals" />
                 </div>
-
-                {/* 오른쪽 영역 (내 출퇴근, 나의 휴가/결재 현황) - 모바일 1열, md 이상 1열, xl 이상 1열 차지 */}
-                <div className="col-span-1 md:col-span-1 xl:col-span-1 space-y-6">
+                <div className="lg:col-span-2">
                     <MyAttendanceWidget currentUser={currentUser} />
-                    <ClientSideOnlyWrapper>{currentUser && <LeaveCalendar currentUser={currentUser} />}</ClientSideOnlyWrapper>
                 </div>
-            </div>
+            </section>
+            
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                    <Widget title="최신 공지사항" link="/notices">
+                        {loadingData ? <p className="text-center py-10">로딩중...</p> : notices.length > 0 ? (
+                            <ul className="space-y-3">{notices.map(notice => (
+                                <li key={notice.id} className="hover:bg-gray-50 p-2 -m-2 rounded-lg">
+                                    <Link href={`/notices/${notice.id}`} className="flex justify-between items-center gap-4">
+                                        <p className="font-semibold text-gray-700 truncate flex-1">{notice.title}</p>
+                                        <div className="text-right shrink-0">
+                                            <p className="text-sm text-gray-600">{notice.author?.full_name || '익명'}</p>
+                                            <p className="text-xs text-gray-400">{new Date(notice.created_at).toLocaleDateString()}</p>
+                                        </div>
+                                    </Link>
+                                </li>
+                            ))}</ul>
+                        ) : <p className="text-center py-10">등록된 공지사항이 없습니다.</p>}
+                    </Widget>
+                </div>
+                
+                <div className="lg:col-span-1">
+                    <Widget title="나의 휴가/일정">
+                        <ClientSideOnlyWrapper>
+                            {currentUser && <LeaveCalendar currentUser={currentUser} isWidget={true} />}
+                        </ClientSideOnlyWrapper>
+                    </Widget>
+                </div>
+            </section>
         </div>
     );
 }

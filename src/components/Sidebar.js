@@ -32,6 +32,26 @@ export default function Sidebar({ isOpen, onClose }) {
     const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
     const [openMenus, setOpenMenus] = useState({});
 
+    // 외부 클릭 시 사이드바 닫기 (모바일에서만 필요)
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            // 사이드바 내부나 햄버거 버튼 클릭은 제외
+            if (isOpen && !event.target.closest('.user-status-dropdown') && !event.target.closest('.mobile-sidebar-toggle-button')) { // ★★★ mobile-sidebar-toggle-button 클래스 감지 추가 ★★★
+                onClose();
+            }
+        };
+        // 모바일에서만 이벤트 리스너 추가
+        if (typeof window !== 'undefined' && window.innerWidth < 768) { // 클라이언트 환경에서만 실행 + md breakpoint보다 작을 때만
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            if (typeof window !== 'undefined') {
+                document.removeEventListener('mousedown', handleClickOutside);
+            }
+        };
+    }, [isOpen, onClose]);
+
+
     useEffect(() => {
         const pathSegments = pathname.split('/').filter(Boolean);
         if (pathSegments.length > 0 && pathSegments[0] === 'work') {
@@ -81,13 +101,13 @@ export default function Sidebar({ isOpen, onClose }) {
     const departments = ['전략기획부', '공무부', '공사부', '관리부', '비서실'];
 
     return (
-        // ★★★ 모바일에서 숨기기/보여주기 로직 추가 ★★★
+        // ★★★ 모바일에서 display 속성 제어 ★★★
         <aside className={`
-            w-64 bg-white flex flex-col border-r shrink-0
+            w-64 bg-white flex-col border-r shrink-0
             fixed top-0 left-0 h-screen overflow-y-auto z-50
             transform transition-transform duration-300 ease-in-out
-            ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-            md:translate-x-0 md:static md:shadow-none md:border-r
+            ${isOpen ? 'translate-x-0 flex' : '-translate-x-full hidden'}
+            md:translate-x-0 md:static md:shadow-none md:border-r md:flex
         `}>
             {/* 닫기 버튼 (모바일에서만 보임) */}
             <button
@@ -136,10 +156,10 @@ export default function Sidebar({ isOpen, onClose }) {
                     <MenuItem key={item.label} item={item} isActive={pathname.startsWith(item.href)} />
                 ))}
             </nav>
-            <div className="px-4 py-4 border-t shrink-0">
-                {loading ? ( <div className="animate-pulse flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-200"></div><div className="flex-1"><div className="h-4 bg-gray-200 rounded w-3/4"></div><div className="h-3 bg-gray-200 rounded w-1/2 mt-1.5"></div></div></div> ) :
+            <div className="px-4 py-4 border-t shrink-0"> 
+                {loading ? ( <div className="animate-pulse flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-200"></div><div className="flex-1"><div className="h-4 bg-gray-200 rounded w-3/4"></div><div className="h-3 bg-gray-200 rounded w-1/2 mt-1.5"></div></div></div> ) : 
                 employee ? (
-                    <div className="relative user-status-dropdown">
+                    <div className="relative user-status-dropdown"> 
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">{employee.full_name?.charAt(0) || 'U'}</div>
                             <div className="flex-1 min-w-0">
@@ -147,12 +167,12 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <button onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)} className="text-xs text-gray-500 flex items-center gap-1.5 hover:text-gray-800 transition-colors">
                                     <span className={`w-2 h-2 rounded-full ${statusColorMap[employee.status] || 'bg-gray-400'}`}></span>
                                     {employee.status || '상태 없음'}
-                                    <svg className={`w-3 h-3 text-gray-400 transform transition-transform ${isStatusMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                                    <svg className={`w-3 h-3 text-gray-400 transform transition-transform ${isStatusMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg> 
                                 </button>
                             </div>
                         </div>
                         {isStatusMenuOpen && (
-                            <div className="absolute bottom-full left-0 w-full mb-2 bg-white border rounded-lg shadow-lg z-[60] animate-fade-in-up">
+                            <div className="absolute bottom-full left-0 w-full mb-2 bg-white border rounded-lg shadow-lg z-[60] animate-fade-in-up"> 
                                 <ul className="p-1">
                                     {statusOptions.map(status => (
                                         <li key={status}><button onClick={() => handleStatusChange(status)} className="w-full text-left text-sm px-3 py-1.5 rounded-md hover:bg-gray-100 flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${statusColorMap[status]}`}></span>{status}</button></li>

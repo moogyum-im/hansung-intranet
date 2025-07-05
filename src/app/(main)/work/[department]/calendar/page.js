@@ -1,6 +1,5 @@
-// src/app/work/[department]/calendar/page.js
+// 파일 경로: src/app/(main)/work/[department]/calendar/page.js
 import WorkCalendar from './WorkCalendar';
-// 👇 여기가 @supabase/auth-helpers-nextjs로 변경되어야 합니다!
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'; 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -9,68 +8,80 @@ export default async function WorkCalendarPage({ params }) {
     const pageDepartment = decodeURIComponent(params.department);
     
     const cookieStore = cookies();
-    // 👇 여기도 @supabase/auth-helpers-nextjs 방식으로 클라이언트 초기화!
     const supabase = createServerComponentClient({
-        cookies: () => cookieStore, // 함수 형태로 전달
+        cookies: () => cookieStore,
     });
 
-    // 👇 getSession()을 사용하고, user는 session.user로 가져옵니다.
     const { data: { session }, error: authError } = await supabase.auth.getSession();
     const user = session?.user;
 
     if (authError || !user) {
-        console.error("인증 오류 또는 사용자 없음 (WorkCalendarPage - auth-helpers):", authError?.message);
-        // 이 페이지가 아니라 로그인 페이지로 보내는 것이 맞습니다.
         return redirect(`/login?message=업무 캘린더를 보려면 로그인이 필요합니다.&redirectTo=/work/${encodeURIComponent(pageDepartment)}/calendar`);
     }
 
     let currentUserActualDepartment = null;
     let userRole = null;
     let currentUserName = null;
+    let allEmployees = [];
 
-    if (user) { // user 객체가 있을 때만 프로필 조회
+    if (user) {
         const PROFILES_TABLE_NAME = 'profiles'; 
-        const { data: profile, error: profileError } = await supabase
-            .from(PROFILES_TABLE_NAME)
-            .select('department, role, full_name')
-            .eq('id', user.id)
-            .single();
+        
+        const [profileResponse, employeesResponse] = await Promise.all([
+            supabase
+                .from(PROFILES_TABLE_NAME)
+                .select('department, role, full_name')
+                .eq('id', user.id)
+                .single(),
+            supabase
+                .from(PROFILES_TABLE_NAME)
+                .select('id, full_name, department')
+                .order('full_name')
+        ]);
 
-        if (profileError) {
-            console.error("사용자 프로필 조회 오류 (WorkCalendarPage):", profileError.message);
-        }
+        const { data: profile, error: profileError } = profileResponse;
+        if (profileError) console.error("사용자 프로필 조회 오류:", profileError.message);
         if (profile) {
             currentUserActualDepartment = profile.department;
             userRole = profile.role;
             currentUserName = profile.full_name;
-        } else {
-            console.warn(`사용자 ID '${user.id}'에 해당하는 프로필을 찾을 수 없습니다 (WorkCalendarPage).`);
         }
+
+        const { data: employees, error: employeesError } = employeesResponse;
+        if (employeesError) console.error("전체 직원 목록 조회 오류:", employeesError.message);
+        else allEmployees = employees || [];
     }
+    
     const isAdmin = userRole === 'admin';
 
     const TASKS_TABLE_NAME = 'tasks';
     const PROJECTS_TABLE_NAME = 'projects';
+    
+    // ★★★★★ 여기가 핵심! 공유 캘린더를 위한 쿼리입니다. ★★★★★
+    let tasksQuery = supabase
+        .from(TASKS_TABLE_NAME)
+        // 참조인(attendees) 컬럼을 포함하여 모든 필요한 데이터를 가져옵니다.
+        .select('*, author:user_id(full_name)'); // 작성자 이름도 함께 가져오면 좋습니다.
 
-    // user가 확실히 있을 때만 tasks와 projects를 가져오도록 순서를 조정하거나,
-    // tasks/projects 가져오기는 WorkCalendar 내부(클라이언트 컴포넌트)에서 SWR 등으로 처리하는 것도 방법입니다.
-    // 여기서는 일단 그대로 둡니다.
+    // 관리자가 아니라면, 내가 작성했거나 참조인으로 포함된 것만 보도록 필터링
+    if (!isAdmin) {
+        // OR 조건: 내가 작성자(user_id)이거나,
+        //         참조인(attendees) 배열에 내 ID가 포함되어 있는 모든 일정을 가져옴
+        tasksQuery = tasksQuery.or(`user_id.eq.${user.id},attendees.cs.{${user.id}}`);
+    }
+
+    tasksQuery = tasksQuery.order('start_date', { ascending: true });
+
+    // 수정된 쿼리를 실행합니다.
     const [tasksResponse, projectsResponse] = await Promise.all([
-        supabase
-            .from(TASKS_TABLE_NAME)
-            .select('id, title, start_date, end_date, project_id, status, department, user_id, description')
-            .eq('department', pageDepartment)
-            .order('start_date', { ascending: true }),
-        supabase
-            .from(PROJECTS_TABLE_NAME)
-            .select('id, name, color') // color 컬럼이 projects 테이블에 있다고 가정
+        tasksQuery, 
+        supabase.from(PROJECTS_TABLE_NAME).select('id, name, color')
     ]);
     
     if (tasksResponse.error) {
         console.error(`[Page.js] '${pageDepartment}' 부서 업무 데이터 로딩 에러:`, tasksResponse.error.message);
     }
     if (projectsResponse.error) {
-        // 프로젝트 목록 로딩 에러가 페이지 전체를 막을 필요는 없을 수 있으므로, console.error만 남길 수 있음
         console.error(`[Page.js] 프로젝트 목록 로딩 에러:`, projectsResponse.error.message);
     }
 
@@ -79,7 +90,7 @@ export default async function WorkCalendarPage({ params }) {
         <header className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
             <div>
                  <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-100">{pageDepartment} - 업무 캘린더</h1>
-                 <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">부서의 전체 업무 일정을 확인하고 관리합니다.</p>
+                 <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">나와 관련된 모든 업무 일정을 확인하고 관리합니다.</p>
             </div>
         </header>
         
@@ -90,8 +101,9 @@ export default async function WorkCalendarPage({ params }) {
                 isAdmin={isAdmin}
                 pageDepartment={pageDepartment}
                 currentUserDepartment={currentUserActualDepartment}
-                currentUserId={user?.id} // user가 null일 수 있으므로 옵셔널 체이닝 유지
+                currentUserId={user?.id}
                 currentUserName={currentUserName}
+                allEmployees={allEmployees} 
             />
         </main>
       </div>
