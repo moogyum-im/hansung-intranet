@@ -109,21 +109,11 @@ export default function NewApprovalPage() {
         const approvalType = formData['결재 종류'] || selectedForm.title;
         const title = formData['제목'] || selectedForm.title;
 
-        // 1. approval_documents 테이블에 문서 저장
-        const { data: approvalDoc, error: insertError } = await supabase
-            .from('approval_documents')
-            .insert({
-                title: title, 
-                form_id: selectedForm.id, 
-                form_data: formData,
-                author_id: employee.id, 
-                status: '대기', 
-                type: approvalType,
-                start_date: startDate, 
-                end_date: endDate,
-            })
-            .select()
-            .single();
+        const { data: approvalDoc, error: insertError } = await supabase.from('approval_documents').insert({
+            title: title, form_id: selectedForm.id, form_data: formData,
+            author_id: employee.id, status: '대기', type: approvalType,
+            start_date: startDate, end_date: endDate,
+        }).select().single();
 
         if (insertError || !approvalDoc) {
             toast.error('결재 상신 실패: ' + insertError.message);
@@ -131,17 +121,12 @@ export default function NewApprovalPage() {
             return;
         }
         
-        // 2. approval_document_approvers 테이블에 결재자들 저장
         const approverData = approvers.map((approver, index) => ({ 
-            document_id: approvalDoc.id, 
-            approver_id: approver.value, 
-            step: index + 1, 
-            status: index === 0 ? '대기' : '미결', 
+            document_id: approvalDoc.id, approver_id: approver.value, 
+            step: index + 1, status: index === 0 ? '대기' : '미결', 
         }));
         
-        const { error: approverError } = await supabase
-            .from('approval_document_approvers')
-            .insert(approverData);
+        const { error: approverError } = await supabase.from('approval_document_approvers').insert(approverData);
 
         if (approverError) {
             toast.error('결재선 지정 실패: ' + approverError.message);
@@ -183,7 +168,8 @@ export default function NewApprovalPage() {
                     <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-sm border space-y-8 animate-fade-in">
                         <div>
                             <h2 className="text-lg font-semibold text-gray-800 mb-1">2. 내용 작성</h2>
-                            <p className="text-sm text-gray-500 mb-4">선택한 '<span className="font-bold text-blue-600">{selectedForm.title}</span>' 양식에 따라 내용을 입력합니다.</p>
+                            {/* ★★★★★ 작은따옴표를 큰따옴표로 수정 ★★★★★ */}
+                            <p className="text-sm text-gray-500 mb-4">선택한 "<span className="font-bold text-blue-600">{selectedForm.title}</span>" 양식에 따라 내용을 입력합니다.</p>
                             <div className="space-y-6 border-t pt-6">
                                 {(selectedForm.fields || []).map((field) => (
                                     <div key={field.name}>
