@@ -1,61 +1,54 @@
-// 파일 경로: src/app/(main)/layout.js
 'use client';
 
 import { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
+import { EmployeeProvider } from '@/contexts/EmployeeContext';
+import { Toaster } from 'react-hot-toast';
+import GlobalChatListener from '@/components/GlobalChatListener';
 
-// 햄버거 아이콘 컴포넌트 (생략)
-const HamburgerIcon = ({ isOpen }) => (
-  <svg className="w-6 h-6 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    {isOpen ? (<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />) : (<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />)}
-  </svg>
-);
-
+const MenuIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg> );
 
 export default function MainLayout({ children }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  return (
-    // ★★★ 전체 레이아웃을 grid 시스템으로 변경 ★★★
-    <div className="md:grid md:grid-cols-[256px_1fr] h-screen"> {/* 데스크톱에서는 '256px 1fr' 그리드로 */}
-      
-      {/* 1. 사이드바 */}
-      {/* 모바일에서는 fixed, 데스크톱에서는 그리드의 첫 번째 컬럼을 차지 */}
-      <div className="hidden md:block">
-        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      </div>
+    return (
+        <EmployeeProvider>
+            {/* ✨ [수정] position을 'bottom-right'로 변경하고, toastOptions로 기본 스타일을 지정합니다. */}
+            <Toaster 
+                position="bottom-right" 
+                reverseOrder={false}
+                toastOptions={{
+                    className: '',
+                    style: {
+                        background: '#334155', // 슬레이트 색상 배경
+                        color: '#fff',
+                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+                    },
+                }}
+            />
+            <GlobalChatListener />
+            
+            <div className="flex h-screen bg-gray-100">
+                <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+                
+                <div className="flex-1 flex flex-col">
+                    <header className="lg:hidden flex justify-between items-center bg-white p-4 border-b">
+                        <button 
+                            onClick={() => setSidebarOpen(true)}
+                            className="text-gray-500 focus:outline-none"
+                            aria-label="Open sidebar"
+                        >
+                            <MenuIcon />
+                        </button>
+                        <h1 className="text-xl font-semibold">HANSUNG</h1>
+                        <div className="w-6"></div>
+                    </header>
 
-      {/* 모바일용 사이드바 (화면 밖에서 나타남) */}
-      <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out md:hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      </div>
-
-      {/* 모바일용 오버레이 */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        ></div>
-      )}
-
-      {/* 2. 메인 콘텐츠 */}
-      <main className="overflow-y-auto bg-slate-50">
-        {/* 모바일용 헤더에 햄버거 버튼 추가 */}
-        <div className="md:hidden p-4 flex items-center bg-white border-b">
-            <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="p-2 rounded-lg"
-            >
-                <HamburgerIcon isOpen={isSidebarOpen} />
-            </button>
-            <div className="ml-4 font-bold text-lg text-indigo-600">HANSUNG</div>
-        </div>
-        
-        {/* 콘텐츠 패딩 */}
-        <div className="p-4 sm:p-6 lg:p-8">
-          {children}
-        </div>
-      </main>
-    </div>
-  );
+                    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50">
+                        {children}
+                    </main>
+                </div>
+            </div>
+        </EmployeeProvider>
+    );
 }

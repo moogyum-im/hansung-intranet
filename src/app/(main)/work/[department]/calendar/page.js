@@ -1,6 +1,7 @@
 // 파일 경로: src/app/(main)/work/[department]/calendar/page.js
+
 import WorkCalendar from './WorkCalendar';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'; 
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
@@ -52,27 +53,29 @@ export default async function WorkCalendarPage({ params }) {
         else allEmployees = employees || [];
     }
     
+    // 이 페이지에서는 userRole을 직접 사용하지 않으므로 isAdmin 변수는 참고용으로 남겨둡니다.
     const isAdmin = userRole === 'admin';
 
     const TASKS_TABLE_NAME = 'tasks';
     const PROJECTS_TABLE_NAME = 'projects';
     
-    // ★★★★★ 여기가 핵심! 공유 캘린더를 위한 쿼리입니다. ★★★★★
+    // ================== ★★★★★ 수정된 핵심 로직 ★★★★★ ==================
+    
+    // 1. 기본 쿼리를 생성합니다.
     let tasksQuery = supabase
         .from(TASKS_TABLE_NAME)
-        // 참조인(attendees) 컬럼을 포함하여 모든 필요한 데이터를 가져옵니다.
-        .select('*, author:user_id(full_name)'); // 작성자 이름도 함께 가져오면 좋습니다.
+        .select('*, author:user_id(full_name)');
 
-    // 관리자가 아니라면, 내가 작성했거나 참조인으로 포함된 것만 보도록 필터링
-    if (!isAdmin) {
-        // OR 조건: 내가 작성자(user_id)이거나,
-        //         참조인(attendees) 배열에 내 ID가 포함되어 있는 모든 일정을 가져옴
-        tasksQuery = tasksQuery.or(`user_id.eq.${user.id},attendees.cs.{${user.id}}`);
-    }
+    // 2. **사용자 역할(관리자/일반)에 관계없이,
+    //    무조건 현재 페이지의 부서로 업무 데이터를 필터링합니다.**
+    // 'tasks' 테이블에 부서를 나타내는 'department' 컬럼이 있다고 가정합니다.
+    tasksQuery = tasksQuery.eq('department', pageDepartment);
 
+    // 3. 날짜순으로 정렬합니다.
     tasksQuery = tasksQuery.order('start_date', { ascending: true });
 
-    // 수정된 쿼리를 실행합니다.
+    // =====================================================================
+    
     const [tasksResponse, projectsResponse] = await Promise.all([
         tasksQuery, 
         supabase.from(PROJECTS_TABLE_NAME).select('id, name, color')
@@ -90,7 +93,7 @@ export default async function WorkCalendarPage({ params }) {
         <header className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
             <div>
                  <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-100">{pageDepartment} - 업무 캘린더</h1>
-                 <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">나와 관련된 모든 업무 일정을 확인하고 관리합니다.</p>
+                 <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">해당 부서의 모든 업무 일정을 확인하고 관리합니다.</p>
             </div>
         </header>
         
@@ -98,7 +101,7 @@ export default async function WorkCalendarPage({ params }) {
             <WorkCalendar
                 initialTasks={tasksResponse.data || []} 
                 initialGroups={projectsResponse.data || []}
-                isAdmin={isAdmin}
+                isAdmin={isAdmin} // isAdmin prop은 다른 곳에서 사용할 수 있으므로 유지합니다.
                 pageDepartment={pageDepartment}
                 currentUserDepartment={currentUserActualDepartment}
                 currentUserId={user?.id}

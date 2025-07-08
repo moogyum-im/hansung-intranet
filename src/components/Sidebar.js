@@ -1,4 +1,3 @@
-// 파일 경로: src/components/Sidebar.js
 'use client';
 
 import Link from 'next/link';
