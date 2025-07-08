@@ -1,6 +1,9 @@
 // src/app/(main)/approvals/[id]/page.js
 
-import createServerClient from '@/lib/supabase/server'; 
+// 이전: import createServerClient from '@/lib/supabase/server';
+// 변경: lib/supabase/server.js에서 createSupabaseServerClient가 명명된 export로 변경되었으므로,
+// 중괄호를 사용하여 명명된 임포트를 사용합니다.
+import { createSupabaseServerClient } from '@/lib/supabase/server'; 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import ApprovalActions from './ApprovalActions'; // 바로 이 컴포넌트를 import 합니다.
@@ -52,7 +55,9 @@ const ApprovalAttachments = ({ attachments }) => {
 
 // 이 페이지는 서버 컴포넌트입니다. ('use client' 없음)
 export default async function ApprovalDetailPage({ params }) {
-    const supabase = createServerClient();
+    // 이전: const supabase = createServerClient();
+    // 변경: 명명된 임포트로 가져온 createSupabaseServerClient 함수를 호출합니다.
+    const supabase = createSupabaseServerClient(); 
     const documentId = params.id;
     const { data: { user } } = await supabase.auth.getUser();
 

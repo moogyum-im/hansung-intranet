@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client'; // 클라이언트용 supabase 인스턴스
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import Select from 'react-select';
+import { Suspense } from 'react'; // Suspense 임포트 추가
 
 // --- 템플릿 데이터 정의 ---
 const formTemplates = {
@@ -20,8 +21,10 @@ const formTemplates = {
     expense_report: {
         title: '지출 결의서',
         fields: [
-            { name: '지출 항목', type: 'text', required: true }, { name: '금액', type: 'text', required: true },
-            { name: '증빙 자료', type: 'file', required: false }, { name: '상세 내용', type: 'textarea', required: true },
+            { name: '지출 항목', type: 'text', required: true },
+            { name: '금액', type: 'text', required: true },
+            { name: '증빙 자료', type: 'file', required: false },
+            { name: '상세 내용', type: 'textarea', required: true },
         ]
     },
     work_report: {
@@ -74,9 +77,12 @@ const renderField = (field, formData, onChange) => {
     }
 };
 
-export default function NewApprovalPage() {
+// 기존 NewApprovalPage 컴포넌트를 NewApprovalPageContent로 이름을 변경하고,
+// useSearchParams를 직접 사용하는 로직을 포함합니다.
+function NewApprovalPageContent() {
     const router = useRouter();
-    const searchParams = useSearchParams();
+    const searchParams = useSearchParams(); // 클라이언트 컴포넌트에서 안전하게 사용
+
     const { employee } = useEmployee();
     
     const templateId = useMemo(() => searchParams.get('template'), [searchParams]);
@@ -123,11 +129,12 @@ export default function NewApprovalPage() {
         };
 
         fetchInitialData();
-    }, [templateId, formId, router]);
-    
-    const handleInputChange = (fieldName, value) => {
+    }, [templateId, formId, router]); // 의존성 배열에 router 추가
+
+    // useCallback 불필요한 의존성 경고 수정: supabase는 변경되지 않으므로 제외
+    const handleInputChange = useCallback((fieldName, value) => {
         setFormData(prev => ({ ...prev, [fieldName]: value }));
-    };
+    }, []); // 빈 배열: 함수는 한 번만 생성되고 메모리 사용 효율적
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -140,7 +147,7 @@ export default function NewApprovalPage() {
         try {
             const { data: approvalDoc, error: insertError } = await supabase.from('approval_documents').insert({
                 title,
-                form_id: formId, // ✨ 이 줄이 추가되었습니다!
+                form_id: formId, 
                 form_data: formData,
                 form_fields: selectedForm?.fields || [],
                 author_id: employee.id,
@@ -180,9 +187,12 @@ export default function NewApprovalPage() {
 
     if (loading) return <div className="p-8 text-center">페이지를 불러오는 중...</div>;
     
-    const employeeOptions = allEmployees
-        .filter(emp => emp.id !== employee?.id)
-        .map(emp => ({ value: emp.id, label: `${emp.full_name} (${emp.department})` }));
+    // useMemo 의존성 경고 수정: employeeOptions 생성 시 employee.id에 의존
+    const employeeOptions = useMemo(() => {
+        return allEmployees
+            .filter(emp => emp.id !== employee?.id)
+            .map(emp => ({ value: emp.id, label: `${emp.full_name} (${emp.department})` }));
+    }, [allEmployees, employee?.id]);
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
@@ -235,5 +245,15 @@ export default function NewApprovalPage() {
                 </div>
             </form>
         </div>
+    );
+}
+
+// Next.js App Router에서 useSearchParams를 사용하는 Client Component 페이지는
+// Suspense로 감싸져야 빌드 시 정적 렌더링 오류를 피할 수 있습니다.
+export default function NewApprovalPage() {
+    return (
+        <Suspense fallback={<div>폼을 로딩 중입니다...</div>}>
+            <NewApprovalPageContent />
+        </Suspense>
     );
 }
