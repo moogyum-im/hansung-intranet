@@ -24,21 +24,26 @@ export default function GlobalChatListener() {
     }, [employee]);
 
     useEffect(() => {
-        if (!employee) return;
-        const channel = supabase.channel('global-message-listener').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, async (payload) => {
-            const newMessage = payload.new;
-            if (newMessage.sender_id === employee.id || !myRoomIds.has(newMessage.room_id)) return;
-            const { data: sender } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', newMessage.sender_id).single();
-            toast((t) => (
-                <div className="flex gap-4 items-center cursor-pointer w-full max-w-md" onClick={() => { router.push(`/chatrooms/${newMessage.room_id}`); toast.dismiss(t.id); }}>
-                    <Avatar profile={sender} />
-                    <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm">{sender?.full_name || '새 메시지'}</p>
-                        <p className="truncate text-sm opacity-80">{newMessage.content}</p>
+        if (!employee || myRoomIds.size === 0) return;
+
+        const channel = supabase.channel('global-message-listener')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, async (payload) => {
+                const newMessage = payload.new;
+                if (newMessage.sender_id === employee.id || !myRoomIds.has(newMessage.room_id)) return;
+                
+                const { data: sender } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', newMessage.sender_id).single();
+                toast((t) => (
+                    <div className="flex gap-4 items-center cursor-pointer w-full max-w-md" onClick={() => { router.push(`/chatrooms/${newMessage.room_id}`); toast.dismiss(t.id); }}>
+                        <Avatar profile={sender} />
+                        <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm">{sender?.full_name || '새 메시지'}</p>
+                            <p className="truncate text-sm opacity-80">{newMessage.content}</p>
+                        </div>
                     </div>
-                </div>
-            ), { icon: '💬', duration: 5000 });
-        }).subscribe();
+                ), { icon: '💬', duration: 5000 });
+            })
+            .subscribe();
+
         return () => { supabase.removeChannel(channel); };
     }, [employee, router, myRoomIds]);
 
