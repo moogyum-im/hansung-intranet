@@ -1,11 +1,10 @@
-// 파일 경로: src/app/(main)/chatrooms/page.js
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import CreateRoomModal from '@/components/CreateRoomModal';
-import ChatRoomListItem from '@/components/ChatRoomListItem'; // 새로 만든 아이템 컴포넌트 import
+import ChatRoomListItem from '@/components/ChatRoomListItem';
 import { useRouter } from 'next/navigation';
 
 export default function ChatRoomsPage() {
@@ -23,7 +22,6 @@ export default function ChatRoomsPage() {
         }
         setLoading(true);
         
-        // ✨ [업그레이드] 1단계에서 만든 강력한 RPC 함수를 호출합니다.
         const { data, error } = await supabase.rpc('get_chat_rooms_for_user', { p_user_id: employee.id });
 
         if (error) {
@@ -36,17 +34,38 @@ export default function ChatRoomsPage() {
     }, [employee?.id]);
 
     useEffect(() => {
-        fetchChatRooms();
-    }, [fetchChatRooms]);
+        if (employee) {
+            fetchChatRooms();
+        }
+    }, [employee, fetchChatRooms]);
 
-    // ✨ [추가] 실시간 업데이트 리스너
     useEffect(() => {
         if (!employee?.id) return;
         
         const channel = supabase
-            .channel('chatroom-list-changes-page')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_participants', filter: `user_id=eq.${employee.id}` }, fetchChatRooms)
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_rooms' }, fetchChatRooms)
+            .channel('chatroom-list-changes-page-v3')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_participants', filter: `user_id=eq.${employee.id}` }, payload => {
+                console.log('참여자 변경 감지, 목록 새로고침', payload);
+                fetchChatRooms();
+            })
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, payload => {
+                // 새 메시지가 오면, 해당 채팅방 정보만 업데이트 (전체 목록 새로고침 방지)
+                setChatRooms(prevRooms => {
+                    const roomIndex = prevRooms.findIndex(r => r.id === payload.new.room_id);
+                    if (roomIndex === -1) return prevRooms; // 내가 참여하지 않은 방의 메시지는 무시
+                    
+                    const updatedRoom = { 
+                        ...prevRooms[roomIndex],
+                        last_message_content: payload.new.content,
+                        last_message_at: payload.new.created_at,
+                        unread_count: (prevRooms[roomIndex].unread_count || 0) + 1
+                    };
+
+                    // 마지막 메시지 순으로 정렬하기 위해, 해당 방을 맨 위로 올림
+                    const otherRooms = prevRooms.filter(r => r.id !== payload.new.room_id);
+                    return [updatedRoom, ...otherRooms];
+                });
+            })
             .subscribe();
             
         return () => { supabase.removeChannel(channel); };
@@ -56,13 +75,8 @@ export default function ChatRoomsPage() {
         setChatRooms(prevRooms => prevRooms.filter(room => room.id !== roomId));
     };
 
-    if (employeeLoading) {
+    if (employeeLoading && loading) {
         return <div className="p-6"><p className="text-gray-500">사용자 정보 로딩 중...</p></div>;
-    }
-
-    if (!employee) {
-        router.push('/login');
-        return null;
     }
 
     return (
@@ -86,7 +100,6 @@ export default function ChatRoomsPage() {
                         <p className="text-sm text-gray-400 mt-2">새 채팅 버튼을 눌러 대화를 시작해보세요.</p>
                     </div>
                 ) : (
-                    // ✨ [업그레이드] 새로운 UI 컴포넌트로 목록을 그립니다.
                     <div className="divide-y divide-gray-200">
                         {chatRooms.map(room => (
                             <ChatRoomListItem key={room.id} room={room} onLeave={handleLeaveRoom} />

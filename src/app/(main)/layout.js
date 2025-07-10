@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { EmployeeProvider } from '@/contexts/EmployeeContext';
 import { Toaster } from 'react-hot-toast';
-import GlobalChatListener from '@/components/GlobalChatListener';
+import GlobalChatListener from '@/components/GlobalChatListener'; // ✨ 리스너 import
 
 const MenuIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg> );
 
@@ -13,19 +13,17 @@ export default function MainLayout({ children }) {
 
     return (
         <EmployeeProvider>
-            {/* ✨ [수정] position을 'bottom-right'로 변경하고, toastOptions로 기본 스타일을 지정합니다. */}
             <Toaster 
                 position="bottom-right" 
                 reverseOrder={false}
                 toastOptions={{
-                    className: '',
                     style: {
-                        background: '#334155', // 슬레이트 색상 배경
+                        background: '#334155',
                         color: '#fff',
-                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
                     },
                 }}
             />
+            {/* ✨ 전역 알림 기능이 앱 전체에서 동작하도록 추가합니다. */}
             <GlobalChatListener />
             
             <div className="flex h-screen bg-gray-100">
