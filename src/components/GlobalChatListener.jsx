@@ -24,51 +24,52 @@ export default function GlobalChatListener() {
     const router = useRouter();
     const [myRoomIds, setMyRoomIds] = useState(new Set());
 
+    // 처음 한 번만 내가 참여한 채팅방 ID 목록을 가져옵니다.
     useEffect(() => {
         if (!employee) return;
-        console.log('[진단] 1. 직원 정보 로드 완료, 내 채팅방 ID 가져오기 시작.');
         const fetchMyRooms = async () => {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('chat_room_participants')
                 .select('room_id')
                 .eq('user_id', employee.id);
             
             if (data) {
-                console.log(`[진단] 2. 내가 참여한 채팅방 ${data.length}개 확인.`);
                 setMyRoomIds(new Set(data.map(r => r.room_id)));
-            } else {
-                 console.error('[진단] 2-1. 내 채팅방 목록 가져오기 실패!', error);
             }
         };
         fetchMyRooms();
     }, [employee]);
 
+    // 실시간 메시지를 감지합니다.
     useEffect(() => {
         if (!employee || myRoomIds.size === 0) return;
-        console.log('[진단] 3. 실시간 리스너 설정 시작.');
 
-        const channel = supabase.channel('global-message-listener-v2')
+        const channel = supabase.channel('global-message-listener')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, 
             async (payload) => {
-                console.log('[진단] 5. 새로운 메시지 방송 수신!', payload.new);
                 const newMessage = payload.new;
                 
-                if (newMessage.sender_id === employee.id) {
-                    console.log('[진단] 6. 내가 보낸 메시지라 알림 건너뜀.');
-                    return;
-                }
-
-                if (!myRoomIds.has(newMessage.room_id)) {
-                    console.log(`[진단] 6. 내가 참여하지 않은 방(ID: ${newMessage.room_id})의 메시지라 알림 건너뜀.`);
+                // 내가 보낸 메시지이거나, 내가 참여하지 않은 방의 메시지는 무시합니다.
+                if (newMessage.sender_id === employee.id || !myRoomIds.has(newMessage.room_id)) {
                     return;
                 }
                 
-                console.log('[진단] 7. 보낸 사람 프로필 정보 조회 시작.');
-                const { data: sender } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', newMessage.sender_id).single();
+                // 보낸 사람의 프로필 정보를 가져옵니다.
+                const { data: sender } = await supabase
+                    .from('profiles')
+                    .select('full_name, avatar_url')
+                    .eq('id', newMessage.sender_id)
+                    .single();
                 
-                console.log('[진단] 8. 토스트 팝업 실행!');
+                // 토스트 팝업을 띄웁니다.
                 toast((t) => (
-                    <div className="flex gap-4 items-center cursor-pointer w-full max-w-md" onClick={() => { router.push(`/chatrooms/${newMessage.room_id}`); toast.dismiss(t.id); }}>
+                    <div 
+                        className="flex gap-4 items-center cursor-pointer w-full max-w-md"
+                        onClick={() => {
+                            router.push(`/chatrooms/${newMessage.room_id}`);
+                            toast.dismiss(t.id);
+                        }}
+                    >
                         <Avatar profile={sender} />
                         <div className="flex-1 min-w-0">
                             <p className="font-bold text-sm">{sender?.full_name || '새 메시지'}</p>
@@ -77,17 +78,11 @@ export default function GlobalChatListener() {
                     </div>
                 ), { icon: '💬', duration: 5000 });
             })
-            .subscribe((status) => {
-                // 실시간 연결 상태를 확인하는 가장 중요한 로그
-                console.log('[진단] 4. 실시간 채널 구독 상태:', status);
-            });
+            .subscribe();
 
-        return () => {
-            console.log('[진단] 9. 리스너 정리 및 채널 연결 해제.');
-            supabase.removeChannel(channel);
-        };
+        return () => { supabase.removeChannel(channel); };
 
     }, [employee, router, myRoomIds]);
 
-    return null;
+    return null; // 이 컴포넌트는 화면에 아무것도 그리지 않습니다.
 }
