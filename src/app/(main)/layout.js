@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { EmployeeProvider } from '@/contexts/EmployeeContext';
-import { Toaster } from 'react-hot-toast';
 import GlobalChatListener from '@/components/GlobalChatListener';
 import { usePathname } from 'next/navigation';
+import { Toaster } from 'react-hot-toast'; // Toaster import
 
 const MenuIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg> );
 
@@ -16,7 +16,9 @@ export default function MainLayout({ children }) {
 
     return (
         <EmployeeProvider>
-            <Toaster position="bottom-right" reverseOrder={false} toastOptions={{ style: { background: '#334155', color: '#fff' } }} />
+            {/* 앱 전체에 토스트 메시지를 표시하기 위해 Toaster 컴포넌트를 추가합니다. */}
+            <Toaster position="bottom-right" reverseOrder={false} />
+
             <GlobalChatListener />
             <div className="flex h-screen bg-gray-100">
                 <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />

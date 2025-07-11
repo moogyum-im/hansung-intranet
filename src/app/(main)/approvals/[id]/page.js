@@ -1,14 +1,19 @@
 // src/app/(main)/approvals/[id]/page.js
+'use client'; // 이 페이지는 클라이언트 컴포넌트입니다.
 
-// 이전: import createServerClient from '@/lib/supabase/server';
-// 변경: lib/supabase/server.js에서 createSupabaseServerClient가 명명된 export로 변경되었으므로,
-// 중괄호를 사용하여 명명된 임포트를 사용합니다.
-import { createSupabaseServerClient } from '@/lib/supabase/server'; 
-import { notFound } from 'next/navigation';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { supabase } from '@/lib/supabase/client'; // 클라이언트용 Supabase 임포트
+import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
-import ApprovalActions from './ApprovalActions'; // 바로 이 컴포넌트를 import 합니다.
 
-// --- Helper Components (서버 컴포넌트 내부에 정의해도 무방합니다) ---
+// ApprovalActions 컴포넌트 임포트
+import ApprovalActions from './ApprovalActions';
+
+// PDF/이미지 변환 라이브러리 제거 (html2canvas, jspdf)
+// import html2canvas from 'html2canvas'; // 제거
+// import jsPDF from 'jspdf'; // 제거
+
+// --- Helper Components (생략: 기존과 동일) ---
 const getStatusStyle = (status) => {
     switch (status) {
         case '승인': return 'bg-blue-100 text-blue-800';
@@ -53,36 +58,92 @@ const ApprovalAttachments = ({ attachments }) => {
 };
 
 
-// 이 페이지는 서버 컴포넌트입니다. ('use client' 없음)
-export default async function ApprovalDetailPage({ params }) {
-    // 이전: const supabase = createServerClient();
-    // 변경: 명명된 임포트로 가져온 createSupabaseServerClient 함수를 호출합니다.
-    const supabase = createSupabaseServerClient(); 
-    const documentId = params.id;
-    const { data: { user } } = await supabase.auth.getUser();
+export default function ApprovalDetailPage() {
+    const { id: documentId } = useParams();
+    const [document, setDocument] = useState(null);
+    const [approvers, setApprovers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    // const contentRef = useRef(null); // 더 이상 html2canvas를 사용하지 않으므로 필요 없음
 
-    const { data: document, error: docError } = await supabase
-        .from('approval_documents')
-        .select(`*, author: author_id ( full_name, department )`)
-        .eq('id', documentId)
-        .single();
-    
-    if (docError || !document) {
-        notFound();
+    const [currentUser, setCurrentUser] = useState(null);
+
+    useEffect(() => {
+        const fetchUserData = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setCurrentUser(user);
+        };
+        fetchUserData();
+    }, []);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!documentId) {
+                setLoading(false);
+                notFound();
+                return;
+            }
+
+            setLoading(true);
+            setError(null);
+
+            const { data: docData, error: docError } = await supabase
+                .from('approval_documents')
+                .select(`*, author:author_id(full_name, department)`)
+                .eq('id', documentId)
+                .single();
+
+            if (docError || !docData) {
+                console.error('결재 문서 로드 오류:', docError);
+                setError('결재 문서를 찾을 수 없습니다.');
+                setLoading(false);
+                notFound();
+                return;
+            }
+            setDocument(docData);
+
+            const { data: approversData, error: approversError } = await supabase
+                .from('approval_document_approvers')
+                .select(`*, approver:approver_id(full_name, department)`)
+                .eq('document_id', documentId)
+                .order('step');
+
+            if (approversError) {
+                console.error('결재선 정보 로드 오류:', approversError);
+                setError('결재선 정보를 불러오는데 실패했습니다.');
+                setLoading(false);
+                return;
+            }
+            setApprovers(approversData);
+            setLoading(false);
+        };
+
+        fetchData();
+    }, [documentId]);
+
+    // ★★★ PDF 저장 및 인쇄 로직을 하나로 통합하고 window.print()를 사용합니다. ★★★
+    const handlePrintOrSavePdf = useCallback(() => {
+        // 브라우저의 기본 인쇄 대화 상자를 띄웁니다.
+        // 여기서 "대상"을 "PDF로 저장"으로 선택하면 PDF로 저장됩니다.
+        window.print();
+    }, []);
+
+    if (loading) {
+        return <div className="p-4 text-center">결재 문서를 로드 중입니다...</div>;
     }
-    
-    const { data: approvers, error: approversError } = await supabase
-        .from('approval_document_approvers')
-        .select(`*, approver: approver_id ( full_name, department )`)
-        .eq('document_id', documentId)
-        .order('step');
 
-    if (approversError) {
-        return <div>결재선 정보를 불러오는데 실패했습니다.</div>;
+    if (error) {
+        return <div className="p-4 text-red-500 text-center">{error}</div>;
+    }
+
+    if (!document) {
+        return notFound();
     }
 
     return (
         <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8 bg-gray-50">
+            {/* ★★★ 이 div는 이제 `print-area` ID를 가지지 않습니다. ★★★
+                 실제 인쇄/PDF 저장 시에는 CSS로 제어합니다. */}
             <div className="max-w-4xl mx-auto space-y-6">
                 <header className="bg-white p-6 rounded-lg shadow-sm border">
                     <div className="flex justify-between items-center mb-4">
@@ -133,12 +194,22 @@ export default async function ApprovalDetailPage({ params }) {
                     </ol>
                 </div>
                 
+                {/* PDF 저장 버튼 (이제 인쇄 기능을 겸합니다) */}
+                <div className="flex gap-4 mt-6 print:hidden"> {/* print:hidden으로 인쇄 시 버튼 숨김 */}
+                    <button
+                        onClick={handlePrintOrSavePdf}
+                        className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow"
+                    >
+                        PDF로 저장 / 인쇄
+                    </button>
+                </div>
+
                 {/* 상호작용이 필요한 부분만 클라이언트 컴포넌트로 렌더링합니다. */}
-                {user && (
+                {currentUser && (
                     <ApprovalActions
                         document={document}
                         approvers={approvers}
-                        currentUserId={user.id}
+                        currentUserId={currentUser.id}
                     />
                 )}
             </div>

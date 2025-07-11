@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { processApprovalAction } from './actions'; // 서버 액션을 불러옵니다.
+import toast from 'react-hot-toast'; // react-hot-toast 임포트
 
 export default function ApprovalActions({ document, approvers, currentUserId }) {
     const router = useRouter();
@@ -25,7 +26,7 @@ export default function ApprovalActions({ document, approvers, currentUserId }) 
         if (isProcessing) return;
 
         if (newStatusInKorean === '반려' && !comment.trim()) {
-            alert('반려 시에는 결재 의견을 반드시 입력해주세요.');
+            toast.error('반려 시에는 결재 의견을 반드시 입력해주세요.');
             return;
         }
 
@@ -40,14 +41,14 @@ export default function ApprovalActions({ document, approvers, currentUserId }) 
             });
 
             if (result.success) {
-                alert(result.message || '결재가 성공적으로 처리되었습니다.');
+                toast.success(result.message || '결재가 성공적으로 처리되었습니다.');
                 router.refresh();
             } else {
-                alert(result.message || '결재 처리 중 오류가 발생했습니다.');
+                toast.error(result.message || '결재 처리 중 오류가 발생했습니다.');
             }
         } catch (error) {
             console.error('클라이언트 측 결재 처리 오류:', error);
-            alert('오류가 발생했습니다. 다시 시도해주세요.');
+            toast.error('오류가 발생했습니다. 다시 시도해주세요.');
         } finally {
             setIsProcessing(false);
         }

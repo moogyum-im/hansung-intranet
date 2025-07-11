@@ -8,7 +8,6 @@ import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import ManageParticipantsModal from './ManageParticipantsModal';
 
-// 아이콘 컴포넌트들 (이전과 동일)
 const EditIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg> );
 const FileAttachIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 hover:text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13.5" /></svg> );
 const SendIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg> );
@@ -35,9 +34,9 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
     const router = useRouter();
     const { employee: currentEmployee } = useEmployee();
     const [chatRoom, setChatRoom] = useState(serverChatRoom);
-    const [messages, setMessages] = useState(serverInitialMessages);
+    const [messages, setMessages] = useState(serverInitialMessages || []);
+    const [participants, setParticipants] = useState((serverInitialParticipants || []).filter(Boolean));
     const [newMessage, setNewMessage] = useState('');
-    const [participants, setParticipants] = useState(serverInitialParticipants);
     const [isManageModalOpen, setManageModalOpen] = useState(false);
     const [isEditingRoomName, setIsEditingRoomName] = useState(false);
     const [editedRoomName, setEditedRoomName] = useState(chatRoom?.name);
@@ -58,17 +57,22 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
     const fetchChatData = useCallback(async () => {
         if (!currentRoomId) return;
         const { data: pData } = await supabase.from('chat_room_participants').select('profiles(id, full_name, position)').eq('room_id', currentRoomId);
-        if (pData) setParticipants(pData.map(p => p.profiles));
+        if (pData) {
+            const validParticipants = pData.map(p => p.profiles).filter(Boolean);
+            setParticipants(validParticipants);
+        }
     }, [currentRoomId]);
 
     useEffect(() => {
-        if(messages.length) scrollToBottom();
+        if (messages.length) {
+            scrollToBottom();
+        }
     }, [messages, scrollToBottom]);
 
     useEffect(() => {
-        // 채팅방에 들어오면, 이 방을 '모두 읽음' 처리
+        if (!currentRoomId || !currentUserId) return;
+
         const markAsRead = async () => {
-            if (!currentRoomId || !currentUserId) return;
             await supabase
                 .from('chat_room_participants')
                 .update({ last_read_at: new Date().toISOString() })
@@ -77,25 +81,29 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
         };
         markAsRead();
 
-        // 실시간 메시지 수신 채널 구독
-        if (!currentRoomId || !currentUserId) return;
         const handleNewMessage = (payload) => {
+            if (!payload.new || !payload.new.id) {
+                return;
+            }
             const senderProfile = participants.find(p => p.id === payload.new.sender_id);
             const messageWithSender = { ...payload.new, sender: senderProfile || { full_name: '알 수 없음' } };
             setMessages(prev => {
                 if (prev.some(msg => msg.id === messageWithSender.id)) return prev;
                 return [...prev, messageWithSender];
             });
-            // 새 메시지 수신 시, 내가 보낸게 아니라면 다시 읽음 처리
             if(payload.new.sender_id !== currentUserId) {
                 markAsRead();
             }
         };
-        const channel = supabase.channel(`realtime_chat_room:${currentRoomId}`)
+
+        // ★★★★★ 핵심 수정사항 ★★★★★
+        // 채널 이름 뒤에 '-v3'를 붙여서, 완전히 새로운 연결을 시도합니다.
+        const channel = supabase.channel(`realtime_chat_room_v3:${currentRoomId}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${currentRoomId}` }, handleNewMessage)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_participants', filter: `room_id=eq.${currentRoomId}` }, fetchChatData)
             .subscribe();
         channelRef.current = channel;
+
         return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
     }, [currentRoomId, currentUserId, participants, fetchChatData]);
 
@@ -118,14 +126,14 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
         const filePath = `${currentUserId}/${Date.now()}_${cleanFileName}`;
 
         try {
-            const { error: uploadError } = await supabase.storage.from('chat-attachments').upload(filePath, file);
+            const { error: uploadError } = await supabase.storage.from('chat-files').upload(filePath, file);
             if (uploadError) throw uploadError;
-            const { data: urlData } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
+            const { data: urlData } = supabase.storage.from('chat-files').getPublicUrl(filePath);
             const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(file.name.split('.').pop().toLowerCase()) ? 'image' : 'file';
             await supabase.from('chat_messages').insert({ room_id: currentRoomId, sender_id: currentUserId, content: urlData.publicUrl, message_type: messageType });
             toast.success("파일 전송 완료!", { id: toastId });
         } catch (error) {
-            toast.error(`파일 전송 실패: ${error.message}`, { id: toastId });
+            toast.error(`파일 전송 실패: ${error.message}`);
         } finally {
             setIsUploading(false);
             if(fileInputRef.current) fileInputRef.current.value = "";
@@ -167,13 +175,13 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
                                         {msg.sender?.full_name?.charAt(0)}
                                     </div>
                                 )}
-                                <div className="flex flex-col gap-1 items-start">
-                                    {!isSentByMe && <p className={`text-xs text-gray-500 ${isSentByMe ? 'text-right' : 'text-left'}`}>{msg.sender?.full_name || '상대방'}</p>}
+                                <div className="flex flex-col gap-1 w-full max-w-md">
+                                    {!isSentByMe && <p className="text-xs text-gray-500 ml-3">{msg.sender?.full_name || '알 수 없음'}</p>}
                                     <div className={`flex items-end gap-2 ${isSentByMe ? 'flex-row-reverse' : ''}`}>
-                                        <div className={`max-w-xs md:max-w-md p-3 rounded-2xl ${isSentByMe ? 'bg-blue-600 text-white rounded-br-lg' : 'bg-white text-gray-800 rounded-bl-lg border'}`}>
-                                            <MessageContent msg={msg} />
+                                        <div className={`p-1 rounded-2xl ${isSentByMe ? 'bg-blue-600 text-white' : 'bg-white text-gray-800 border'}`}>
+                                            <div className="p-2"><MessageContent msg={msg} /></div>
                                         </div>
-                                        <span className="text-xs text-gray-400 self-end">
+                                        <span className="text-xs text-gray-400 self-end flex-shrink-0">
                                             {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: false })}
                                         </span>
                                     </div>

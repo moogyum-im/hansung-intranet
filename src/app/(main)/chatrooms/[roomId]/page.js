@@ -1,46 +1,47 @@
-// 파일 경로: src/app/(main)/chatrooms/[roomId]/page.jsx
-import { cookies } from 'next/headers';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import GroupChatWindow from '@/components/GroupChatWindow';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
-
-async function getChatRoomData(roomId) {
-    const cookieStore = cookies();
-    const supabase = createServerComponentClient({ cookies: () => cookieStore });
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: '로그인 필요' };
-
-    const { data: participantCheck } = await supabase.from('chat_room_participants').select('room_id').eq('room_id', roomId).eq('user_id', user.id).maybeSingle();
-    if (!participantCheck) return { error: '참여자가 아님' };
-
-    const { data: chatRoom } = await supabase.from('chat_rooms').select('*').eq('id', roomId).single();
-    if (!chatRoom) return { error: '채팅방 없음' };
-
-    const { data: initialMessages } = await supabase.from('chat_messages').select(`*, sender:profiles(id, full_name)`).eq('room_id', roomId).order('created_at');
-    const { data: participants } = await supabase.from('chat_room_participants').select('profiles(id, full_name)').eq('room_id', roomId);
-    
-    return {
-        currentUser: user,
-        chatRoom,
-        initialMessages: initialMessages || [],
-        initialParticipants: participants?.map(p => p.profiles) || []
-    };
-}
+import GroupChatWindow from '@/components/GroupChatWindow';
 
 export default async function ChatRoomPage({ params }) {
-    const data = await getChatRoomData(params.roomId);
-    if (data.error) return notFound();
+    const supabase = createSupabaseServerClient();
+    const roomId = params.roomId;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return notFound();
+    }
     
+    const { data: chatRoom, error: roomError } = await supabase
+        .from('chat_rooms')
+        .select('*')
+        .eq('id', roomId)
+        .single();
+    
+    if (roomError || !chatRoom) {
+        return notFound();
+    }
+
+    const { data: participantsData, error: participantsError } = await supabase
+        .from('chat_room_participants')
+        .select('...profiles(*)')
+        .eq('room_id', roomId);
+    
+    const participants = participantsError 
+        ? [] 
+        : participantsData.map(p => p.profiles).filter(Boolean);
+
+    const { data: messages, error: messagesError } = await supabase
+        .from('chat_messages')
+        .select('*, sender:profiles(full_name, avatar_url)')
+        .eq('room_id', roomId)
+        .order('created_at', { ascending: true })
+        .limit(50);
+
     return (
-        // ★★★ GroupChatWindow를 h-full div로 감싸서 높이를 100% 차지하게 합니다 ★★★
-        <div className="h-full">
-            <GroupChatWindow 
-                serverCurrentUser={data.currentUser}
-                serverChatRoom={data.chatRoom}
-                serverInitialMessages={data.initialMessages}
-                serverInitialParticipants={data.initialParticipants}
-            />
-        </div>
+        <GroupChatWindow
+            serverChatRoom={chatRoom}
+            serverInitialMessages={messagesError ? [] : messages}
+            serverInitialParticipants={participants}
+        />
     );
 }

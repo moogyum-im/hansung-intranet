@@ -1,28 +1,48 @@
+// src/app/(main)/approvals/new/page.js
 'use client'; 
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import { useEmployee } from '@/contexts/EmployeeContext';
+// ★★★ 경로 수정: '@/contexts/Employee/EmployeeContext' -> '@/contexts/EmployeeContext' ★★★
+import { useEmployee } from '@/contexts/EmployeeContext'; 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import Select from 'react-select';
-import { Suspense } from 'react';
 
-// --- 템플릿 데이터 정의 (수정 없음) ---
+import dynamic from 'next/dynamic';
+import 'react-quill/dist/quill.snow.css';
+
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+
+// --- 템플릿 데이터 정의 (사유 필드 타입을 'richtext'로 변경) ---
 const formTemplates = {
     leave_request: {
         title: '휴가 신청서',
         fields: [
             { name: '휴가 종류', type: 'select', required: true, options: ['연차', '오전 반차', '오후 반차', '병가', '경조사 휴가'] },
             { name: '휴가 기간', type: 'daterange', required: true },
-            { name: '사유', type: 'textarea', required: true },
+            { name: '사유', type: 'richtext', required: true }, // ★★★ 사유 필드 타입을 'richtext'로 변경 ★★★
         ]
     },
-    expense_report: { /* ... */ },
-    work_report: { /* ... */ }
+    expense_report: { /* ... */
+        title: '지출 결의서',
+        fields: [
+            { name: '제목', type: 'text', required: true },
+            { name: '지출 항목', type: 'text', required: true },
+            { name: '금액', type: 'number', required: true },
+            { name: '상세 내용', type: 'richtext', required: false }, // 예시로 추가
+        ]
+    },
+    work_report: { /* ... */
+        title: '업무 보고서',
+        fields: [
+            { name: '보고 제목', type: 'text', required: true },
+            { name: '보고 내용', type: 'richtext', required: true }, // 예시로 추가
+        ]
+    }
 };
 
-// --- renderField 함수 (수정 없음) ---
+// --- renderField 함수 (richtext 타입 케이스 추가) ---
 const renderField = (field, formData, onChange) => {
     const value = formData[field.name] || '';
     const baseClasses = "w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500";
@@ -48,6 +68,28 @@ const renderField = (field, formData, onChange) => {
                 </select>
             );
         case 'file': return <input type="file" onChange={e => onChange(field.name, e.target.files[0])} required={field.required} className={baseClasses} />;
+        case 'richtext': // 'richtext' 타입 추가
+            return (
+                <ReactQuill
+                    theme="snow"
+                    value={value}
+                    onChange={content => onChange(field.name, content)} // content는 HTML 문자열
+                    required={field.required}
+                    className="mt-2 bg-white rounded-md border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500"
+                    placeholder="내용을 입력하세요. (표, 이미지, 서식 등)"
+                    modules={{
+                        toolbar: [ // Quill 툴바 설정
+                            [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            [{ 'indent': '-1'}, { 'indent': '+1' }],
+                            [{ 'align': [] }],
+                            ['link', 'image', 'video'],
+                            ['clean']
+                        ],
+                    }}
+                />
+            );
         default: return <input type="text" value={value} onChange={e => onChange(field.name, e.target.value)} required={field.required} className={baseClasses} />;
     }
 };
@@ -55,7 +97,7 @@ const renderField = (field, formData, onChange) => {
 function NewApprovalPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { employee } = useEmployee();
+    const { employee } = useEmployee(); // EmployeeContext 경로 수정됨
     
     const templateId = useMemo(() => searchParams.get('template'), [searchParams]);
     const formId = useMemo(() => searchParams.get('formId'), [searchParams]);
@@ -73,20 +115,38 @@ function NewApprovalPageContent() {
             setLoading(true);
             const { data: employees } = await supabase.from('profiles').select('id, full_name, department').order('full_name');
             setAllEmployees(employees || []);
+            
             let formToLoad = null;
             if (templateId && formTemplates[templateId]) {
                 formToLoad = formTemplates[templateId];
             } else if (formId) {
-                const { data: customForm } = await supabase.from('approval_forms').select('*').eq('id', formId).single();
+                const { data: customForm, error: formError } = await supabase.from('approval_forms').select('*').eq('id', formId).single();
+                if (formError) {
+                    console.error("Custom form load error:", formError);
+                    toast.error("양식 정보를 불러오는데 실패했습니다.");
+                    router.push('/approvals/forms');
+                    return;
+                }
                 formToLoad = customForm;
             }
             if (formToLoad) {
                 setSelectedForm(formToLoad);
                 setTitle(formToLoad.title);
             } else {
-                router.push('/approvals/forms'); return;
+                router.push('/approvals/forms');
+                return;
             }
-            setFormData({});
+            const initialFormData = {};
+            formToLoad.fields?.forEach(field => {
+                if (field.type === 'richtext') {
+                    initialFormData[field.name] = '';
+                } else if (field.type === 'daterange') {
+                    initialFormData[field.name] = { start: '', end: '' };
+                } else {
+                    initialFormData[field.name] = '';
+                }
+            });
+            setFormData(initialFormData);
             setApprovers([]);
             setReferrers([]);
             setLoading(false);
@@ -98,7 +158,6 @@ function NewApprovalPageContent() {
         setFormData(prev => ({ ...prev, [fieldName]: value }));
     }, []);
 
-    // ★★★★★ 수정된 handleSubmit 함수 ★★★★★
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!employee || !title.trim() || approvers.length === 0) {
@@ -106,7 +165,6 @@ function NewApprovalPageContent() {
         }
         setLoading(true);
 
-        // ★★★ 이제 클라이언트에서는 날짜 계산을 하지 않습니다. ★★★
         try {
             const { data: approvalDoc, error: insertError } = await supabase.from('approval_documents').insert({
                 title,
@@ -116,7 +174,6 @@ function NewApprovalPageContent() {
                 author_id: employee.id,
                 status: '대기', 
                 type: selectedForm?.title || '일반'
-                // leave_duration 컬럼은 이제 보내지 않습니다. 서버(DB)가 알아서 계산 후 채워줍니다.
             }).select().single();
 
             if (insertError) throw insertError;
@@ -126,15 +183,20 @@ function NewApprovalPageContent() {
             if (approverError) throw approverError;
 
             if (referrers.length > 0) {
-                const referrerData = referrers.map(ref => ({ document_id: approvalDoc.id, referrer_id: ref.value }));
-                await supabase.from('approval_document_referrers').insert(referrerData);
+                const referrerData = referrers.map(ref => ({
+                    document_id: approvalDoc.id,
+                    referrer_id: ref.value
+                }));
+                const { error: referrerError } = await supabase.from('approval_document_referrers').insert(referrerData);
+                if (referrerError) throw referrerError;
             }
 
             toast.success('결재가 성공적으로 상신되었습니다.');
             router.push('/approvals');
             router.refresh();
         } catch (error) {
-            toast.error(`결재 상신 실패: ${error.message}`);
+            console.error('결재 상신 실패:', error);
+            toast.error(`결재 상신 실패: ${error.message || '알 수 없는 오류'}`);
         } finally {
             setLoading(false);
         }
@@ -189,9 +251,10 @@ function NewApprovalPageContent() {
     );
 }
 
+// Suspense 경계 (최상단 layout.js에 <Suspense>가 이미 있다면 여기서는 불필요)
 export default function NewApprovalPage() {
     return (
-        <Suspense fallback={<div>폼을 로딩 중입니다...</div>}>
+        <Suspense fallback={<div className="p-8 text-center">양식 로딩 중...</div>}>
             <NewApprovalPageContent />
         </Suspense>
     );
