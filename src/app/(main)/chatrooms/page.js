@@ -1,85 +1,128 @@
-'use client';
+"use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
-import CreateRoomModal from '@/components/CreateRoomModal';
-import ChatRoomListItem from '@/components/ChatRoomListItem';
+import { useEmployee } from '@/contexts/EmployeeContext';
 import { useRouter } from 'next/navigation';
+import CreateChatRoomModal from '@/components/CreateChatRoomModal';
+
+const ChatIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2V6a2 2 0 012-2h2.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293H17z" /></svg> );
 
 export default function ChatRoomsPage() {
-    const { employee, loading: employeeLoading } = useEmployee();
+    const { employee } = useEmployee();
     const router = useRouter();
     const [chatRooms, setChatRooms] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const fetchChatRooms = useCallback(async () => {
-        if (!employee?.id) { setLoading(false); return; }
-        setLoading(true);
-        const { data, error } = await supabase.rpc('get_chat_rooms_for_user', { p_user_id: employee.id });
-        if (error) { setChatRooms([]); } else { setChatRooms(data || []); }
-        setLoading(false);
-    }, [employee?.id]);
+        if (!employee) return;
 
-    useEffect(() => {
-        if (employee) fetchChatRooms();
-    }, [employee, fetchChatRooms]);
+        const { data: roomsData, error: roomsError } = await supabase
+            .from('chat_room_participants')
+            .select('chat_rooms(*)')
+            .eq('user_id', employee.id)
+            .order('created_at', { foreignTable: 'chat_rooms', ascending: false });
 
-    useEffect(() => {
-        if (!employee?.id) return;
+        if (roomsError) {
+            console.error('Error fetching chat rooms:', roomsError);
+            setLoading(false);
+            return;
+        }
+
+        const rooms = roomsData.map(item => item.chat_rooms);
         
-        // ✨ [수정] 새 메시지 신호를 받아서 목록을 업데이트하는 로직
-        const handleNewMessage = (event) => {
-            const newMessage = event.detail;
-            setChatRooms(prevRooms => {
-                const roomIndex = prevRooms.findIndex(r => r.id === newMessage.room_id);
-                if (roomIndex === -1) return prevRooms;
+        const { data: unreadData, error: unreadError } = await supabase.rpc('get_my_total_unread_count');
 
-                const updatedRoom = { 
-                    ...prevRooms[roomIndex],
-                    last_message_content: newMessage.content,
-                    last_message_at: newMessage.created_at,
-                    unread_count: newMessage.sender_id !== employee.id ? (prevRooms[roomIndex].unread_count || 0) + 1 : prevRooms[roomIndex].unread_count
-                };
-                const otherRooms = prevRooms.filter(r => r.id !== newMessage.room_id);
-                return [updatedRoom, ...otherRooms];
+        if (unreadError) {
+            console.error('Error fetching unread counts:', unreadError);
+        }
+
+        const unreadMap = new Map();
+        if (unreadData) {
+            unreadData.forEach(item => {
+                unreadMap.set(item.room_id, item.unread_count);
             });
-        };
-        
-        window.addEventListener('new-message', handleNewMessage);
+        }
 
-        const participationChannel = supabase.channel('chatroom-list-participation-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_participants', filter: `user_id=eq.${employee.id}` }, 
-            (payload) => { fetchChatRooms(); })
+        const roomsWithUnread = rooms.map(room => ({
+            ...room,
+            unread_count: unreadMap.get(room.id) || 0
+        }));
+
+        setChatRooms(roomsWithUnread);
+        setLoading(false);
+    }, [employee]);
+
+    useEffect(() => {
+        fetchChatRooms();
+    }, [fetchChatRooms]);
+
+    useEffect(() => {
+        if (!employee) return;
+        const channel = supabase
+            .channel('public:chat_rooms_and_participants')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_participants' }, (payload) => {
+                fetchChatRooms();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, (payload) => {
+                fetchChatRooms();
+            })
             .subscribe();
-            
-        return () => { 
-            window.removeEventListener('new-message', handleNewMessage);
-            supabase.removeChannel(participationChannel); 
-        };
-    }, [employee?.id, fetchChatRooms]);
+        return () => { supabase.removeChannel(channel); };
+    }, [employee, fetchChatRooms]);
+    
+    const handleModalClose = (isSuccess) => {
+        setIsModalOpen(false);
+        if (isSuccess) {
+            setLoading(true);
+            fetchChatRooms();
+        }
+    }
 
-    const handleLeaveRoom = (roomId) => {
-        setChatRooms(prevRooms => prevRooms.filter(room => room.id !== roomId));
-    };
-
-    if (employeeLoading && loading) return <div className="p-6"><p>로딩 중...</p></div>;
+    if (loading) {
+        return <div className="p-8 text-center">채팅방 목록을 불러오는 중입니다...</div>;
+    }
 
     return (
-        <div className="flex flex-col h-full bg-white">
-            <header className="p-4 sm:p-6 border-b flex justify-between items-center flex-shrink-0">
-                <h1 className="text-3xl font-extrabold text-gray-900">채팅</h1>
-                <button onClick={() => setCreateModalOpen(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg ...">
-                    + 새 채팅방 생성
+        <div className="p-4 sm:p-6 lg:p-8">
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold text-gray-800">채팅</h1>
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                    새 채팅방 만들기
                 </button>
-            </header>
-            <main className="flex-1 overflow-y-auto">
-                {loading ? <p className="p-6">채팅방 목록을 불러오는 중...</p> : 
-                 chatRooms.length === 0 ? <div className="text-center py-20"><p>참여 중인 채팅방이 없습니다.</p></div> : 
-                 <div className="divide-y divide-gray-200">{chatRooms.map(room => (<ChatRoomListItem key={room.id} room={room} onLeave={handleLeaveRoom} />))}</div>}
-            </main>
-            {isCreateModalOpen && <CreateRoomModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} currentUser={employee} onRoomCreated={fetchChatRooms} />}
+            </div>
+
+            <div className="bg-white rounded-lg shadow">
+                <ul role="list" className="divide-y divide-gray-200">
+                    {chatRooms.length > 0 ? (
+                        chatRooms.map((room) => (
+                            <li key={room.id} onClick={() => router.push(`/chatrooms/${room.id}`)} className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer">
+                                <div className="flex items-center gap-4 min-w-0">
+                                    <div className="bg-gray-200 p-2 rounded-full flex-shrink-0">
+                                        <ChatIcon />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">{room.name}</p>
+                                        <p className="text-sm text-gray-500">{room.is_direct_message ? '개인 메시지' : '그룹 채팅'}</p>
+                                    </div>
+                                </div>
+                                {room.unread_count > 0 && (
+                                    <span className="bg-red-500 text-white text-xs font-semibold rounded-full px-2.5 py-1 ml-4 flex-shrink-0">
+                                        {room.unread_count}
+                                    </span>
+                                )}
+                            </li>
+                        ))
+                    ) : (
+                        <p className="p-8 text-center text-gray-500">참여 중인 채팅방이 없습니다.</p>
+                    )}
+                </ul>
+            </div>
+            {isModalOpen && <CreateChatRoomModal onClose={handleModalClose} />}
         </div>
     );
 }

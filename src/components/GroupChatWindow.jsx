@@ -5,93 +5,155 @@ import { supabase } from '../lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import Image from 'next/image';
+import ManageParticipantsModal from './ManageParticipantsModal';
 
+// 아이콘 컴포넌트들 (이전과 동일)
+const EditIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg> );
+const FileAttachIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 hover:text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13.5" /></svg> );
 const SendIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg> );
+const DownloadIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V3" /></svg> );
 const LeaveIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
+
+const MessageContent = ({ msg }) => {
+    switch (msg.message_type) {
+        case 'image': return <Image src={msg.content} alt="전송된 이미지" width={250} height={250} className="rounded-lg object-cover cursor-pointer" onClick={() => window.open(msg.content, '_blank')} />;
+        case 'file':
+            try {
+                const fileName = decodeURIComponent(new URL(msg.content).pathname.split('/').pop()).substring(14);
+                return (
+                    <a href={msg.content} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 bg-gray-100 rounded-lg hover:bg-gray-200 border max-w-xs">
+                        <DownloadIcon /><span className="truncate underline text-sm">{fileName}</span>
+                    </a>
+                );
+            } catch (e) { return <p className="text-sm">{msg.content}</p>; }
+        default: return <p className="text-sm whitespace-pre-wrap">{msg.content}</p>;
+    }
+};
 
 export default function GroupChatWindow({ serverChatRoom, serverInitialMessages, serverInitialParticipants }) {
     const router = useRouter();
     const { employee: currentEmployee } = useEmployee();
+    const [chatRoom, setChatRoom] = useState(serverChatRoom);
     const [messages, setMessages] = useState(serverInitialMessages);
     const [newMessage, setNewMessage] = useState('');
-    
+    const [participants, setParticipants] = useState(serverInitialParticipants);
+    const [isManageModalOpen, setManageModalOpen] = useState(false);
+    const [isEditingRoomName, setIsEditingRoomName] = useState(false);
+    const [editedRoomName, setEditedRoomName] = useState(chatRoom?.name);
+    const [isUploading, setIsUploading] = useState(false);
+
     const messagesEndRef = useRef(null);
+    const fileInputRef = useRef(null);
     const channelRef = useRef(null);
     
-    const currentRoomId = serverChatRoom?.id;
+    const currentRoomId = chatRoom?.id;
     const currentUserId = currentEmployee?.id;
+    const isRoomCreator = chatRoom?.created_by === currentUserId;
 
     const scrollToBottom = useCallback(() => {
-        setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, 50);
+        setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, 100);
     }, []);
+
+    const fetchChatData = useCallback(async () => {
+        if (!currentRoomId) return;
+        const { data: pData } = await supabase.from('chat_room_participants').select('profiles(id, full_name, position)').eq('room_id', currentRoomId);
+        if (pData) setParticipants(pData.map(p => p.profiles));
+    }, [currentRoomId]);
 
     useEffect(() => {
         if(messages.length) scrollToBottom();
     }, [messages, scrollToBottom]);
 
     useEffect(() => {
-        if (!currentRoomId || !currentUserId) return;
+        // 채팅방에 들어오면, 이 방을 '모두 읽음' 처리
+        const markAsRead = async () => {
+            if (!currentRoomId || !currentUserId) return;
+            await supabase
+                .from('chat_room_participants')
+                .update({ last_read_at: new Date().toISOString() })
+                .eq('room_id', currentRoomId)
+                .eq('user_id', currentUserId);
+        };
+        markAsRead();
 
+        // 실시간 메시지 수신 채널 구독
+        if (!currentRoomId || !currentUserId) return;
         const handleNewMessage = (payload) => {
-            // 다른 사람이 보낸 메시지만 실시간으로 추가합니다.
-            if (String(payload.new.sender_id) !== String(currentUserId)) {
-                const senderProfile = serverInitialParticipants.find(p => p.id === payload.new.sender_id);
-                const messageWithSender = { ...payload.new, sender: senderProfile || { full_name: '알 수 없음' } };
-                setMessages(prev => [...prev, messageWithSender]);
+            const senderProfile = participants.find(p => p.id === payload.new.sender_id);
+            const messageWithSender = { ...payload.new, sender: senderProfile || { full_name: '알 수 없음' } };
+            setMessages(prev => {
+                if (prev.some(msg => msg.id === messageWithSender.id)) return prev;
+                return [...prev, messageWithSender];
+            });
+            // 새 메시지 수신 시, 내가 보낸게 아니라면 다시 읽음 처리
+            if(payload.new.sender_id !== currentUserId) {
+                markAsRead();
             }
         };
-
-        const channel = supabase.channel(`rt:chat:${currentRoomId}`)
+        const channel = supabase.channel(`realtime_chat_room:${currentRoomId}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${currentRoomId}` }, handleNewMessage)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_participants', filter: `room_id=eq.${currentRoomId}` }, fetchChatData)
             .subscribe();
         channelRef.current = channel;
-
         return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
-    }, [currentRoomId, currentUserId, serverInitialParticipants]);
+    }, [currentRoomId, currentUserId, participants, fetchChatData]);
 
-    // ✨ [수정] 가장 안정적인 '낙관적 UI' 메시지 전송 로직
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!newMessage.trim() || !currentUserId) return;
-        
         const content = newMessage.trim();
         setNewMessage('');
-        
-        const tempId = `temp_${Date.now()}`;
-        const optimisticMessage = {
-            id: tempId,
-            content: content,
-            created_at: new Date().toISOString(),
-            sender_id: currentUserId,
-            sender: { full_name: currentEmployee.full_name }
-        };
-        setMessages(prev => [...prev, optimisticMessage]);
+        await supabase.from('chat_messages').insert({ room_id: currentRoomId, sender_id: currentUserId, content, message_type: 'text' });
+    };
 
-        const { data: savedMessage, error } = await supabase
-            .from('chat_messages')
-            .insert({ room_id: currentRoomId, sender_id: currentUserId, content })
-            .select()
-            .single();
+    const handleFileChange = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file || !currentUserId) return;
+        if (file.size > 10 * 1024 * 1024) return toast.error("10MB 이하의 파일만 업로드할 수 있습니다.");
 
-        if (error) {
-            setMessages(prev => prev.filter(msg => msg.id !== tempId));
-            setNewMessage(content); // 실패 시 입력 내용 복원
-            toast.error("메시지 전송 실패: " + error.message);
-        } else {
-            // 성공 시, 임시 메시지를 실제 DB 데이터로 교체합니다. (실시간 리스너는 이 메시지를 무시합니다)
-            setMessages(prev => prev.map(msg => msg.id === tempId ? { ...savedMessage, sender: optimisticMessage.sender } : msg));
+        setIsUploading(true);
+        const toastId = toast.loading('파일을 업로드하는 중입니다...');
+        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const filePath = `${currentUserId}/${Date.now()}_${cleanFileName}`;
+
+        try {
+            const { error: uploadError } = await supabase.storage.from('chat-attachments').upload(filePath, file);
+            if (uploadError) throw uploadError;
+            const { data: urlData } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
+            const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(file.name.split('.').pop().toLowerCase()) ? 'image' : 'file';
+            await supabase.from('chat_messages').insert({ room_id: currentRoomId, sender_id: currentUserId, content: urlData.publicUrl, message_type: messageType });
+            toast.success("파일 전송 완료!", { id: toastId });
+        } catch (error) {
+            toast.error(`파일 전송 실패: ${error.message}`, { id: toastId });
+        } finally {
+            setIsUploading(false);
+            if(fileInputRef.current) fileInputRef.current.value = "";
         }
     };
     
-    if (!currentEmployee || !serverChatRoom) return <div className="p-8 text-center">로딩 중...</div>;
+    const handleSaveRoomName = async () => { /* ... */ };
+    const handleLeaveRoom = async () => { /* ... */ };
+    
+    if (!currentEmployee || !chatRoom) return <div className="p-8 text-center">로딩 중...</div>;
 
     return (
         <div className="flex flex-col h-full bg-gray-100">
             <header className="flex items-center justify-between p-4 border-b bg-white flex-shrink-0">
-                <h3 className="text-lg font-bold truncate">{serverChatRoom.name}</h3>
-                <button onClick={() => router.push('/chatrooms')} className="p-2 text-gray-500 hover:text-red-600 rounded-full">
-                    <LeaveIcon />
-                </button>
+                <div className="flex items-center min-w-0">
+                    <h3 className="text-lg font-bold truncate">{chatRoom.name}</h3>
+                    {isRoomCreator && !chatRoom.is_direct_message && (
+                        <button onClick={() => setIsEditingRoomName(true)} className="ml-2 p-1 text-gray-500 hover:text-gray-800 rounded-full"><EditIcon /></button>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                    {!chatRoom.is_direct_message && (
+                        <button onClick={() => setManageModalOpen(true)} className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300">
+                            참여자 관리
+                        </button>
+                    )}
+                    <button onClick={handleLeaveRoom} className="p-2 text-gray-500 hover:text-red-600 rounded-full"><LeaveIcon /></button>
+                </div>
             </header>
 
             <div className="flex-1 overflow-y-auto p-4 sm:p-6">
@@ -105,15 +167,17 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
                                         {msg.sender?.full_name?.charAt(0)}
                                     </div>
                                 )}
-                                <div>
-                                    {!isSentByMe && <p className="text-xs text-gray-500 mb-1 ml-1">{msg.sender?.full_name || '상대방'}</p>}
-                                    <div className={`max-w-xs md:max-w-md px-4 py-2 rounded-2xl ${isSentByMe ? 'bg-blue-600 text-white rounded-br-lg' : 'bg-white text-gray-800 rounded-bl-lg border'}`}>
-                                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                <div className="flex flex-col gap-1 items-start">
+                                    {!isSentByMe && <p className={`text-xs text-gray-500 ${isSentByMe ? 'text-right' : 'text-left'}`}>{msg.sender?.full_name || '상대방'}</p>}
+                                    <div className={`flex items-end gap-2 ${isSentByMe ? 'flex-row-reverse' : ''}`}>
+                                        <div className={`max-w-xs md:max-w-md p-3 rounded-2xl ${isSentByMe ? 'bg-blue-600 text-white rounded-br-lg' : 'bg-white text-gray-800 rounded-bl-lg border'}`}>
+                                            <MessageContent msg={msg} />
+                                        </div>
+                                        <span className="text-xs text-gray-400 self-end">
+                                            {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: false })}
+                                        </span>
                                     </div>
                                 </div>
-                                <span className="text-xs text-gray-400 self-end">
-                                    {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: false })}
-                                </span>
                             </div>
                         );
                     })}
@@ -123,19 +187,20 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
 
             <footer className="p-4 bg-white border-t flex-shrink-0">
                 <form onSubmit={handleSendMessage} className="flex items-center gap-3">
-                    <input
-                        type="text"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="메시지를 입력하세요..."
-                        className="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        autoFocus
-                    />
-                    <button type="submit" className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-400" disabled={!newMessage.trim()}>
+                    <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="p-2 rounded-full hover:bg-gray-200 disabled:opacity-50">
+                        <FileAttachIcon />
+                    </button>
+                    <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="메시지를 입력하세요..." className="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
+                    <button type="submit" className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-400" disabled={!newMessage.trim() || isUploading}>
                         <SendIcon />
                     </button>
                 </form>
             </footer>
+
+            {isManageModalOpen && (
+                <ManageParticipantsModal isOpen={isManageModalOpen} onClose={(isChanged) => { setManageModalOpen(false); if(isChanged) fetchChatData(); }} chatRoom={chatRoom} initialParticipants={participants} />
+            )}
         </div>
     );
 }

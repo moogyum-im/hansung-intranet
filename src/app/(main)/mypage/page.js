@@ -10,13 +10,18 @@ import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
 
 // --- 재사용 컴포넌트들 ---
 
-// 연차 현황 위젯 (수정 없음)
+// ★★★★★ 연차 현황 위젯 (문제가 된 부분) ★★★★★
 function MyLeaveWidget({ employee }) {
     if (!employee) return <div className="bg-white p-5 rounded-xl border shadow-sm h-full flex items-center justify-center animate-pulse"><p className="text-gray-500">연차 정보 로딩...</p></div>;
-    const total = employee.total_leaves ?? 0;
-    const used = employee.used_leave_days ?? 0;
-    const remaining = employee.remaining_leaves ?? 0;
+    
+    // ★★★★★ 핵심 수정사항: 변수명 변경 ★★★★★
+    const total = employee.total_leaves ?? 15; // DB에 total_leaves 컬럼이 없다면 기본 15로 가정
+    const remaining = employee.remaining_leave_days ?? 0; // employee.remaining_leaves -> employee.remaining_leave_days 로 수정!
+    const used = total - remaining;
+    // ★★★★★ 수정 끝 ★★★★★
+
     const usedPercentage = total > 0 ? (used / total) * 100 : 0;
+    
     return (
         <div className="bg-white p-5 rounded-xl border shadow-sm h-full">
             <h2 className="text-lg font-bold text-gray-800 mb-4">나의 연차 현황</h2>
@@ -30,7 +35,7 @@ function MyLeaveWidget({ employee }) {
     );
 }
 
-// ✨ [최종 개편] 내 결재 현황 위젯
+// 내 결재 현황 위젯 (수정 없음)
 function MyApprovalsWidget({ toReview, submitted, completed }) {
     const [activeTab, setActiveTab] = useState('toReview'); 
 
@@ -71,7 +76,6 @@ function MyApprovalsWidget({ toReview, submitted, completed }) {
                     <button onClick={() => setActiveTab('submitted')} className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'submitted' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
                         상신한 결재 ({submitted.length})
                     </button>
-                    {/* ✨ '완료 문서' 탭 추가 */}
                     <button onClick={() => setActiveTab('completed')} className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'completed' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
                         완료 문서 ({completed.length})
                     </button>
@@ -136,7 +140,7 @@ export default function MyPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const [mySubmittedApprovals, setMySubmittedApprovals] = useState([]);
     const [approvalsToReview, setApprovalsToReview] = useState([]);
-    const [completedApprovals, setCompletedApprovals] = useState([]); // ✨ 완료된 결재 상태 추가
+    const [completedApprovals, setCompletedApprovals] = useState([]);
     const [myWorkReports, setMyWorkReports] = useState([]);
     const [receivedWorkLogs, setReceivedWorkLogs] = useState([]);
     const [loadingSubData, setLoadingSubData] = useState(true);
@@ -148,7 +152,6 @@ export default function MyPage() {
         const { data: form } = await supabase.from('approval_forms').select('id').eq('title', '업무 보고서').single();
         const workReportFormId = form?.id;
 
-        // 상신한 결재 (진행중, 대기)
         const fetchMySubmitted = async () => {
             let query = supabase.from('approval_documents').select('id, title, status, author:profiles(full_name)').eq('author_id', currentEmployee.id).in('status', ['대기', '진행중']);
             if (workReportFormId) {
@@ -158,7 +161,6 @@ export default function MyPage() {
             return data || [];
         };
 
-        // 받은 결재 (대기중)
         const fetchToReview = async () => {
             const { data: approverEntries } = await supabase.from('approval_document_approvers').select('document_id').eq('approver_id', currentEmployee.id).eq('status', '대기');
             if (!approverEntries || approverEntries.length === 0) return [];
@@ -167,7 +169,6 @@ export default function MyPage() {
             return data || [];
         };
         
-        // ✨ 완료된 결재 (승인, 반려)
         const fetchCompleted = async () => {
             const myIdSet = (await supabase.from('approval_documents').select('id').eq('author_id', currentEmployee.id)).data?.map(d => d.id) || [];
             const approvedIdSet = (await supabase.from('approval_document_approvers').select('document_id').eq('approver_id', currentEmployee.id)).data?.map(d => d.document_id) || [];

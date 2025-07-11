@@ -1,142 +1,114 @@
-'use client';
+"use client";
 
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
-import { useState, useEffect } from 'react';
+import { useEmployee } from '@/contexts/EmployeeContext';
+import Image from 'next/image';
 
-// SVG 아이콘 컴포넌트들
-const DashboardIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> );
-const NoticeIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-2.236 9.168-5.518" /></svg> );
-const OrgIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg> );
-const SiteManagementIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 4h1m4-4h1m-1 4h1" /></svg> );
-const TaskIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l-4 4-4-4m4 4V3"/></svg> );
-const ChatIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> );
-const MyPageIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>;
-const ApprovalIcon = (props) => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 8l3-3m0 0l-3-3m3 3H9"/></svg>;
-
-const MenuItem = ({ item, isActive, onClick }) => (
-    <Link 
-        href={item.href} 
-        onClick={onClick} // 모바일에서 클릭 시 사이드바 닫기
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all duration-200 ${ isActive ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900' }`}
-    >
-        {item.icon}
-        <span>{item.label}</span>
-    </Link>
-);
+// 아이콘 컴포넌트들 (이전과 동일)
+const HomeIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg> );
+const DocumentTextIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> );
+const UsersIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.978 5.978 0 0112 13a5.979 5.979 0 013-1.197m-3 6.393A3.426 3.426 0 0012 17.647a3.426 3.426 0 00-3-1.454m-3 0a3.426 3.426 0 01-3-1.454" /></svg> );
+const CalendarIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> );
+const CurrencyWonIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8h6m-5 4h4m5 4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2z" /></svg> );
+const ChatIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> );
+const UserCircleIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
+const LogoutIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
 
 export default function Sidebar({ isOpen, onClose }) {
-    const pathname = usePathname() || '';
-    const { employee, loading, updateEmployeeStatus } = useEmployee();
-    const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
-    const [openMenus, setOpenMenus] = useState({});
+    const pathname = usePathname();
+    const { employee, loading } = useEmployee();
+    const [totalUnreadCount, setTotalUnreadCount] = useState(0);
+
+    const menuItems = [
+        { name: '대시보드', href: '/', icon: HomeIcon },
+        { name: '공지사항', href: '/notices', icon: DocumentTextIcon },
+        { name: '조직도', href: '/organization', icon: UsersIcon },
+        { name: '현장 관리', href: '/sites', icon: CalendarIcon },
+        { name: '결재', href: '/approvals', icon: CurrencyWonIcon },
+        { name: '채팅', href: '/chatrooms', icon: ChatIcon, count: totalUnreadCount },
+        { name: '마이페이지', href: '/mypage', icon: UserCircleIcon },
+    ];
+
+    const fetchTotalUnreadCount = useCallback(async () => {
+        if (!employee) return;
+        const { data, error } = await supabase.rpc('get_my_total_unread_count');
+
+        if (data) {
+            const total = data.reduce((acc, item) => acc + item.unread_count, 0);
+            setTotalUnreadCount(total);
+        } else if (error) {
+            console.error("Error fetching total unread count:", error);
+        }
+    }, [employee]);
 
     useEffect(() => {
-        const pathSegments = pathname.split('/').filter(Boolean);
-        if (pathSegments.length > 0) {
-            setOpenMenus(prev => ({ ...prev, [pathSegments[0]]: true }));
-            if(pathSegments.length > 1 && pathSegments[0] === 'work') {
-                setOpenMenus(prev => ({ ...prev, [decodeURIComponent(pathSegments[1])]: true }));
-            }
-        }
-    }, [pathname]);
+        fetchTotalUnreadCount();
+    }, [fetchTotalUnreadCount]);
 
-    const toggleMenu = (menuKey) => setOpenMenus(prev => ({ ...prev, [menuKey]: !prev[menuKey] }));
-    
+    useEffect(() => {
+        if (!employee) return;
+
+        const channel = supabase.channel('sidebar-unread-listener')
+            .on('postgres_changes', { event: '*', schema: 'public' }, 
+            (payload) => {
+                fetchTotalUnreadCount();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [employee, fetchTotalUnreadCount]);
+
     const handleLogout = async () => {
         await supabase.auth.signOut();
         window.location.href = '/login';
     };
 
-    const handleStatusChange = async (newStatus) => {
-        if (!employee || !updateEmployeeStatus) return;
-        await updateEmployeeStatus(employee.id, newStatus);
-        setIsStatusMenuOpen(false);
-    };
-    
-    const statusOptions = ['업무 중', '회의 중', '외근 중', '식사 중', '휴가'];
-    const statusColorMap = { '업무 중': 'bg-green-500', '회의 중': 'bg-blue-500', '외근 중': 'bg-yellow-500', '식사 중': 'bg-orange-500', '휴가': 'bg-purple-500', '오프라인': 'bg-gray-400' };
-
-    const menuItems = [
-        { href: '/dashboard', label: '대시보드', icon: <DashboardIcon /> },
-        { href: '/notices', label: '공지사항', icon: <NoticeIcon /> },
-        { href: '/organization', label: '조직도', icon: <OrgIcon /> },
-        { href: '/sites', label: '현장 관리', icon: <SiteManagementIcon /> },
-        { href: '/approvals', label: '결재', icon: <ApprovalIcon /> },
-    ];
-    const departments = ['전략기획부', '공무부', '공사부', '관리부', '비서실'];
-
     return (
         <>
-            {/* 오버레이(배경) */}
-            {isOpen && (
-                <div 
-                    onClick={onClose}
-                    className="fixed inset-0 bg-black/50 lg:hidden"
-                    style={{ zIndex: 40 }} // z-index 설정
-                />
-            )}
-
-            <aside 
-                className={`
-                    w-64 bg-white flex flex-col border-r shrink-0
-                    fixed top-0 left-0 h-screen overflow-y-auto
-                    transform transition-transform duration-300 ease-in-out
-                    lg:translate-x-0 lg:static lg:flex
-                    ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-                `}
-                style={{ zIndex: 50 }} // ★★★★★ 가장 중요한 z-index 설정 ★★★★★
-            >
-                <div className="h-20 flex items-center justify-center border-b px-4">
-                    <Link href="/dashboard" className="font-black text-3xl text-blue-600">HANSUNG</Link>
+            <div className={`fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden ${isOpen ? 'block' : 'hidden'}`} onClick={onClose}></div>
+            <aside className={`fixed top-0 left-0 w-64 h-full bg-gray-800 text-white flex flex-col z-30 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-200 ease-in-out`}>
+                <div className="h-16 flex items-center justify-center text-2xl font-bold border-b border-gray-700">
+                    HANSUNG
                 </div>
-                <nav className="flex-1 px-4 py-6 space-y-1"> 
-                    {menuItems.map(item => (
-                        <MenuItem key={item.label} item={item} isActive={pathname.startsWith(item.href)} onClick={onClose} />
-                    ))}
-                    <div>
-                        <button onClick={() => toggleMenu('work')} className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg font-medium transition-all duration-200 ${pathname.startsWith('/work') ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>
-                            <div className="flex items-center gap-3"><TaskIcon /><span>업무</span></div>
-                            <svg className={`w-4 h-4 transform transition-transform ${openMenus['work'] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> 
-                        </button>
-                        {openMenus['work'] && ( 
-                            <div className="mt-1 pl-4 space-y-1">
-                                {departments.map(deptName => (
-                                    <Link key={deptName} href={`/work/${deptName}/calendar`} onClick={onClose} className={`block text-sm py-1.5 px-3 rounded-md ${pathname.includes(`/${deptName}/`) ? 'text-blue-600 font-bold' : 'text-gray-600 hover:text-gray-800'}`}>
-                                        {deptName}
-                                    </Link>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    <MenuItem item={{ href: '/chatrooms', label: '채팅', icon: <ChatIcon /> }} isActive={pathname.startsWith('/chatrooms')} onClick={onClose} />
-                    <MenuItem item={{ href: '/mypage', label: '마이페이지', icon: <MyPageIcon /> }} isActive={pathname.startsWith('/mypage')} onClick={onClose} />
-                </nav>
-                <div className="px-4 py-4 border-t shrink-0">
-                    {loading ? ( <div className="animate-pulse flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-200"></div><div className="flex-1"><div className="h-4 bg-gray-200 rounded w-3/4"></div><div className="h-3 bg-gray-200 rounded w-1/2 mt-1.5"></div></div></div> ) : 
-                    employee ? (
-                        <div className="relative user-status-dropdown"> 
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">{employee.full_name?.charAt(0) || 'U'}</div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-bold text-gray-800 truncate">{employee.full_name}</p>
-                                    <button onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)} className="text-xs text-gray-500 flex items-center gap-1.5 hover:text-gray-800 transition-colors">
-                                        <span className={`w-2 h-2 rounded-full ${statusColorMap[employee.status] || 'bg-gray-400'}`}></span>
-                                        {employee.status || '상태 없음'}
-                                        <svg className={`w-3 h-3 text-gray-400 transform transition-transform ${isStatusMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg> 
-                                    </button>
-                                </div>
-                            </div>
-                            {isStatusMenuOpen && (
-                                <div className="absolute bottom-full left-0 w-full mb-2 bg-white border rounded-lg shadow-lg z-[60] animate-fade-in-up"> 
-                                    <ul className="p-1">{statusOptions.map(status => ( <li key={status}><button onClick={() => handleStatusChange(status)} className="w-full text-left text-sm px-3 py-1.5 rounded-md hover:bg-gray-100 flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${statusColorMap[status]}`}></span>{status}</button></li> ))}</ul>
-                                </div>
+                <nav className="flex-1 px-4 py-6 space-y-2">
+                    {menuItems.map((item) => (
+                        <Link key={item.name} href={item.href} className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${pathname === item.href ? 'bg-gray-900 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}>
+                            <item.icon className="h-5 w-5 mr-3" />
+                            <span>{item.name}</span>
+                            {item.count > 0 && (
+                                <span className="ml-auto bg-red-500 text-white text-xs font-semibold rounded-full px-2 py-0.5">
+                                    {item.count}
+                                </span>
                             )}
-                            <button onClick={handleLogout} className="w-full mt-4 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-red-500 rounded-lg transition-colors">로그아웃</button>
+                        </Link>
+                    ))}
+                </nav>
+                <div className="px-4 py-4 border-t border-gray-700">
+                    {loading ? (
+                        <div className="text-center text-sm">로딩 중...</div>
+                    ) : employee ? (
+                        <div className="flex items-center">
+                            <div className="w-10 h-10 rounded-full bg-gray-500 flex-shrink-0">
+                                {employee.avatar_url && <Image src={employee.avatar_url} alt="프로필" width={40} height={40} className="rounded-full" />}
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-sm font-medium">{employee.full_name}</p>
+                                <p className="text-xs text-gray-400">{employee.position}</p>
+                            </div>
+                            <button onClick={handleLogout} className="ml-auto p-2 text-gray-400 hover:text-white">
+                                <LogoutIcon />
+                            </button>
                         </div>
-                    ) : ( <Link href="/login" className="block text-center py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">로그인</Link> )}
+                    ) : (
+                        <Link href="/login" className="block text-center text-sm font-medium text-gray-300 hover:text-white">
+                            로그인
+                        </Link>
+                    )}
                 </div>
             </aside>
         </>

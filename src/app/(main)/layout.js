@@ -22,7 +22,9 @@ export default function MainLayout({ children }) {
                 <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
                 <div className="flex-1 flex flex-col overflow-hidden">
                     <header className="lg:hidden flex justify-between items-center bg-white p-4 border-b">
-                        <button onClick={() => setSidebarOpen(true)} className="text-gray-500"><MenuIcon /></button>
+                        <button onClick={() => setSidebarOpen(true)} className="text-gray-500 focus:outline-none" aria-label="Open sidebar">
+                            <MenuIcon />
+                        </button>
                         <h1 className="text-xl font-semibold">HANSUNG</h1>
                         <div className="w-6"></div>
                     </header>
