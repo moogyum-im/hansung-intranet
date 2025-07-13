@@ -1,3 +1,5 @@
+// 파일 경로: src/app/(main)/sites/page.js
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -48,7 +50,9 @@ const SiteCard = ({ site }) => {
 export default function SitesPage() {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { employee } = useEmployee(); // 관리자 여부 확인을 위해 추가
+  
+  // 관리자 여부 확인을 위해 useEmployee 훅은 그대로 둡니다.
+  const { employee } = useEmployee(); 
 
   useEffect(() => {
     const fetchSites = async () => {
@@ -68,19 +72,16 @@ export default function SitesPage() {
     fetchSites();
   }, []);
 
-  const isAdmin = employee?.role === 'admin';
-
   return (
-    // ✨ [수정] 전체 컨테이너에 여백(padding)을 추가합니다.
     <div className="p-4 sm:p-6 lg:p-8">
       <header className="flex justify-between items-center mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">현장 목록</h1>
-        {/* ✨ 관리자일 때만 버튼이 보이도록 수정 */}
-        {isAdmin && (
-            <Link href="/sites/new" className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
-                + 새 현장 등록
-            </Link>
-        )}
+        
+        {/* ★★★ 수정된 부분 ★★★ */}
+        {/* isAdmin 확인 조건을 제거하여 버튼이 항상 보이도록 합니다. */}
+        <Link href="/sites/new" className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+            + 새 현장 등록
+        </Link>
       </header>
 
       {loading ? (
@@ -96,7 +97,8 @@ export default function SitesPage() {
       ) : (
         <div className="text-center py-16 bg-white rounded-xl shadow-sm border">
             <p className="text-gray-500">등록된 현장이 없습니다.</p>
-            {isAdmin && <p className="text-sm text-gray-400 mt-2">새 현장 등록 버튼을 눌러 현장을 추가해보세요.</p>}
+            {/* 이 부분도 isAdmin 조건을 제거하여 항상 보이도록 합니다. */}
+            <p className="text-sm text-gray-400 mt-2">새 현장 등록 버튼을 눌러 현장을 추가해보세요.</p>
         </div>
       )}
     </div>
