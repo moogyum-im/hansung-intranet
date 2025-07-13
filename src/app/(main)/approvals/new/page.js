@@ -3,8 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { supabase } from '@/lib/supabase/client';
-// ★★★ 경로 수정: '@/contexts/Employee/EmployeeContext' -> '@/contexts/EmployeeContext' ★★★
-import { useEmployee } from '@/contexts/EmployeeContext'; 
+import { useEmployee } from '@/contexts/EmployeeContext'; // 경로 확인
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import Select from 'react-select';
@@ -21,23 +20,26 @@ const formTemplates = {
         fields: [
             { name: '휴가 종류', type: 'select', required: true, options: ['연차', '오전 반차', '오후 반차', '병가', '경조사 휴가'] },
             { name: '휴가 기간', type: 'daterange', required: true },
-            { name: '사유', type: 'richtext', required: true }, // ★★★ 사유 필드 타입을 'richtext'로 변경 ★★★
+            { name: '사유', type: 'richtext', required: true },
+            { name: '첨부 파일', type: 'file', required: false },
         ]
     },
-    expense_report: { /* ... */
+    expense_report: { 
         title: '지출 결의서',
         fields: [
             { name: '제목', type: 'text', required: true },
             { name: '지출 항목', type: 'text', required: true },
             { name: '금액', type: 'number', required: true },
-            { name: '상세 내용', type: 'richtext', required: false }, // 예시로 추가
+            { name: '상세 내용', type: 'richtext', required: false },
+            { name: '첨부 파일', type: 'file', required: false },
         ]
     },
-    work_report: { /* ... */
+    work_report: { 
         title: '업무 보고서',
         fields: [
             { name: '보고 제목', type: 'text', required: true },
-            { name: '보고 내용', type: 'richtext', required: true }, // 예시로 추가
+            { name: '보고 내용', type: 'richtext', required: true },
+            { name: '첨부 파일', type: 'file', required: false },
         ]
     }
 };
@@ -68,25 +70,28 @@ const renderField = (field, formData, onChange) => {
                 </select>
             );
         case 'file': return <input type="file" onChange={e => onChange(field.name, e.target.files[0])} required={field.required} className={baseClasses} />;
-        case 'richtext': // 'richtext' 타입 추가
+        case 'richtext':
             return (
                 <ReactQuill
                     theme="snow"
                     value={value}
-                    onChange={content => onChange(field.name, content)} // content는 HTML 문자열
+                    onChange={content => onChange(field.name, content)}
                     required={field.required}
                     className="mt-2 bg-white rounded-md border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500"
                     placeholder="내용을 입력하세요. (표, 이미지, 서식 등)"
                     modules={{
-                        toolbar: [ // Quill 툴바 설정
+                        toolbar: [
                             [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
                             ['bold', 'italic', 'underline', 'strike'],
                             [{ 'list': 'ordered'}, { 'list': 'bullet' }],
                             [{ 'indent': '-1'}, { 'indent': '+1' }],
                             [{ 'align': [] }],
                             ['link', 'image', 'video'],
-                            ['clean']
+                            ['clean'],
                         ],
+                        clipboard: {
+                            matchVisual: false,
+                        },
                     }}
                 />
             );
@@ -97,7 +102,7 @@ const renderField = (field, formData, onChange) => {
 function NewApprovalPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { employee } = useEmployee(); // EmployeeContext 경로 수정됨
+    const { employee } = useEmployee();
     
     const templateId = useMemo(() => searchParams.get('template'), [searchParams]);
     const formId = useMemo(() => searchParams.get('formId'), [searchParams]);
@@ -109,6 +114,7 @@ function NewApprovalPageContent() {
     const [formData, setFormData] = useState({});
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
+    const [fileToUpload, setFileToUpload] = useState(null);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -149,13 +155,18 @@ function NewApprovalPageContent() {
             setFormData(initialFormData);
             setApprovers([]);
             setReferrers([]);
+            setFileToUpload(null);
             setLoading(false);
         };
         fetchInitialData();
     }, [templateId, formId, router]);
 
     const handleInputChange = useCallback((fieldName, value) => {
-        setFormData(prev => ({ ...prev, [fieldName]: value }));
+        if (fieldName === '첨부 파일') {
+            setFileToUpload(value);
+        } else {
+            setFormData(prev => ({ ...prev, [fieldName]: value }));
+        }
     }, []);
 
     const handleSubmit = async (e) => {
@@ -165,15 +176,62 @@ function NewApprovalPageContent() {
         }
         setLoading(true);
 
+        let fileUrl = null;
+        if (fileToUpload) {
+            const originalFileName = fileToUpload.name;
+            const fileExtension = originalFileName.includes('.') ? originalFileName.split('.').pop() : '';
+            const baseFileNameWithoutExt = originalFileName.includes('.') ? originalFileName.substring(0, originalFileName.lastIndexOf('.')) : originalFileName;
+            
+            // ★★★ 파일 이름 정제 로직 더욱 강화 (한글, 공백, 괄호 등 모든 특수 문자를 하이픈으로) ★★★
+            const sanitizedBaseFileName = baseFileNameWithoutExt
+                .replace(/[^a-zA-Z0-9.\-_가-힣]/g, '-') // 알파벳, 숫자, 점, 하이픈, 언더바, 한글만 허용하고 나머지는 하이픈으로 대체
+                .replace(/\s+/g, '-') // 공백을 하이픈으로 (혹시 위에서 처리 안 된 공백이 있다면)
+                .replace(/-{2,}/g, '-') // 연속된 하이픈을 하나로
+                .replace(/^-+|-+$/g, ''); // 시작/끝 하이픈 제거
+
+            // 최종 파일 이름: 타임스탬프-정제된파일명.확장자 (확장자는 소문자로 통일)
+            const fileName = `${Date.now()}-${sanitizedBaseFileName}${fileExtension ? '.' + fileExtension.toLowerCase() : ''}`;
+            
+            try {
+                const { data, error } = await supabase.storage
+                    .from('chat-attachments') // 버킷 이름
+                    .upload(fileName, fileToUpload, { // 정제된 fileName 사용
+                        cacheControl: '3600',
+                        upsert: false
+                    });
+                
+                if (error) throw error;
+                
+                const { data: publicUrlData } = supabase.storage
+                    .from('chat-attachments') // 버킷 이름
+                    .getPublicUrl(fileName);
+                
+                fileUrl = publicUrlData.publicUrl;
+                toast.success('파일 업로드 완료.');
+
+            } catch (error) {
+                console.error('파일 업로드 실패:', error);
+                toast.error(`파일 업로드 실패: ${error.message}`);
+                setLoading(false);
+                return;
+            }
+        }
+
         try {
+            const finalFormData = { ...formData };
+            if (fileUrl) {
+                finalFormData['첨부 파일'] = fileUrl;
+            }
+
             const { data: approvalDoc, error: insertError } = await supabase.from('approval_documents').insert({
                 title,
                 form_id: formId, 
-                form_data: formData,
+                form_data: finalFormData,
                 form_fields: selectedForm?.fields || [],
                 author_id: employee.id,
                 status: '대기', 
-                type: selectedForm?.title || '일반'
+                type: selectedForm?.title || '일반',
+                attachments: fileUrl ? [fileUrl] : null,
             }).select().single();
 
             if (insertError) throw insertError;
@@ -210,43 +268,45 @@ function NewApprovalPageContent() {
     
     return (
         <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
-            <header className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">{selectedForm?.title || '새 결재 문서 작성'}</h1>
-            </header>
-            <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-sm border space-y-8">
-                <div>
-                    <h2 className="text-lg font-semibold text-gray-800 mb-1">1. 내용 작성</h2>
-                    <div className="space-y-6 border-t pt-6 mt-4">
-                        <div>
-                            <label className="font-semibold text-gray-800">제목 <span className="text-red-500">*</span></label>
-                            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required className="w-full mt-2 p-2 border border-gray-300 rounded-md" />
-                        </div>
-                        {selectedForm?.fields?.map((field) => (
-                            <div key={field.name}>
-                                <label className="font-semibold text-gray-800">{field.name} {field.required && <span className="text-red-500">*</span>}</label>
-                                {renderField(field, formData, handleInputChange)}
+            <div> 
+                <header className="mb-8">
+                    <h1 className="text-3xl font-bold text-gray-900">{selectedForm?.title || '새 결재 문서 작성'}</h1>
+                </header>
+                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-sm border space-y-8">
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-800 mb-1">1. 내용 작성</h2>
+                        <div className="space-y-6 border-t pt-6 mt-4">
+                            <div>
+                                <label className="font-semibold text-gray-800">제목 <span className="text-red-500">*</span></label>
+                                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required className="w-full mt-2 p-2 border border-gray-300 rounded-md" />
                             </div>
-                        ))}
+                            {selectedForm?.fields?.map((field) => (
+                                <div key={field.name}>
+                                    <label className="font-semibold text-gray-800">{field.name} {field.required && <span className="text-red-500">*</span>}</label>
+                                    {renderField(field, formData, handleInputChange)}
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
-                <div>
-                    <h2 className="text-lg font-semibold text-gray-800 mb-1">2. 결재선 지정</h2>
-                    <div className="border-t pt-6 mt-4">
-                        <Select isMulti options={employeeOptions} value={approvers} onChange={setApprovers} className="mt-1" classNamePrefix="select" placeholder="결재자를 순서대로 선택..." />
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-800 mb-1">2. 결재선 지정</h2>
+                        <div className="border-t pt-6 mt-4">
+                            <Select isMulti options={employeeOptions} value={approvers} onChange={setApprovers} className="mt-1" classNamePrefix="select" placeholder="결재자를 순서대로 선택..." />
+                        </div>
                     </div>
-                </div>
-                <div>
-                    <h2 className="text-lg font-semibold text-gray-800 mb-1">3. 참조인 지정 (선택)</h2>
-                    <div className="border-t pt-6 mt-4">
-                        <Select isMulti options={employeeOptions} value={referrers} onChange={setReferrers} className="mt-1" classNamePrefix="select" placeholder="참조인을 선택하세요..." />
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-800 mb-1">3. 참조인 지정 (선택)</h2>
+                        <div className="border-t pt-6 mt-4">
+                            <Select isMulti options={employeeOptions} value={referrers} onChange={setReferrers} className="mt-1" classNamePrefix="select" placeholder="참조인을 선택하세요..." />
+                        </div>
                     </div>
-                </div>
-                <div className="pt-6 border-t flex justify-end">
-                    <button type="submit" disabled={loading} className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400">
-                        {loading ? '상신 중...' : '상신하기'}
-                    </button>
-                </div>
-            </form>
+                    <div className="pt-6 border-t flex justify-end">
+                        <button type="submit" disabled={loading} className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400">
+                            {loading ? '상신 중...' : '상신하기'}
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 }

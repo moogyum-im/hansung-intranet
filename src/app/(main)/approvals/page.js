@@ -1,4 +1,4 @@
-// src/app/(main)/approvals/page.js
+ // src/app/(main)/approvals/page.js
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -58,17 +58,13 @@ export default function ApprovalsPage() {
     const [error, setError] = useState(null);
 
     // 검색 필터 상태
-    const [mainSearchQuery, setMainSearchQuery] = useState(''); // 메인 검색어
-    const [searchTarget, setSearchTarget] = useState('all'); // 검색 대상: 'all', 'title', 'author', 'type', 'createdDate'
-
-    const [searchCompletionDate, setSearchCompletionDate] = useState(''); // 결재 완료일 (승인/반려일)
+    const [searchQuery, setSearchQuery] = useState(''); // 메인 검색어 (단일 텍스트 입력)
     
-    const [documentTypes, setDocumentTypes] = useState([]); // 동적으로 가져올 문서 종류 목록
-
     // 디바운스를 위한 ref
     const debounceTimeoutRef = useRef(null);
 
     // 문서 종류 목록 가져오기 (콤보박스 옵션용)
+    const [documentTypes, setDocumentTypes] = useState([]); 
     useEffect(() => {
         const fetchDocumentTypes = async () => {
             const { data, error } = await supabase
@@ -87,7 +83,12 @@ export default function ApprovalsPage() {
 
     // fetchApprovals 함수: 모든 검색 조건에 따라 데이터를 가져오고 필터링
     const fetchApprovals = useCallback(async () => {
-        if (!employee) return; 
+        // employee가 아직 로딩 중이거나 null이면 fetch 시도 안 함
+        if (!employee || !employee.id) {
+            console.log("ApprovalsPage: Employee not loaded or invalid, skipping fetchApprovals.");
+            setLoading(false); // 로딩 상태 해제
+            return;
+        }
 
         setLoading(true);
         setError(null);
@@ -99,18 +100,20 @@ export default function ApprovalsPage() {
                     .from('approval_documents')
                     .select(`*, author:profiles(full_name)`)
                     .order('created_at', { ascending: false });
-                if (allDocsError) throw allDocsError;
-
-                const { data: myApproverEntries } = await supabase
+                if (allDocsError) { console.error('전체 결재 로드 오류:', allDocsError); throw allDocsError; }
+                
+                const { data: myApproverEntries, error: myApproverError } = await supabase
                     .from('approval_document_approvers')
                     .select('document_id')
                     .eq('approver_id', employee.id);
+                if (myApproverError) { console.error('내 결재자 항목 로드 오류:', myApproverError); throw myApproverError; }
                 const myApproverDocIds = myApproverEntries?.map(e => e.document_id) || [];
 
-                const { data: myReferrerEntries } = await supabase
+                const { data: myReferrerEntries, error: myReferrerError } = await supabase
                     .from('approval_document_referrers')
                     .select('document_id')
                     .eq('referrer_id', employee.id);
+                if (myReferrerError) { console.error('내 참조인 항목 로드 오류:', myReferrerError); throw myReferrerError; }
                 const myReferrerDocIds = myReferrerEntries?.map(e => e.document_id) || [];
 
                 currentDocuments = allDocs.filter(doc => 
@@ -126,7 +129,7 @@ export default function ApprovalsPage() {
                     .eq('approver_id', employee.id)
                     .eq('status', '대기');
 
-                if (entryError) throw entryError;
+                if (entryError) { console.error('받은 결재 항목 조회 오류:', entryError); throw entryError; }
 
                 if (!approverEntries || approverEntries.length === 0) {
                     currentDocuments = [];
@@ -138,7 +141,7 @@ export default function ApprovalsPage() {
                         .in('id', docIds)
                         .order('created_at', { ascending: false });
                     
-                    if (docError) throw docError;
+                    if (docError) { console.error('받은 결재 문서 로드 오류:', docError); throw docError; }
 
                     currentDocuments = docs?.map(doc => {
                         const approverEntry = approverEntries.find(ae => ae.document_id === doc.id);
@@ -155,105 +158,67 @@ export default function ApprovalsPage() {
                     .select(`*, author:profiles(full_name)`)
                     .eq('author_id', employee.id)
                     .order('created_at', { ascending: false });
-                if (docError) throw docError;
+                if (docError) { console.error('상신한 결재 로드 오류:', docError); throw docError; }
                 currentDocuments = docs || [];
             } else if (activeTab === 'completed') {
                 const { data: docs, error: rpcError } = await supabase.rpc('get_my_completed_approvals', { p_employee_id: employee.id });
-                if (rpcError) throw rpcError;
+                if (rpcError) { console.error('완료된 결재 RPC 호출 오류:', rpcError); throw rpcError; }
                 currentDocuments = docs || [];
             } else if (activeTab === 'referred') {
                 const { data: docs, error: rpcError } = await supabase.rpc('get_my_referred_documents', { p_employee_id: employee.id });
-                if (rpcError) throw rpcError;
+                if (rpcError) { console.error('참조할 결재 RPC 호출 오류:', rpcError); throw rpcError; }
                 currentDocuments = docs || [];
             }
 
-            // 2. 클라이언트 측에서 검색 필터 적용 (통합 검색바 로직)
+            // 단일 검색어 필터링 로직
             let filteredDocuments = currentDocuments;
 
-            // mainSearchQuery가 있을 때만 필터링 적용
-            if (mainSearchQuery) {
-                const queryLower = mainSearchQuery.toLowerCase();
+            if (searchQuery) {
+                const queryLower = searchQuery.toLowerCase();
                 filteredDocuments = filteredDocuments.filter(doc => {
-                    if (searchTarget === 'all') {
-                        return (doc.title && doc.title.toLowerCase().includes(queryLower)) ||
-                               (doc.author?.full_name && doc.author.full_name.toLowerCase().includes(queryLower)) ||
-                               (doc.author_full_name && doc.author_full_name.toLowerCase().includes(queryLower)) ||
-                               (doc.type && doc.type.toLowerCase().includes(queryLower)); 
-                    } else if (searchTarget === 'title') {
-                        return doc.title && doc.title.toLowerCase().includes(queryLower);
-                    } else if (searchTarget === 'author') {
-                        return (doc.author?.full_name && doc.author.full_name.toLowerCase().includes(queryLower)) ||
-                               (doc.author_full_name && doc.author_full_name.toLowerCase().includes(queryLower));
-                    } else if (searchTarget === 'type') {
-                        return doc.type && doc.type.toLowerCase().includes(queryLower); 
-                    } else if (searchTarget === 'createdDate') {
-                        // 날짜 입력 필드 (type='date')를 사용하면 value는 'YYYY-MM-DD' 형식
-                        // 따라서 이 문자열을 직접 Date 객체로 변환하여 비교합니다.
-                        const searchDate = new Date(queryLower);
-                        if (isNaN(searchDate.getTime())) return false; // 유효하지 않은 날짜면 필터링 안함
+                    const titleMatch = doc.title && doc.title.toLowerCase().includes(queryLower);
+                    const authorMatch = (doc.author?.full_name && doc.author.full_name.toLowerCase().includes(queryLower)) ||
+                                        (doc.author_full_name && doc.author_full_name.toLowerCase().includes(queryLower)); 
+                    const typeMatch = doc.type && doc.type.toLowerCase().includes(queryLower); 
+                    
+                    const dateMatch = !isNaN(new Date(queryLower).getTime()) && 
+                                      new Date(doc.created_at).toDateString() === new Date(queryLower).toDateString();
 
-                        const docCreatedDate = new Date(doc.created_at);
-                        return docCreatedDate.toDateString() === searchDate.toDateString(); // 날짜 부분만 비교
-                    }
-                    return true;
+                    const completionDateMatch = activeTab === 'completed' && !isNaN(new Date(queryLower).getTime()) &&
+                                                doc.processed_at && new Date(doc.processed_at).toDateString() === new Date(queryLower).toDateString();
+
+
+                    return titleMatch || authorMatch || typeMatch || dateMatch || completionDateMatch;
                 });
-            }
-
-            // 결재 완료일 (별도 유지)
-            if (searchCompletionDate && activeTab === 'completed') {
-                filteredDocuments = filteredDocuments.filter(doc =>
-                    doc.processed_at && new Date(doc.processed_at).toDateString() === new Date(searchCompletionDate).toDateString()
-                );
             }
 
             setDocuments(filteredDocuments);
 
         } catch (err) {
-            console.error('결재 목록 로드 또는 필터링 오류:', err);
+            console.error('결재 목록 데이터 처리 중 최상위 오류 발생:', err); // catch 블록 오류 로깅 강화
             setError(err.message || '결재 목록을 불러오는데 실패했습니다.');
             setDocuments([]);
         } finally {
             setLoading(false);
         }
-    }, [employee, activeTab, mainSearchQuery, searchTarget, searchCompletionDate]); // 의존성 배열 업데이트
+    }, [employee, activeTab, searchQuery]); // 의존성 배열 업데이트: searchQuery만 남김
 
-    // 검색어 입력 변경 핸들러
     const handleSearchQueryChange = (e) => {
         const value = e.target.value;
-        setMainSearchQuery(value); // 먼저 mainSearchQuery 상태를 업데이트
+        setSearchQuery(value);
 
-        // 디바운스 적용: 0.3초 동안 입력 없으면 검색 실행
         if (debounceTimeoutRef.current) {
             clearTimeout(debounceTimeoutRef.current);
         }
         debounceTimeoutRef.current = setTimeout(() => {
-            // 디바운스 이후에 fetchApprovals를 호출하여 검색을 실행
-            // fetchApprovals는 mainSearchQuery 상태의 최신 값을 사용합니다.
-            fetchApprovals(); 
-        }, 300); // 300ms 디바운스
+            fetchApprovals();
+        }, 300);
     };
 
-    // 검색 대상 변경 핸들러
-    const handleSearchTargetChange = (e) => {
-        const newTarget = e.target.value;
-        setSearchTarget(newTarget);
-        // 검색 대상 변경 시, mainSearchQuery를 초기화 (필요시)
-        setMainSearchQuery(''); // 어떤 검색 대상이든 변경되면 검색어 초기화 (새로운 검색 시작)
-        
-        // 검색 대상 변경 후 바로 검색 실행 (디바운스 없이)
-        if (debounceTimeoutRef.current) {
-            clearTimeout(debounceTimeoutRef.current);
-        }
-        fetchApprovals();
-    };
-
-
-    // 탭 또는 결재 완료일 필터 변경 시 데이터 다시 가져오기
     useEffect(() => {
         fetchApprovals();
-    }, [fetchApprovals, activeTab, searchCompletionDate]); // searchCompletionDate도 의존성에 추가
+    }, [fetchApprovals, activeTab]); 
 
-    // 컴포넌트 언마운트 시 디바운스 타이머 클리어
     useEffect(() => {
         return () => {
             if (debounceTimeoutRef.current) {
@@ -277,58 +242,24 @@ export default function ApprovalsPage() {
                     </Link>
                 </header>
 
-                {/* 검색 필터 섹션 */}
                 <div className="bg-white p-6 rounded-lg shadow-sm border mb-6">
-                    {/* 검색바를 폼 태그로 감싸고 onSubmit에서 preventDefault 호출 */}
-                    <form onSubmit={(e) => e.preventDefault()} className="flex items-center space-x-2 mb-4 border border-gray-300 rounded-md shadow-sm focus-within:ring-blue-500 focus-within:border-blue-500">
-                        {/* 검색 대상 선택 드롭다운 */}
-                        <select
-                            value={searchTarget}
-                            onChange={handleSearchTargetChange} // 새로운 핸들러 사용
-                            className="block w-auto border-r border-gray-300 rounded-l-md bg-gray-50 py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-0 focus:border-transparent"
-                        >
-                            <option value="all">전체</option>
-                            <option value="title">제목</option>
-                            <option value="author">작성자</option>
-                            <option value="type">문서 종류</option>
-                            <option value="createdDate">작성일</option>
-                        </select>
-                        {/* 메인 검색어 입력 필드 */}
+                    <form onSubmit={(e) => e.preventDefault()} className="flex items-center space-x-2 border border-gray-300 rounded-md shadow-sm focus-within:ring-blue-500 focus-within:border-blue-500">
                         <input
-                            // key={searchTarget} // ★★★ key 프롭 제거 (이전 시도였으나 제거해야 함) ★★★
-                            type={searchTarget === 'createdDate' ? 'date' : 'text'}
-                            value={mainSearchQuery}
-                            onChange={handleSearchQueryChange} // 새로운 핸들러 사용
-                            placeholder={searchTarget === 'createdDate' ? 'YYYY-MM-DD' : '검색어를 입력하세요...'}
-                            className="flex-grow p-2 text-gray-900 placeholder-gray-500 focus:outline-none bg-transparent border-none focus:ring-0"
+                            type="text"
+                            value={searchQuery}
+                            onChange={handleSearchQueryChange}
+                            placeholder="제목, 작성자, 문서 종류, 작성일/완료일로 검색..."
+                            className="flex-grow p-2 pl-4 text-gray-900 placeholder-gray-500 focus:outline-none bg-transparent border-none focus:ring-0"
                         />
-                        {/* 검색 아이콘 */}
                         <button type="submit" className="p-2 text-gray-500 hover:text-gray-700">
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                         </button>
                     </form>
-
-                    {/* 결재 완료일 (완료된 결재 탭에서만 표시, 이제 별도 입력 필드) */}
-                    {activeTab === 'completed' && (
-                        <div className="mt-4">
-                            <label htmlFor="searchCompletionDate" className="block text-sm font-medium text-gray-700">결재 완료일</label>
-                            <input
-                                // key="searchCompletionDate" // ★★★ key 프롭 제거 (불필요) ★★★
-                                type="date"
-                                id="searchCompletionDate"
-                                value={searchCompletionDate}
-                                onChange={(e) => setSearchCompletionDate(e.target.value)}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                        </div>
-                    )}
                 </div>
 
-                {/* 결재 목록 탭 및 내용 */}
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
                     <div className="border-b border-gray-200 mb-6">
                         <nav className="-mb-px flex space-x-8">
-                            {/* '전체 결재' 탭을 가장 먼저 배치 */}
                             <button
                                 onClick={() => setActiveTab('all')}
                                 className={`py-4 px-1 border-b-2 font-medium text-base ${activeTab === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}

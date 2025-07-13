@@ -2,24 +2,28 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEmployee } from '@/contexts/EmployeeContext';
+import { useEmployee } from '@/contexts/EmployeeContext'; // EmployeeContext 경로 확인
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import MyAttendanceWidget from '@/components/MyAttendanceWidget';
-import LeaveCalendar from './LeaveCalendar';
+import LeaveCalendar from './LeaveCalendar.jsx'; // 경로 확인
 import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
 
 // --- 재사용 컴포넌트들 ---
 
-// 연차 현황 위젯 (이전 수정된 부분과 동일)
+// 연차 현황 위젯 (SVG 오류 해결을 위해 usedPercentage 계산 강화)
 function MyLeaveWidget({ employee }) {
-    if (!employee) return <div className="bg-white p-5 rounded-xl border shadow-sm h-full flex items-center justify-center animate-pulse"><p className="text-gray-500">연차 정보 로딩...</p></div>;
+    // employee가 아직 없거나 유효하지 않으면 로딩 메시지 표시
+    if (!employee || !employee.id) return <div className="bg-white p-5 rounded-xl border shadow-sm h-full flex items-center justify-center animate-pulse"><p className="text-gray-500">연차 정보 로딩...</p></div>;
     
+    // employee.total_leaves 또는 employee.remaining_leave_days가 없을 경우 기본값 설정
     const total = employee.total_leaves ?? 15;
     const remaining = employee.remaining_leave_days ?? 0;
     const used = total - remaining;
 
-    const usedPercentage = total > 0 ? (used / total) * 100 : 0;
+    // usedPercentage 계산 시 total이 0이거나 NaN이 되는 경우를 방지
+    // Math.max(0, ...)와 Math.min(100, ...)으로 퍼센티지 범위를 0-100%로 제한
+    const usedPercentage = (total > 0 && !isNaN(used) && !isNaN(total)) ? (used / total) * 100 : 0;
     
     return (
         <div className="bg-white p-5 rounded-xl border shadow-sm h-full">
@@ -29,13 +33,15 @@ function MyLeaveWidget({ employee }) {
                 <p className="text-4xl font-bold text-blue-600 my-1">{remaining}<span className="text-lg ml-1">일</span></p>
                 <p className="text-xs text-gray-400">(총 {total}일 중 {used}일 사용)</p>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${usedPercentage}%` }}></div></div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${Math.max(0, Math.min(100, usedPercentage))}%` }}></div>
+            </div>
         </div>
     );
 }
 
-// 내 결재 현황 위젯 (수정됨: '완료된 결재' 텍스트 변경 및 '참조할 결재' 탭/프롭 추가)
-function MyApprovalsWidget({ toReview, submitted, completed, referred }) { // 'referred' 프롭 추가
+// 내 결재 현황 위젯 (마이페이지 버전 - 기존과 동일)
+function MyApprovalsWidget({ toReview, submitted, completed, referred }) {
     const [activeTab, setActiveTab] = useState('toReview'); 
 
     const getStatusChip = (status) => {
@@ -56,11 +62,9 @@ function MyApprovalsWidget({ toReview, submitted, completed, referred }) { // 'r
                     <Link key={doc.id} href={`/approvals/${doc.id}`} className="block p-3 rounded-lg hover:bg-gray-100 border">
                         <div className="flex justify-between items-center">
                             <p className="font-medium text-gray-800 truncate">{doc.title}</p>
-                            {/* Display correct status chip based on tab context */}
-                            {/* Received Approvals, Completed Approvals는 approver_status를 우선 사용 */}
                             {activeTab === 'received' && doc.approver_status ? getStatusChip(doc.approver_status) :
                              activeTab === 'completed' && doc.approver_status ? getStatusChip(doc.approver_status) :
-                             getStatusChip(doc.status)} {/* 그 외 (상신한 결재, 참조할 결재)는 문서 자체의 status 사용 */}
+                             getStatusChip(doc.status)}
                         </div>
                          <p className="text-sm text-gray-500 mt-1">상신자: {doc.author?.full_name || doc.author_full_name || '정보 없음'}</p>
                     </Link>
@@ -80,10 +84,10 @@ function MyApprovalsWidget({ toReview, submitted, completed, referred }) { // 'r
                         상신한 결재 ({submitted.length})
                     </button>
                     <button onClick={() => setActiveTab('completed')} className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'completed' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                        완료된 결재 ({completed.length}) {/* '완료문서' -> '완료된 결재'로 텍스트 변경 */}
+                        완료된 결재 ({completed.length})
                     </button>
                     <button onClick={() => setActiveTab('referred')} className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'referred' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                        참조할 결재 ({referred.length}) {/* '참조할 결재' 탭 추가 */}
+                        참조할 결재 ({referred.length})
                     </button>
                 </nav>
             </div>
@@ -91,7 +95,7 @@ function MyApprovalsWidget({ toReview, submitted, completed, referred }) { // 'r
               {activeTab === 'toReview' && renderList(toReview)}
               {activeTab === 'submitted' && renderList(submitted)}
               {activeTab === 'completed' && renderList(completed)}
-              {activeTab === 'referred' && renderList(referred)} {/* '참조할 결재' 콘텐츠 렌더링 */}
+              {activeTab === 'referred' && renderList(referred)}
             </div>
         </div>
     );
@@ -148,126 +152,133 @@ export default function MyPage() {
     const [mySubmittedApprovals, setMySubmittedApprovals] = useState([]);
     const [approvalsToReview, setApprovalsToReview] = useState([]);
     const [completedApprovals, setCompletedApprovals] = useState([]);
-    const [referredApprovals, setReferredApprovals] = useState([]); // '참조할 결재' 상태 추가
+    const [referredApprovals, setReferredApprovals] = useState([]);
     const [myWorkReports, setMyWorkReports] = useState([]);
     const [receivedWorkLogs, setReceivedWorkLogs] = useState([]);
     const [loadingSubData, setLoadingSubData] = useState(true);
 
     const fetchData = useCallback(async (currentEmployee) => {
-        if (!currentEmployee) return;
+        // currentEmployee가 유효한지 확인하고, 유효하지 않으면 데이터 로드를 스킵합니다.
+        // useEmployee 훅의 로딩 상태를 더 신뢰합니다.
+        if (!currentEmployee || !currentEmployee.id) {
+            console.log("MyPage fetchData: currentEmployee is null or invalid, skipping data fetch.");
+            setLoadingSubData(false); // 데이터 로드 시도 안 했으니 로딩 끝으로
+            return;
+        }
+        
         setLoadingSubData(true);
+        console.log("MyPage fetchData: Fetching data for employee ID:", currentEmployee.id);
 
-        const { data: form } = await supabase.from('approval_forms').select('id').eq('title', '업무 보고서').single();
-        const workReportFormId = form?.id;
-
-        const fetchMySubmitted = async () => {
-            let query = supabase.from('approval_documents').select('id, title, status, author:profiles(full_name)').eq('author_id', currentEmployee.id).in('status', ['대기', '진행중']);
-            if (workReportFormId) {
-                query = query.not('form_id', 'eq', workReportFormId);
+        try {
+            const { data: form, error: formError } = await supabase.from('approval_forms').select('id').eq('title', '업무 보고서').single();
+            if (formError) {
+                console.error('업무 보고서 폼 ID 로드 오류:', formError);
+                // 오류 발생 시에도 로딩 상태 해제
+                setLoadingSubData(false);
+                return;
             }
-            const { data } = await query.order('created_at', { ascending: false });
-            return data || [];
-        };
+            const workReportFormId = form?.id;
 
-        const fetchToReview = async () => {
-            const { data: approverEntries } = await supabase.from('approval_document_approvers').select('document_id').eq('approver_id', currentEmployee.id).eq('status', '대기');
-            if (!approverEntries || approverEntries.length === 0) return [];
-            const docIds = approverEntries.map(e => e.document_id);
-            const { data } = await supabase.from('approval_documents').select('id, title, status, author:profiles(full_name)').in('id', docIds);
-            return data || [];
-        };
-        
-        const fetchCompleted = async () => {
-            // 본인이 작성했거나 본인이 결재선에 있었던 문서 중 '승인' 또는 '반려' 상태인 문서
-            const uniqueCompletedDocs = new Map(); // Map을 사용하여 ID 기반으로 중복 제거
 
-            // 1. 본인이 작성한 문서 중 완료된 것 (상신한 결재의 완료된 상태)
-            const { data: authoredCompletedDocs } = await supabase
-                .from('approval_documents')
-                .select('id, title, status, created_at, author:profiles(full_name)')
-                .eq('author_id', currentEmployee.id)
-                .in('status', ['승인', '반려']);
-            
-            authoredCompletedDocs?.forEach(doc => {
-                uniqueCompletedDocs.set(doc.id, { ...doc, approver_status: doc.status }); // 문서 자체의 상태를 approver_status로 설정
-            });
+            const fetchMySubmitted = async () => {
+                let query = supabase.from('approval_documents').select('id, title, status, created_at, author:profiles(full_name)').eq('author_id', currentEmployee.id).in('status', ['대기', '진행중']);
+                if (workReportFormId) {
+                    query = query.not('form_id', 'eq', workReportFormId);
+                }
+                const { data, error } = await query.order('created_at', { ascending: false });
+                if (error) console.error('상신한 결재 로드 오류:', error);
+                return data || [];
+            };
 
-            // 2. 본인이 결재한 문서 중 완료된 것 (받은 결재의 완료된 상태)
-            const { data: processedApprovals } = await supabase
-                .from('approval_document_approvers')
-                .select('document_id, status') // 문서 ID와 처리 상태만 선택
-                .eq('approver_id', currentEmployee.id)
-                .in('status', ['승인', '반려']);
-            
-            if (processedApprovals && processedApprovals.length > 0) {
-                const docIds = processedApprovals.map(entry => entry.document_id);
-                // 해당 문서 ID들의 상세 정보를 다시 가져옴
-                const { data: approvedDocs } = await supabase
-                    .from('approval_documents')
-                    .select('id, title, status, created_at, author:profiles(full_name)')
-                    .in('id', docIds);
+            const fetchToReview = async () => {
+                const { data: approverEntries, error: entryError } = await supabase.from('approval_document_approvers').select('document_id, status as approver_status, processed_at').eq('approver_id', currentEmployee.id).eq('status', '대기');
+                if (entryError) { console.error('받은 결재 항목 조회 오류:', entryError); return []; }
+                if (!approverEntries || approverEntries.length === 0) return [];
                 
-                approvedDocs?.forEach(doc => {
-                    const approverStatus = processedApprovals.find(e => e.document_id === doc.id)?.status;
-                    uniqueCompletedDocs.set(doc.id, { ...doc, approver_status: approverStatus }); // Map에 저장 또는 업데이트
-                });
-            }
+                const docIds = approverEntries.map(e => e.document_id);
+                const { data, error } = await supabase.from('approval_documents').select('*, author:profiles(full_name)').in('id', docIds).order('created_at', { ascending: false });
+                if (error) console.error('받은 결재 문서 로드 오류:', error);
+                
+                return data?.map(doc => {
+                    const approverEntry = approverEntries.find(ae => ae.document_id === doc.id);
+                    return { ...doc, approver_status: approverEntry?.approver_status, processed_at: approverEntry?.processed_at };
+                }) || [];
+            };
+            
+            const fetchCompleted = async () => {
+                const { data, error } = await supabase.rpc('get_my_completed_approvals', { p_employee_id: currentEmployee.id });
+                if (error) console.error('완료된 결재 로드 오류:', error);
+                return data || [];
+            };
 
-            // Map의 값들을 배열로 변환하고 최신순으로 정렬
-            return Array.from(uniqueCompletedDocs.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        };
+            const fetchReferredApprovals = async () => {
+                const { data, error } = await supabase.rpc('get_my_referred_documents', { p_employee_id: currentEmployee.id });
+                if (error) console.error('참조할 결재 로드 오류:', error);
+                return data || [];
+            };
 
+            const fetchMyReports = async () => {
+                if (!workReportFormId) return [];
+                const { data, error } = await supabase.from('approval_documents').select('id, title, created_at, form_fields').eq('author_id', currentEmployee.id).eq('form_id', workReportFormId);
+                if (error) console.error('내 업무 보고서 로드 오류:', error);
+                return (data || []).map(report => ({
+                    ...report,
+                    recipient_name: report.form_fields?.수신자 || report.form_fields?.recipient || '지정 안됨'
+                }));
+            };
 
-        const fetchMyReports = async () => {
-            if (!workReportFormId) return [];
-            const { data } = await supabase.from('approval_documents').select('id, title, created_at, form_fields').eq('author_id', currentEmployee.id).eq('form_id', workReportFormId);
-            return (data || []).map(report => ({
-                ...report,
-                recipient_name: report.form_fields?.수신자 || report.form_fields?.recipient || '지정 안됨'
-            }));
-        };
+            const fetchReceivedReports = async () => {
+                const { data, error } = await supabase.rpc('get_work_reports_for_user', { user_id_param: currentEmployee.id });
+                if (error) console.error('받은 업무 보고서 로드 오류:', error);
+                return data || [];
+            };
 
-        const fetchReceivedReports = async () => {
-            const { data } = await supabase.rpc('get_work_reports_for_user', { user_id_param: currentEmployee.id });
-            return data || [];
-        };
-        
-        // ★★★ 참조할 결재 데이터 가져오기 (RPC 호출) ★★★
-        const fetchReferredApprovals = async () => {
-            const { data, error } = await supabase.rpc('get_my_referred_documents', { p_employee_id: currentEmployee.id });
-            if (error) {
-                console.error('참조할 결재 로드 오류:', error);
-                return [];
-            }
-            // get_my_referred_documents 함수에서 author_full_name을 반환하므로,
-            // MyApprovalsWidget의 Link 컴포넌트에서 doc.author_full_name으로 접근 가능
-            return data || [];
-        };
+            const [submitted, toReview, completed, referred, myReports, receivedReports] = await Promise.all([
+                fetchMySubmitted(),
+                fetchToReview(),
+                fetchCompleted(),
+                fetchReferredApprovals(),
+                fetchMyReports(),
+                fetchReceivedReports()
+            ]);
 
-        const [submitted, toReview, completed, referred, myReports, receivedReports] = await Promise.all([
-            fetchMySubmitted(),
-            fetchToReview(),
-            fetchCompleted(),
-            fetchReferredApprovals(), // 참조할 결재 데이터 호출
-            fetchMyReports(),
-            fetchReceivedReports()
-        ]);
+            setMySubmittedApprovals(submitted);
+            setApprovalsToReview(toReview);
+            setCompletedApprovals(completed);
+            setReferredApprovals(referred);
+            setMyWorkReports(myReports);
+            setReceivedWorkLogs(receivedReports);
+            
+            console.log("MyPage fetchData: Data fetch completed successfully.");
 
-        setMySubmittedApprovals(submitted);
-        setApprovalsToReview(toReview);
-        setCompletedApprovals(completed);
-        setReferredApprovals(referred); // '참조할 결재' 상태 업데이트
-        setMyWorkReports(myReports);
-        setReceivedWorkLogs(receivedReports);
-        
-        setLoadingSubData(false);
-    }, []);
+        } catch (error) {
+            console.error("MyPage fetchData: Uncaught error during data fetch:", error);
+            setError("데이터 로드 중 알 수 없는 오류가 발생했습니다."); // UI에 오류 메시지 표시 가능
+        } finally {
+            setLoadingSubData(false);
+        }
+    }, [employee]); // currentEmployee가 employee와 동일하다고 가정하므로 employee를 의존성으로 추가
 
+    // useEffect: employee 정보가 로드되거나 변경될 때 fetchData 호출
     useEffect(() => {
-        if (employee) { fetchData(employee); }
-    }, [employee, fetchData]);
+        if (employee) {
+            fetchData(employee);
+        } else if (!employeeLoading) {
+            // employeeLoading이 false인데 employee가 null이면, 로그인되지 않은 상태로 간주
+            console.log("MyPage useEffect: Employee not logged in or data not available.");
+            setLoadingSubData(false);
+            // 필요시 로그인 페이지로 리다이렉트
+            // router.push('/login');
+        }
+    }, [employee, employeeLoading, fetchData]);
+
 
     if (employeeLoading) return <div className="p-8 text-center">마이페이지 로딩 중...</div>;
+
+    // employee가 없으면 (로그인되지 않은 상태) 로딩 후에도 데이터를 표시하지 않음
+    if (!employee || !employee.id) {
+        return <div className="p-8 text-center text-gray-600">직원 정보를 불러올 수 없습니다. 로그인 상태를 확인해주세요.</div>;
+    }
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-full">
@@ -286,16 +297,7 @@ export default function MyPage() {
                 <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="bg-white p-5 rounded-xl border shadow-sm lg:col-span-2">
                         <h2 className="text-lg font-bold text-gray-800 mb-4 border-b pb-3">내 결재 현황</h2>
-                        {loadingSubData ? (
-                            <p className="text-center text-gray-500 py-10">로딩 중...</p>
-                        ) : (
-                            <MyApprovalsWidget 
-                                toReview={approvalsToReview} 
-                                submitted={mySubmittedApprovals} 
-                                completed={completedApprovals} 
-                                referred={referredApprovals} // '참조할 결재' 데이터 전달
-                            />
-                        )}
+                        {loadingSubData ? <p className="text-center text-gray-500 py-10">로딩 중...</p> : <MyApprovalsWidget toReview={approvalsToReview} submitted={mySubmittedApprovals} completed={completedApprovals} referred={referredApprovals} />}
                     </div>
                     <div className="bg-white p-5 rounded-xl border shadow-sm">
                         <h2 className="text-lg font-bold text-gray-800 mb-4 border-b pb-3">업무 보고</h2>

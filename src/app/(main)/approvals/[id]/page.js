@@ -1,19 +1,18 @@
 // src/app/(main)/approvals/[id]/page.js
-'use client'; // 이 페이지는 클라이언트 컴포넌트입니다.
+'use client'; 
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase/client'; // 클라이언트용 Supabase 임포트
+import { supabase } from '@/lib/supabase/client';
 import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
 
-// ApprovalActions 컴포넌트 임포트
 import ApprovalActions from './ApprovalActions';
 
-// PDF/이미지 변환 라이브러리 제거 (html2canvas, jspdf)
-// import html2canvas from 'html2canvas'; // 제거
-// import jsPDF from 'jspdf'; // 제거
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
-// --- Helper Components (생략: 기존과 동일) ---
+
+// --- Helper Components ---
 const getStatusStyle = (status) => {
     switch (status) {
         case '승인': return 'bg-blue-100 text-blue-800';
@@ -28,6 +27,7 @@ const StatusIndicator = ({ status }) => (
     <span className={`absolute flex items-center justify-center w-6 h-6 rounded-full -left-3.5 ring-4 ring-white ${status === '승인' ? 'bg-blue-500' : status === '반려' ? 'bg-red-500' : status === '대기' ? 'bg-yellow-400' : 'bg-gray-400'}`}></span>
 );
 
+// DynamicFieldRenderer는 Rich Text (HTML) 내용을 안전하게 표시하도록 보강
 const DynamicFieldRenderer = ({ field, data }) => {
     const value = data?.[field.name];
 
@@ -35,6 +35,13 @@ const DynamicFieldRenderer = ({ field, data }) => {
         return <p className="p-3 bg-gray-100 rounded-md mt-1 text-gray-500">내용 없음</p>;
     }
     switch (field.type) {
+        case 'richtext':
+            return (
+                <div 
+                    className="p-3 bg-gray-100 rounded-md mt-1 prose prose-sm max-w-none" 
+                    dangerouslySetInnerHTML={{ __html: value }} 
+                />
+            );
         case 'daterange':
             if (typeof value === 'object' && value.start && value.end) {
                 return <p className="p-3 bg-gray-100 rounded-md mt-1">{`${value.start} ~ ${value.end}`}</p>;
@@ -42,17 +49,39 @@ const DynamicFieldRenderer = ({ field, data }) => {
             return <p className="p-3 bg-gray-100 rounded-md mt-1 text-red-500">잘못된 기간 형식</p>;
         case 'checkbox':
             return <p className="p-3 bg-gray-100 rounded-md mt-1">{value ? '예' : '아니오'}</p>;
+        case 'file': // 파일 타입 표시 추가
+            if (value && typeof value === 'string' && value.startsWith('http')) {
+                const fileName = value.split('/').pop().split('?')[0];
+                return (
+                    <a href={value} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-100 text-blue-800 rounded-md mt-1 flex items-center hover:underline">
+                        <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd"></path></svg>
+                        {fileName} (클릭하여 다운로드)
+                    </a>
+                );
+            }
+            return <p className="p-3 bg-gray-100 rounded-md mt-1 text-gray-500">첨부 파일 없음</p>;
         default:
             return <p className="p-3 bg-gray-100 rounded-md mt-1 whitespace-pre-wrap">{String(value)}</p>;
     }
 };
 
-const ApprovalAttachments = ({ attachments }) => {
-    if (!attachments || attachments.length === 0) { return null; }
+// ApprovalAttachments 컴포넌트
+const ApprovalAttachments = ({ documentData }) => {
+    const fileUrl = documentData?.form_data?.['첨부 파일'];
+
+    if (!fileUrl) { return null; }
+
+    const fileName = fileUrl.split('/').pop().split('?')[0];
+
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm border">
             <h2 className="text-xl font-bold border-b pb-3 mb-4">첨부 파일</h2>
-            <p className="text-sm text-gray-500">첨부파일 기능은 구현 예정입니다.</p>
+            <div className="flex items-center text-blue-800 bg-blue-50 p-3 rounded-md">
+                <svg className="w-6 h-6 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd"></path></svg>
+                <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="hover:underline truncate">
+                    {fileName} (클릭하여 다운로드)
+                </a>
+            </div>
         </div>
     );
 };
@@ -64,7 +93,7 @@ export default function ApprovalDetailPage() {
     const [approvers, setApprovers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    // const contentRef = useRef(null); // 더 이상 html2canvas를 사용하지 않으므로 필요 없음
+    const contentRef = useRef(null);
 
     const [currentUser, setCurrentUser] = useState(null);
 
@@ -121,12 +150,43 @@ export default function ApprovalDetailPage() {
         fetchData();
     }, [documentId]);
 
-    // ★★★ PDF 저장 및 인쇄 로직을 하나로 통합하고 window.print()를 사용합니다. ★★★
-    const handlePrintOrSavePdf = useCallback(() => {
-        // 브라우저의 기본 인쇄 대화 상자를 띄웁니다.
-        // 여기서 "대상"을 "PDF로 저장"으로 선택하면 PDF로 저장됩니다.
-        window.print();
-    }, []);
+    // PDF 저장 함수
+    const handleDownloadPdf = useCallback(async () => {
+        if (contentRef.current) {
+            const canvas = await html2canvas(contentRef.current, {
+                scale: 2,
+                useCORS: true,
+                scrollX: 0,
+                scrollY: 0,
+                windowWidth: contentRef.current.scrollWidth,
+                windowHeight: contentRef.current.scrollHeight,
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgWidth = 210;
+            const pageHeight = 297;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            pdf.save(`결재문서_${documentId}.pdf`);
+        } else {
+            console.error("PDF로 변환할 콘텐츠 영역(ref)을 찾을 수 없습니다.");
+        }
+    }, [documentId]);
+
 
     if (loading) {
         return <div className="p-4 text-center">결재 문서를 로드 중입니다...</div>;
@@ -142,9 +202,7 @@ export default function ApprovalDetailPage() {
 
     return (
         <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8 bg-gray-50">
-            {/* ★★★ 이 div는 이제 `print-area` ID를 가지지 않습니다. ★★★
-                 실제 인쇄/PDF 저장 시에는 CSS로 제어합니다. */}
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div id="print-area" ref={contentRef} className="max-w-4xl mx-auto space-y-6">
                 <header className="bg-white p-6 rounded-lg shadow-sm border">
                     <div className="flex justify-between items-center mb-4">
                         <span className={`text-sm font-semibold px-3 py-1 rounded-full ${getStatusStyle(document.status)}`}>
@@ -166,6 +224,7 @@ export default function ApprovalDetailPage() {
                                 <div key={field.name} className="grid grid-cols-1 md:grid-cols-4 gap-2">
                                     <dt className="text-sm font-medium text-gray-500 md:col-span-1">{field.name}</dt>
                                     <dd className="md:col-span-3">
+                                        {/* DynamicFieldRenderer가 파일 타입을 처리하도록 보강 */}
                                         <DynamicFieldRenderer field={field} data={document.form_data} />
                                     </dd>
                                 </div>
@@ -176,7 +235,8 @@ export default function ApprovalDetailPage() {
                     </dl>
                 </div>
                 
-                <ApprovalAttachments attachments={document.attachments} />
+                {/* ApprovalAttachments 컴포넌트에 documentData 프롭 전달 */}
+                <ApprovalAttachments documentData={document} /> 
                 
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
                     <h2 className="text-xl font-bold border-b pb-3 mb-4">결재선</h2>
@@ -194,10 +254,9 @@ export default function ApprovalDetailPage() {
                     </ol>
                 </div>
                 
-                {/* PDF 저장 버튼 (이제 인쇄 기능을 겸합니다) */}
-                <div className="flex gap-4 mt-6 print:hidden"> {/* print:hidden으로 인쇄 시 버튼 숨김 */}
+                <div className="flex gap-4 mt-6 print:hidden">
                     <button
-                        onClick={handlePrintOrSavePdf}
+                        onClick={handleDownloadPdf}
                         className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow"
                     >
                         PDF로 저장 / 인쇄
