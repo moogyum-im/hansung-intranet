@@ -43,13 +43,51 @@ export default function OrganizationClient({ initialEmployees }) {
     const [openDepartments, setOpenDepartments] = useState({});
     
     const departmentOrder = ['최고 경영진', '비서실', '전략기획부', '관리부', '공무부', '공사부'];
+    
+    // 직급 순서 정의 (더 많은 직급이 있다면 여기에 추가하세요)
+    const positionOrder = {
+        '회장': 0,
+        '대표': 1,
+        '이사': 2,
+        '총괄팀장': 3,
+        '부장': 4,
+        '차장': 5,
+        '과장': 6,
+        '대리': 7,
+        '사원': 8,
+
+    };
 
     // 부서별 그룹화 및 정렬 로직
     const employeesByDepartment = useMemo(() => {
-        const grouped = employees.reduce((acc, employee) => { const dept = employee.department || '미배정'; if (!acc[dept]) acc[dept] = []; acc[dept].push(employee); return acc; }, {});
+        const grouped = employees.reduce((acc, employee) => {
+            const dept = employee.department || '미배정';
+            if (!acc[dept]) acc[dept] = [];
+            acc[dept].push(employee);
+            return acc;
+        }, {});
+
+        // 각 부서 내의 직원들을 직급 순서에 따라 정렬
+        for (const dept in grouped) {
+            grouped[dept].sort((a, b) => {
+                const orderA = positionOrder[a.position] !== undefined ? positionOrder[a.position] : positionOrder['미정'];
+                const orderB = positionOrder[b.position] !== undefined ? positionOrder[b.position] : positionOrder['미정'];
+                
+                // 같은 직급이면 이름으로 한번 더 정렬 (선택 사항)
+                if (orderA === orderB) {
+                    return (a.full_name || '').localeCompare(b.full_name || '');
+                }
+                return orderA - orderB;
+            });
+        }
+
         const sortedGrouped = {};
-        departmentOrder.forEach(deptName => { if (grouped[deptName]) sortedGrouped[deptName] = grouped[deptName]; });
-        Object.keys(grouped).forEach(deptName => { if (!sortedGrouped[deptName]) sortedGrouped[deptName] = grouped[deptName]; });
+        departmentOrder.forEach(deptName => {
+            if (grouped[deptName]) sortedGrouped[deptName] = grouped[deptName];
+        });
+        Object.keys(grouped).forEach(deptName => {
+            if (!sortedGrouped[deptName]) sortedGrouped[deptName] = grouped[deptName];
+        });
         return sortedGrouped;
     }, [employees]);
     
@@ -70,6 +108,7 @@ export default function OrganizationClient({ initialEmployees }) {
             await findOrCreateDirectChat(targetUserId);
         } catch (error) {
             console.log("Redirect 중 발생한 에러(정상일 수 있음):", error);
+            // 에러 발생 시에도 로딩 상태를 해제하여 UI가 멈추지 않도록 합니다.
             setTimeout(() => setChatLoading(false), 2000); 
         }
     };
@@ -81,7 +120,6 @@ export default function OrganizationClient({ initialEmployees }) {
   
     // 최종 렌더링 UI
     return (
-        // ★★★ 이 div에 h-full과 overflow-y-auto를 추가하여 스크롤을 활성화합니다. ★★★
         <div className="h-full overflow-y-auto p-6 md:p-8">
             {chatLoading && (
                 <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
