@@ -3,11 +3,20 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { findOrCreateDirectChat } from '@/actions/chatActions';
+import { supabase } from '@/lib/supabase/client'; // Supabase 클라이언트 임포트
 
 // 자식 컴포넌트 1: 상태 아이콘
 const StatusIcon = ({ status }) => {
-    const statusMap = { '업무 중': { color: 'bg-green-500', text: '업무 중' }, '회의 중': { color: 'bg-blue-500', text: '회의 중' }, '외근 중': { color: 'bg-yellow-500', text: '외근' }, '식사 중': { color: 'bg-orange-500', text: '식사 중' }, '자리 비움': { color: 'bg-purple-500', text: '자리 비움' }, '연차 중': { color: 'bg-gray-400', text: '연차' },};
-    const currentStatus = statusMap[status] || statusMap['업무 중'];
+    const statusMap = {
+        '업무 중': { color: 'bg-green-500', text: '업무 중' },
+        '회의 중': { color: 'bg-blue-500', text: '회의 중' },
+        '외근 중': { color: 'bg-yellow-500', text: '외근' },
+        '식사 중': { color: 'bg-orange-500', text: '식사 중' },
+        '자리 비움': { color: 'bg-purple-500', text: '자리 비움' },
+        '연차 중': { color: 'bg-gray-400', text: '연차' },
+        '오프라인': { color: 'bg-gray-500', text: '오프라인' }, // 오프라인 상태 추가
+    };
+    const currentStatus = statusMap[status] || statusMap['오프라인']; // 기본값 '오프라인'으로 설정
     return (
       <div className="flex items-center gap-2">
         <span className={`w-2.5 h-2.5 rounded-full ${currentStatus.color}`}></span>
@@ -38,13 +47,85 @@ const EmployeeCard = ({ employee, onChat }) => {
 // 메인 클라이언트 컴포넌트
 export default function OrganizationClient({ initialEmployees }) {
     const [employees, setEmployees] = useState(initialEmployees || []);
-    const [loading, setLoading] = useState(!initialEmployees);
+    const [loading, setLoading] = useState(false); 
     const [chatLoading, setChatLoading] = useState(false);
     const [openDepartments, setOpenDepartments] = useState({});
-    
+
+    // 새로운 함수: 단일 직원 정보를 가져오는 함수 (Realtime 이벤트 수신 후 사용)
+    const fetchEmployeeById = async (employeeId) => {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*') // 모든 필드를 다시 조회
+            .eq('id', employeeId)
+            .single();
+        if (error) {
+            console.error(`Failed to fetch employee ${employeeId} via re-fetch:`, error);
+            return null;
+        }
+        return data;
+    };
+
+    // Realtime 구독을 위한 useEffect
+    useEffect(() => {
+        if (!initialEmployees || initialEmployees.length === 0) {
+            setLoading(true);
+        }
+
+        const channel = supabase
+            .channel('organization_profiles_changes') // 고유한 채널 이름 (충돌 방지)
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'profiles' },
+                async (payload) => { // async 함수로 변경
+                    console.log('Realtime event received for profiles:', payload);
+                    console.log('Event Type:', payload.eventType);
+                    console.log('New Data from payload:', payload.new);
+                    console.log('Old Data from payload:', payload.old);
+
+                    // Realtime 이벤트 수신 후 해당 직원의 전체 데이터를 다시 조회하여 확실하게 업데이트
+                    if ((payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') && payload.new?.id) {
+                        const fetchedEmployee = await fetchEmployeeById(payload.new.id);
+                        if (fetchedEmployee && fetchedEmployee.department !== '시스템 관리팀') { // 다시 필터링
+                            setEmployees(currentEmployees => {
+                                const index = currentEmployees.findIndex(emp => emp.id === fetchedEmployee.id);
+                                if (index !== -1) {
+                                    const newArray = [...currentEmployees];
+                                    newArray[index] = fetchedEmployee; // 전체 데이터로 교체
+                                    return newArray;
+                                } else {
+                                    // 새로 삽입된 경우 (initial fetch 이후 추가된 직원)
+                                    return [...currentEmployees, fetchedEmployee];
+                                }
+                            });
+                        }
+                    } else if (payload.eventType === 'DELETE' && payload.old?.id) {
+                         setEmployees(currentEmployees =>
+                            currentEmployees.filter(emp => emp.id !== payload.old.id)
+                        );
+                    }
+                }
+            )
+            .subscribe((status) => {
+                console.log('Supabase Realtime Channel Status for OrganizationClient:', status);
+                if (status === 'SUBSCRIBED') {
+                    console.log('Successfully subscribed to profiles changes in OrganizationClient!');
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error('Failed to subscribe to profiles changes in OrganizationClient due to channel error.');
+                } else if (status === 'TIMED_OUT') {
+                    console.warn('Realtime subscription timed out in OrganizationClient.');
+                }
+            });
+
+
+        setLoading(false);
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []); // 빈 의존성 배열로 컴포넌트 마운트 시 한 번만 실행
+
     const departmentOrder = ['최고 경영진', '비서실', '전략기획부', '관리부', '공무부', '공사부'];
     
-    // 직급 순서 정의 (더 많은 직급이 있다면 여기에 추가하세요)
     const positionOrder = {
         '회장': 0,
         '대표': 1,
@@ -55,10 +136,9 @@ export default function OrganizationClient({ initialEmployees }) {
         '과장': 6,
         '대리': 7,
         '사원': 8,
-
+        '미정': 99,
     };
 
-    // 부서별 그룹화 및 정렬 로직
     const employeesByDepartment = useMemo(() => {
         const grouped = employees.reduce((acc, employee) => {
             const dept = employee.department || '미배정';
@@ -67,13 +147,11 @@ export default function OrganizationClient({ initialEmployees }) {
             return acc;
         }, {});
 
-        // 각 부서 내의 직원들을 직급 순서에 따라 정렬
         for (const dept in grouped) {
             grouped[dept].sort((a, b) => {
                 const orderA = positionOrder[a.position] !== undefined ? positionOrder[a.position] : positionOrder['미정'];
                 const orderB = positionOrder[b.position] !== undefined ? positionOrder[b.position] : positionOrder['미정'];
                 
-                // 같은 직급이면 이름으로 한번 더 정렬 (선택 사항)
                 if (orderA === orderB) {
                     return (a.full_name || '').localeCompare(b.full_name || '');
                 }
@@ -85,40 +163,34 @@ export default function OrganizationClient({ initialEmployees }) {
         departmentOrder.forEach(deptName => {
             if (grouped[deptName]) sortedGrouped[deptName] = grouped[deptName];
         });
-        Object.keys(grouped).forEach(deptName => {
+        Object.keys(grouped).sort().forEach(deptName => {
             if (!sortedGrouped[deptName]) sortedGrouped[deptName] = grouped[deptName];
         });
         return sortedGrouped;
     }, [employees]);
     
-    // 초기 아코디언 상태 설정
     useEffect(() => {
         const allDepts = Object.keys(employeesByDepartment);
         const initialOpenState = allDepts.reduce((acc, dept) => ({ ...acc, [dept]: true }), {});
         setOpenDepartments(initialOpenState);
     }, [employeesByDepartment]);
 
-    // 아코디언 토글 함수
     const toggleDepartment = (dept) => { setOpenDepartments(prev => ({ ...prev, [dept]: !prev[dept] })); };
     
-    // 1:1 채팅 시작 함수
     const handleStartChat = async (targetUserId) => {
         setChatLoading(true);
         try {
             await findOrCreateDirectChat(targetUserId);
         } catch (error) {
             console.log("Redirect 중 발생한 에러(정상일 수 있음):", error);
-            // 에러 발생 시에도 로딩 상태를 해제하여 UI가 멈추지 않도록 합니다.
             setTimeout(() => setChatLoading(false), 2000); 
         }
     };
 
-    // 로딩 중 UI
     if (loading) {
-        return <div className="p-8 text-center text-gray-500">조직도 정보를 불러오는 중입니다...</div>;
+        return <div className="p-8 text-center text-gray-500">조직도 정보를 실시간으로 불러오는 중입니다...</div>;
     }
   
-    // 최종 렌더링 UI
     return (
         <div className="h-full overflow-y-auto p-6 md:p-8">
             {chatLoading && (

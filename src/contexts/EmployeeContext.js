@@ -22,10 +22,8 @@ export function EmployeeProvider({ children }) {
     setLoading(true);
     
     try {
-      // ★★★★★ 'profiles' 대신 'employee_leave_status' 뷰를 조회 ★★★★★
-      // 이 뷰에는 연차 정보(total_leaves 등)가 모두 포함되어 있습니다.
       const { data, error } = await supabase
-        .from('employee_leave_status') // 테이블 대신 뷰(view)를 조회
+        .from('employee_leave_status') // 뷰(view)를 조회
         .select('*')
         .eq('id', user.id)
         .single();
@@ -74,8 +72,17 @@ export function EmployeeProvider({ children }) {
       console.error("상태 업데이트 실패: 사용자 ID가 없습니다.");
       return;
     }
+
+    // 낙관적 업데이트 시작
+    const prevEmployee = employee; // 이전 employee 객체 저장
+
+    // 현재 로그인한 사용자의 상태가 변경되는 경우에만 UI를 즉시 업데이트
+    if (employee && employee.id === userId) {
+        setEmployee(prev => ({ ...prev, status: newStatus }));
+    }
+    // 낙관적 업데이트 종료
+
     try {
-      // 상태 업데이트는 'profiles' 원본 테이블에 직접 수행합니다.
       const { data, error } = await supabase
         .from('profiles')
         .update({ status: newStatus, updated_at: new Date().toISOString() })
@@ -83,14 +90,24 @@ export function EmployeeProvider({ children }) {
         .select()
         .single();
 
-      if (error) { throw error; }
+      if (error) {
+        throw error;
+      }
       
       if (data) {
-        // 상태가 변경되었으므로, 연차 정보가 포함된 최신 뷰를 다시 불러옵니다.
-        fetchEmployeeProfile({ id: userId });
+        // 본인의 프로필이 업데이트된 경우, 'profileUpdated' 이벤트를 발송하여
+        // 이 컨텍스트의 useEffect에서 fetchEmployeeProfile을 호출하게 합니다.
+        window.dispatchEvent(new CustomEvent('profileUpdated'));
+        return true; // 성공적으로 업데이트됨
       }
+      return false;
     } catch (error) {
       console.error("상태 업데이트 실패:", error.message);
+      // 낙관적 업데이트 롤백 (실패 시 이전 상태로 복구)
+      if (prevEmployee && prevEmployee.id === userId) {
+          setEmployee(prevEmployee); // 이전 employee 객체로 복구
+      }
+      throw error;
     }
   };
 

@@ -16,7 +16,7 @@ const STATUS_STYLES = {
 };
 
 const formatDuration = (milliseconds) => {
-    if (milliseconds < 0) return "00:00:00";
+    if (milliseconds < 0 || isNaN(milliseconds)) return "00:00:00";
     const totalSeconds = Math.floor(milliseconds / 1000);
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -66,17 +66,18 @@ export default function MyAttendanceWidget({ currentUser }) {
 
   useEffect(() => {
     let timer;
-    if (todayRecord && !todayRecord.check_out_time) {
-      const checkInTime = new Date(todayRecord.check_in_time).getTime();
-      const updateElapsedTime = () => {
-        setElapsedTime(Date.now() - checkInTime);
-      };
-      updateElapsedTime();
-      timer = setInterval(updateElapsedTime, 1000);
-    } else if (todayRecord && todayRecord.check_out_time) {
-      const checkInTime = new Date(todayRecord.check_in_time).getTime();
-      const checkOutTime = new Date(todayRecord.check_out_time).getTime();
-      setElapsedTime(checkOutTime - checkInTime);
+    if (todayRecord) {
+        const checkInMs = new Date(todayRecord.check_in_time).getTime();
+        if (!todayRecord.check_out_time) {
+            const updateElapsedTime = () => {
+                setElapsedTime(Date.now() - checkInMs);
+            };
+            updateElapsedTime();
+            timer = setInterval(updateElapsedTime, 1000);
+        } else {
+            const checkOutMs = new Date(todayRecord.check_out_time).getTime();
+            setElapsedTime(checkOutMs - checkInMs);
+        }
     } else {
         setElapsedTime(0);
     }
@@ -86,8 +87,13 @@ export default function MyAttendanceWidget({ currentUser }) {
   const handleStatusChange = async (newStatus) => {
     if (!currentUser?.id || !updateEmployeeStatus) return;
     setIsStatusDropdownOpen(false);
-    await updateEmployeeStatus(currentUser.id, newStatus);
-    toast.success(`상태가 '${newStatus}'(으)로 변경되었습니다.`);
+    try {
+        await updateEmployeeStatus(currentUser.id, newStatus);
+        toast.success(`상태가 '${newStatus}'(으)로 변경되었습니다.`);
+    } catch (error) {
+        toast.error("상태 변경에 실패했습니다.");
+        console.error("Status update error:", error);
+    }
   };
 
   const handleAttendance = async () => {
@@ -95,39 +101,45 @@ export default function MyAttendanceWidget({ currentUser }) {
 
     const isCheckedIn = todayRecord && !todayRecord.check_out_time;
 
-    if (isCheckedIn) { // 퇴근 처리
-      const { data: updatedRecord, error } = await supabase
-        .from('attendance_records')
-        .update({ check_out_time: new Date() }) // .toISOString() 제거
-        .eq('id', todayRecord.id)
-        .select()
-        .single();
-      if (error) {
-        toast.error('퇴근 처리 실패: ' + error.message);
-      } else {
-        toast.success('퇴근 처리되었습니다.');
-        setTodayRecord(updatedRecord);
-        await handleStatusChange('오프라인');
-      }
-    } else { // 출근 처리
-      const { data: newRecord, error } = await supabase
-        .from('attendance_records')
-        .insert({ user_id: currentUser.id, check_in_time: new Date() }) // .toISOString() 제거
-        .select()
-        .single();
-      if (error) {
-        toast.error('출근 처리 실패: ' + error.message);
-      } else {
-        toast.success('출근 처리되었습니다.');
-        setTodayRecord(newRecord);
-        await handleStatusChange('업무 중');
-      }
+    setLoading(true);
+    try {
+        if (isCheckedIn) { // 퇴근 처리
+            const { data: updatedRecord, error } = await supabase
+                .from('attendance_records')
+                .update({ check_out_time: new Date().toISOString() })
+                .eq('id', todayRecord.id)
+                .select()
+                .single();
+            if (error) {
+                throw error;
+            }
+            toast.success('퇴근 처리되었습니다.');
+            setTodayRecord(updatedRecord);
+            await updateEmployeeStatus(currentUser.id, '오프라인'); 
+        } else { // 출근 처리
+            const { data: newRecord, error } = await supabase
+                .from('attendance_records')
+                .insert({ user_id: currentUser.id, check_in_time: new Date().toISOString() })
+                .select()
+                .single();
+            if (error) {
+                throw error;
+            }
+            toast.success('출근 처리되었습니다.');
+            setTodayRecord(newRecord);
+            await updateEmployeeStatus(currentUser.id, '업무 중');
+        }
+    } catch (error) {
+        console.error("출퇴근 처리 실패:", error);
+        toast.error('출퇴근 처리 실패: ' + (error.message || '알 수 없는 오류'));
+    } finally {
+        setLoading(false);
     }
   };
   
-  const currentStatus = employee?.status || '오프라인';
+  const currentStatus = employee?.status || '오프라인'; 
   const statusStyle = STATUS_STYLES[currentStatus] || STATUS_STYLES['오프라인'];
-  const isCheckedIn = todayRecord && !todayRecord.check_out_time;
+  const isCurrentlyCheckedIn = todayRecord && !todayRecord.check_out_time;
 
   return (
     <div className="bg-white p-5 rounded-xl border shadow-sm w-full h-full flex flex-col justify-between">
@@ -178,11 +190,11 @@ export default function MyAttendanceWidget({ currentUser }) {
         )}
         <button
           onClick={handleAttendance}
-          disabled={loading || employeeLoading || (isCheckedIn && !todayRecord.check_out_time && elapsedTime < 1000)}
-          className={`w-full font-bold text-white py-2.5 rounded-lg transition-colors disabled:opacity-50
-            ${isCheckedIn ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-500 hover:bg-green-600'}`}
+          disabled={loading || employeeLoading || (isCurrentlyCheckedIn && elapsedTime < 1000)}
+          className={`w-full font-bold text-white py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+            ${isCurrentlyCheckedIn ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-500 hover:bg-green-600'}`}
         >
-          {isCheckedIn ? '퇴근하기' : '출근하기'}
+          {isCurrentlyCheckedIn ? '퇴근하기' : '출근하기'}
         </button>
       </div>
     </div>
