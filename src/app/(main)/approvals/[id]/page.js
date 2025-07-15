@@ -1,4 +1,3 @@
-// src/app/(main)/approvals/[id]/page.js
 'use client'; 
 
 import { useEffect, useState, useRef, useCallback } from 'react';
@@ -27,35 +26,27 @@ const StatusIndicator = ({ status }) => (
     <span className={`absolute flex items-center justify-center w-6 h-6 rounded-full -left-3.5 ring-4 ring-white ${status === '승인' ? 'bg-blue-500' : status === '반려' ? 'bg-red-500' : status === '대기' ? 'bg-yellow-400' : 'bg-gray-400'}`}></span>
 );
 
-// DynamicFieldRenderer는 Rich Text (HTML) 내용을 안전하게 표시하도록 보강
+// DynamicFieldRenderer: 파일 정보를 객체로 처리하도록 수정
 const DynamicFieldRenderer = ({ field, data }) => {
     const value = data?.[field.name];
 
-    if (value === null || typeof value === 'undefined' || value === '') {
+    if (!value) {
         return <p className="p-3 bg-gray-100 rounded-md mt-1 text-gray-500">내용 없음</p>;
     }
     switch (field.type) {
         case 'richtext':
-            return (
-                <div 
-                    className="p-3 bg-gray-100 rounded-md mt-1 prose prose-sm max-w-none" 
-                    dangerouslySetInnerHTML={{ __html: value }} 
-                />
-            );
+            return <div className="p-3 bg-gray-100 rounded-md mt-1 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: value }} />;
         case 'daterange':
-            if (typeof value === 'object' && value.start && value.end) {
-                return <p className="p-3 bg-gray-100 rounded-md mt-1">{`${value.start} ~ ${value.end}`}</p>;
-            }
-            return <p className="p-3 bg-gray-100 rounded-md mt-1 text-red-500">잘못된 기간 형식</p>;
+            return <p className="p-3 bg-gray-100 rounded-md mt-1">{`${value.start || ''} ~ ${value.end || ''}`}</p>;
         case 'checkbox':
             return <p className="p-3 bg-gray-100 rounded-md mt-1">{value ? '예' : '아니오'}</p>;
-        case 'file': // 파일 타입 표시 추가
-            if (value && typeof value === 'string' && value.startsWith('http')) {
-                const fileName = value.split('/').pop().split('?')[0];
+        case 'file':
+            // ★★★ value가 {name, url} 형태의 객체이므로, 각 속성을 올바르게 사용합니다. ★★★
+            if (typeof value === 'object' && value.url && value.name) {
                 return (
-                    <a href={value} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-100 text-blue-800 rounded-md mt-1 flex items-center hover:underline">
+                    <a href={value.url} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-100 text-blue-800 rounded-md mt-1 flex items-center hover:underline">
                         <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd"></path></svg>
-                        {fileName} (클릭하여 다운로드)
+                        {value.name} (클릭하여 다운로드)
                     </a>
                 );
             }
@@ -65,21 +56,23 @@ const DynamicFieldRenderer = ({ field, data }) => {
     }
 };
 
-// ApprovalAttachments 컴포넌트
+// ApprovalAttachments: 파일 정보를 객체로 처리하도록 수정
 const ApprovalAttachments = ({ documentData }) => {
-    const fileUrl = documentData?.form_data?.['첨부 파일'];
+    // ★★★ fileInfo는 이제 {name, url} 형태의 객체입니다. ★★★
+    const fileInfo = documentData?.form_data?.['첨부 파일'];
 
-    if (!fileUrl) { return null; }
-
-    const fileName = fileUrl.split('/').pop().split('?')[0];
+    if (!fileInfo || typeof fileInfo !== 'object' || !fileInfo.url) {
+        return null;
+    }
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm border">
             <h2 className="text-xl font-bold border-b pb-3 mb-4">첨부 파일</h2>
             <div className="flex items-center text-blue-800 bg-blue-50 p-3 rounded-md">
                 <svg className="w-6 h-6 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd"></path></svg>
-                <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="hover:underline truncate">
-                    {fileName} (클릭하여 다운로드)
+                {/* ★★★ 객체의 url과 name 속성을 사용합니다. ★★★ */}
+                <a href={fileInfo.url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate">
+                    {fileInfo.name || '파일 다운로드'}
                 </a>
             </div>
         </div>
@@ -94,7 +87,6 @@ export default function ApprovalDetailPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const contentRef = useRef(null);
-
     const [currentUser, setCurrentUser] = useState(null);
 
     useEffect(() => {
@@ -150,14 +142,10 @@ export default function ApprovalDetailPage() {
         fetchData();
     }, [documentId]);
 
-    // PDF 저장 함수
     const handleDownloadPdf = useCallback(async () => {
         if (contentRef.current) {
             const canvas = await html2canvas(contentRef.current, {
-                scale: 2,
-                useCORS: true,
-                scrollX: 0,
-                scrollY: 0,
+                scale: 2, useCORS: true, scrollX: 0, scrollY: 0,
                 windowWidth: contentRef.current.scrollWidth,
                 windowHeight: contentRef.current.scrollHeight,
             });
@@ -168,7 +156,6 @@ export default function ApprovalDetailPage() {
             const pageHeight = 297;
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
             let heightLeft = imgHeight;
-
             let position = 0;
 
             pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
@@ -180,25 +167,14 @@ export default function ApprovalDetailPage() {
                 pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
                 heightLeft -= pageHeight;
             }
-
             pdf.save(`결재문서_${documentId}.pdf`);
-        } else {
-            console.error("PDF로 변환할 콘텐츠 영역(ref)을 찾을 수 없습니다.");
         }
     }, [documentId]);
 
 
-    if (loading) {
-        return <div className="p-4 text-center">결재 문서를 로드 중입니다...</div>;
-    }
-
-    if (error) {
-        return <div className="p-4 text-red-500 text-center">{error}</div>;
-    }
-
-    if (!document) {
-        return notFound();
-    }
+    if (loading) return <div className="p-4 text-center">결재 문서를 로드 중입니다...</div>;
+    if (error) return <div className="p-4 text-red-500 text-center">{error}</div>;
+    if (!document) return notFound();
 
     return (
         <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8 bg-gray-50">
@@ -224,7 +200,6 @@ export default function ApprovalDetailPage() {
                                 <div key={field.name} className="grid grid-cols-1 md:grid-cols-4 gap-2">
                                     <dt className="text-sm font-medium text-gray-500 md:col-span-1">{field.name}</dt>
                                     <dd className="md:col-span-3">
-                                        {/* DynamicFieldRenderer가 파일 타입을 처리하도록 보강 */}
                                         <DynamicFieldRenderer field={field} data={document.form_data} />
                                     </dd>
                                 </div>
@@ -235,7 +210,6 @@ export default function ApprovalDetailPage() {
                     </dl>
                 </div>
                 
-                {/* ApprovalAttachments 컴포넌트에 documentData 프롭 전달 */}
                 <ApprovalAttachments documentData={document} /> 
                 
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
@@ -263,7 +237,6 @@ export default function ApprovalDetailPage() {
                     </button>
                 </div>
 
-                {/* 상호작용이 필요한 부분만 클라이언트 컴포넌트로 렌더링합니다. */}
                 {currentUser && (
                     <ApprovalActions
                         document={document}
