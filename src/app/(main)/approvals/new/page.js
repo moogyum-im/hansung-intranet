@@ -1,4 +1,3 @@
-// src/app/(main)/approvals/new/page.js
 'use client'; 
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
@@ -13,7 +12,7 @@ import 'react-quill/dist/quill.snow.css';
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
-// --- 템플릿 데이터 정의 (사유 필드 타입을 'richtext'로 변경) ---
+// --- 템플릿 데이터 정의 ---
 const formTemplates = {
     leave_request: {
         title: '휴가 신청서',
@@ -44,7 +43,7 @@ const formTemplates = {
     }
 };
 
-// --- renderField 함수 (richtext 타입 케이스 추가) ---
+// --- renderField 함수 ---
 const renderField = (field, formData, onChange) => {
     const value = formData[field.name] || '';
     const baseClasses = "w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500";
@@ -89,9 +88,7 @@ const renderField = (field, formData, onChange) => {
                             ['link', 'image', 'video'],
                             ['clean'],
                         ],
-                        clipboard: {
-                            matchVisual: false,
-                        },
+                        clipboard: { matchVisual: false },
                     }}
                 />
             );
@@ -144,13 +141,9 @@ function NewApprovalPageContent() {
             }
             const initialFormData = {};
             formToLoad.fields?.forEach(field => {
-                if (field.type === 'richtext') {
-                    initialFormData[field.name] = '';
-                } else if (field.type === 'daterange') {
-                    initialFormData[field.name] = { start: '', end: '' };
-                } else {
-                    initialFormData[field.name] = '';
-                }
+                if (field.type === 'richtext') initialFormData[field.name] = '';
+                else if (field.type === 'daterange') initialFormData[field.name] = { start: '', end: '' };
+                else initialFormData[field.name] = '';
             });
             setFormData(initialFormData);
             setApprovers([]);
@@ -162,11 +155,8 @@ function NewApprovalPageContent() {
     }, [templateId, formId, router]);
 
     const handleInputChange = useCallback((fieldName, value) => {
-        if (fieldName === '첨부 파일') {
-            setFileToUpload(value);
-        } else {
-            setFormData(prev => ({ ...prev, [fieldName]: value }));
-        }
+        if (fieldName === '첨부 파일') setFileToUpload(value);
+        else setFormData(prev => ({ ...prev, [fieldName]: value }));
     }, []);
 
     const handleSubmit = async (e) => {
@@ -182,46 +172,25 @@ function NewApprovalPageContent() {
             const fileExtension = originalFileName.includes('.') ? originalFileName.split('.').pop() : '';
             const baseFileNameWithoutExt = originalFileName.includes('.') ? originalFileName.substring(0, originalFileName.lastIndexOf('.')) : originalFileName;
             
-            // ★★★ 파일 이름 정제 로직 더욱 강화 (한글, 공백, 괄호 등 모든 특수 문자를 하이픈으로) ★★★
-            const sanitizedBaseFileName = baseFileNameWithoutExt
-                .replace(/[^a-zA-Z0-9.\-_가-힣]/g, '-') // 알파벳, 숫자, 점, 하이픈, 언더바, 한글만 허용하고 나머지는 하이픈으로 대체
-                .replace(/\s+/g, '-') // 공백을 하이픈으로 (혹시 위에서 처리 안 된 공백이 있다면)
-                .replace(/-{2,}/g, '-') // 연속된 하이픈을 하나로
-                .replace(/^-+|-+$/g, ''); // 시작/끝 하이픈 제거
-
-            // 최종 파일 이름: 타임스탬프-정제된파일명.확장자 (확장자는 소문자로 통일)
+            const sanitizedBaseFileName = baseFileNameWithoutExt.replace(/[^a-zA-Z0-9.\-_가-힣]/g, '-').replace(/\s+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
             const fileName = `${Date.now()}-${sanitizedBaseFileName}${fileExtension ? '.' + fileExtension.toLowerCase() : ''}`;
             
             try {
-                const { data, error } = await supabase.storage
-                    .from('chat-attachments') // 버킷 이름
-                    .upload(fileName, fileToUpload, { // 정제된 fileName 사용
-                        cacheControl: '3600',
-                        upsert: false
-                    });
-                
+                const { data, error } = await supabase.storage.from('chat-attachments').upload(fileName, fileToUpload, { cacheControl: '3600', upsert: false });
                 if (error) throw error;
-                
-                const { data: publicUrlData } = supabase.storage
-                    .from('chat-attachments') // 버킷 이름
-                    .getPublicUrl(fileName);
-                
+                const { data: publicUrlData } = supabase.storage.from('chat-attachments').getPublicUrl(fileName);
                 fileUrl = publicUrlData.publicUrl;
                 toast.success('파일 업로드 완료.');
-
             } catch (error) {
                 console.error('파일 업로드 실패:', error);
                 toast.error(`파일 업로드 실패: ${error.message}`);
-                setLoading(false);
-                return;
+                setLoading(false); return;
             }
         }
 
         try {
             const finalFormData = { ...formData };
-            if (fileUrl) {
-                finalFormData['첨부 파일'] = fileUrl;
-            }
+            if (fileUrl) finalFormData['첨부 파일'] = fileUrl;
 
             const { data: approvalDoc, error: insertError } = await supabase.from('approval_documents').insert({
                 title,
@@ -231,7 +200,7 @@ function NewApprovalPageContent() {
                 author_id: employee.id,
                 status: '대기', 
                 type: selectedForm?.title || '일반',
-                attachments: fileUrl ? [fileUrl] : null,
+                // ★★★ 이 아래에 있던 attachments 줄을 완전히 삭제했습니다! ★★★
             }).select().single();
 
             if (insertError) throw insertError;
@@ -241,10 +210,7 @@ function NewApprovalPageContent() {
             if (approverError) throw approverError;
 
             if (referrers.length > 0) {
-                const referrerData = referrers.map(ref => ({
-                    document_id: approvalDoc.id,
-                    referrer_id: ref.value
-                }));
+                const referrerData = referrers.map(ref => ({ document_id: approvalDoc.id, referrer_id: ref.value }));
                 const { error: referrerError } = await supabase.from('approval_document_referrers').insert(referrerData);
                 if (referrerError) throw referrerError;
             }
@@ -264,14 +230,12 @@ function NewApprovalPageContent() {
         return allEmployees.filter(emp => emp.id !== employee?.id).map(emp => ({ value: emp.id, label: `${emp.full_name} (${emp.department})` }));
     }, [allEmployees, employee?.id]);
 
-    if (loading) { return <div className="p-8 text-center">페이지를 불러오는 중...</div>; }
+    if (loading) return <div className="p-8 text-center">페이지를 불러오는 중...</div>;
     
     return (
         <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
             <div> 
-                <header className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">{selectedForm?.title || '새 결재 문서 작성'}</h1>
-                </header>
+                <header className="mb-8"><h1 className="text-3xl font-bold text-gray-900">{selectedForm?.title || '새 결재 문서 작성'}</h1></header>
                 <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-sm border space-y-8">
                     <div>
                         <h2 className="text-lg font-semibold text-gray-800 mb-1">1. 내용 작성</h2>
@@ -311,7 +275,6 @@ function NewApprovalPageContent() {
     );
 }
 
-// Suspense 경계 (최상단 layout.js에 <Suspense>가 이미 있다면 여기서는 불필요)
 export default function NewApprovalPage() {
     return (
         <Suspense fallback={<div className="p-8 text-center">양식 로딩 중...</div>}>
