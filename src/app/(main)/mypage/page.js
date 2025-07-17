@@ -1,3 +1,5 @@
+// 파일 경로: src/app/(main)/mypage/page.js
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -11,9 +13,20 @@ import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
 // --- 재사용 컴포넌트들 ---
 function MyLeaveWidget({ employee }) {
     if (!employee || !employee.id) return <div className="bg-white p-5 rounded-xl border shadow-sm h-full flex items-center justify-center animate-pulse"><p className="text-gray-500">연차 정보 로딩...</p></div>;
-    const total = employee.total_leaves ?? 15;
+
+    // ★★★ employee 객체에서 total_leave_days와 remaining_leave_days 값을 가져옴 ★★★
+    // profiles 테이블의 실제 컬럼 이름인 'total_leave_days'를 사용합니다.
+    const total = employee.total_leave_days ?? 0; // 'total_leaves' 대신 'total_leave_days' 사용
     const remaining = employee.remaining_leave_days ?? 0;
-    const used = total - remaining;
+    
+    // 사용된 연차 일수 계산 (used_leave_days 컬럼을 사용하거나 계산)
+    // 1. 만약 used_leave_days 컬럼이 정확하다면 그 값을 사용:
+    const used = employee.used_leave_days ?? (total - remaining); // used_leave_days가 없으면 계산
+
+    // 2. 만약 total과 remaining으로만 계산할 거라면:
+    // const used = total - remaining;
+
+    // 사용된 연차 비율 계산 (총 연차가 0일 경우 0%로 설정)
     const usedPercentage = (total > 0 && !isNaN(used) && !isNaN(total)) ? (used / total) * 100 : 0;
     
     return (
