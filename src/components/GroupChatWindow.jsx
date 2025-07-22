@@ -8,7 +8,6 @@ import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import ManageParticipantsModal from './ManageParticipantsModal';
 
-// 아이콘 컴포넌트들
 const EditIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg> );
 const FileAttachIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 hover:text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13.5" /></svg> );
 const SendIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg> );
@@ -17,16 +16,25 @@ const LeaveIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5
 
 const MessageContent = ({ msg }) => {
     switch (msg.message_type) {
-        case 'image': return <Image src={msg.content} alt="전송된 이미지" width={250} height={250} className="rounded-lg object-cover cursor-pointer" onClick={() => window.open(msg.content, '_blank')} />;
+        case 'image':
+             // Assuming content is the public URL string
+            if (typeof msg.content === 'string' && msg.content.startsWith('http')) {
+                return <Image src={msg.content} alt="전송된 이미지" width={250} height={250} className="rounded-lg object-cover cursor-pointer" onClick={() => window.open(msg.content, '_blank')} />;
+            }
+            // Fallback for object-based file info
+            try {
+                const fileInfo = JSON.parse(msg.content);
+                return <Image src={fileInfo.url} alt={fileInfo.name} width={250} height={250} className="rounded-lg object-cover cursor-pointer" onClick={() => window.open(fileInfo.url, '_blank')} />;
+            } catch (e) { return <p className="text-sm text-red-500">이미지를 표시할 수 없습니다.</p>; }
         case 'file':
             try {
-                const fileName = decodeURIComponent(new URL(msg.content).pathname.split('/').pop()).substring(14);
+                const fileInfo = JSON.parse(msg.content);
                 return (
-                    <a href={msg.content} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 bg-gray-100 rounded-lg hover:bg-gray-200 border max-w-xs">
-                        <DownloadIcon /><span className="truncate underline text-sm">{fileName}</span>
+                     <a href={fileInfo.url} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 bg-gray-100 rounded-lg hover:bg-gray-200 border max-w-xs">
+                        <DownloadIcon /><span className="truncate underline text-sm">{fileInfo.name}</span>
                     </a>
                 );
-            } catch (e) { return <p className="text-sm">{msg.content}</p>; }
+            } catch (e) { return <p className="text-sm text-red-500">파일 정보를 표시할 수 없습니다.</p>; }
         default: return <p className="text-sm whitespace-pre-wrap">{msg.content}</p>;
     }
 };
@@ -39,95 +47,52 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
     const [participants, setParticipants] = useState((serverInitialParticipants || []).filter(Boolean));
     const [newMessage, setNewMessage] = useState('');
     const [isManageModalOpen, setManageModalOpen] = useState(false);
-    const [isEditingRoomName, setIsEditingRoomName] = useState(false);
-    const [editedRoomName, setEditedRoomName] = useState(chatRoom?.name);
     const [isUploading, setIsUploading] = useState(false);
-    
-    // ★★★ 1. 안 읽음 카운트를 저장할 상태 추가 ★★★
-    const [unreadCounts, setUnreadCounts] = useState({});
 
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
-    const channelRef = useRef(null);
     
     const currentRoomId = chatRoom?.id;
     const currentUserId = currentEmployee?.id;
-    const isRoomCreator = chatRoom?.created_by === currentUserId;
 
     const scrollToBottom = useCallback(() => {
-        setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, 100);
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, []);
 
-    const fetchChatData = useCallback(async () => {
-        if (!currentRoomId) return;
-        const { data: pData } = await supabase.from('chat_room_participants').select('profiles(id, full_name, position)').eq('room_id', currentRoomId);
-        if (pData) {
-            const validParticipants = pData.map(p => p.profiles).filter(Boolean);
-            setParticipants(validParticipants);
-        }
-    }, [currentRoomId]);
+    useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
-    // ★★★ 2. 안 읽음 카운트를 불러오는 함수 추가 ★★★
-    const fetchUnreadCounts = useCallback(async () => {
-        if (!currentRoomId) return;
-        const { data, error } = await supabase.rpc('get_unread_counts_for_my_messages', {
-            p_room_id: currentRoomId
-        });
-        if (data) {
-            const countsMap = data.reduce((acc, item) => {
-                acc[item.message_id] = item.unread_count;
-                return acc;
-            }, {});
-            setUnreadCounts(countsMap);
-        }
-    }, [currentRoomId]);
-
-    useEffect(() => {
-        if (messages.length) scrollToBottom();
-    }, [messages, scrollToBottom]);
-
-    // ★★★ 3. 실시간 기능 수정 ★★★
     useEffect(() => {
         if (!currentRoomId || !currentUserId) return;
 
-        // 채팅방에 들어오면, 나의 '마지막 읽은 시간'을 갱신
         const markAsRead = async () => {
-            await supabase
-                .from('chat_room_participants')
-                .update({ last_read_at: new Date().toISOString() })
-                .eq('room_id', currentRoomId)
-                .eq('user_id', currentUserId);
+            await supabase.from('chat_room_participants').update({ last_read_at: new Date().toISOString() }).eq('room_id', currentRoomId).eq('user_id', currentUserId);
         };
         markAsRead();
-        fetchUnreadCounts(); // 들어오자마자 카운트 갱신
 
-        const handleNewMessage = (payload) => {
-            if (!payload.new || !payload.new.id) return;
-            const senderProfile = participants.find(p => p.id === payload.new.sender_id);
-            const messageWithSender = { ...payload.new, sender: senderProfile || { full_name: '알 수 없음' } };
-            setMessages(prev => {
-                if (prev.some(msg => msg.id === messageWithSender.id)) return prev;
-                return [...prev, messageWithSender];
-            });
-        };
-
-        const channel = supabase.channel(`room-realtime-${currentRoomId}`)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${currentRoomId}` }, handleNewMessage)
-            // 다른 참여자가 방에 들어와서 메시지를 읽으면(last_read_at이 바뀌면), 카운트를 다시 계산
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_room_participants', filter: `room_id=eq.${currentRoomId}` }, (payload) => {
-                fetchUnreadCounts();
-            })
+        const channel = supabase.channel(`room-final-${currentRoomId}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${currentRoomId}` }, 
+                async (payload) => {
+                    const { data: newMessageData } = await supabase.from('chat_messages').select('*, sender:profiles(full_name, avatar_url)').eq('id', payload.new.id).single();
+                    if (newMessageData) {
+                        setMessages(prev => {
+                           if (prev.some(msg => msg.id === newMessageData.id)) return prev;
+                           return [...prev, newMessageData];
+                        });
+                        if (newMessageData.sender_id !== currentUserId) await markAsRead();
+                    }
+                }
+            )
             .subscribe();
-        channelRef.current = channel;
 
-        return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
-    }, [currentRoomId, currentUserId, participants, fetchUnreadCounts]);
+        return () => { supabase.removeChannel(channel); };
+    }, [currentRoomId, currentUserId]);
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!newMessage.trim() || !currentUserId) return;
         const content = newMessage.trim();
         setNewMessage('');
+        
         await supabase.from('chat_messages').insert({ room_id: currentRoomId, sender_id: currentUserId, content: content, message_type: 'text' });
     };
 
@@ -136,14 +101,21 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
         if (!file) return;
         setIsUploading(true);
         const toastId = toast.loading('파일 업로드 중...');
-        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-        const filePath = `${currentUserId}/${Date.now()}_${cleanFileName}`;
+        const filePath = `${currentUserId}/${Date.now()}_${file.name}`;
         try {
             const { error: uploadError } = await supabase.storage.from('chat-files').upload(filePath, file);
             if (uploadError) throw uploadError;
+            
             const { data: urlData } = supabase.storage.from('chat-files').getPublicUrl(filePath);
             const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(file.name.split('.').pop().toLowerCase()) ? 'image' : 'file';
-            await supabase.from('chat_messages').insert({ room_id: currentRoomId, sender_id: currentUserId, content: urlData.publicUrl, message_type: messageType });
+            
+            // 이미지 타입은 URL을 바로 저장, 파일 타입은 JSON 객체로 저장
+            const content = messageType === 'image' 
+                ? urlData.publicUrl 
+                : JSON.stringify({ name: file.name, url: urlData.publicUrl });
+
+            await supabase.from('chat_messages').insert({ room_id: currentRoomId, sender_id: currentUserId, content: content, message_type: messageType });
+            
             toast.success("파일 전송 완료!", { id: toastId });
         } catch (error) {
             toast.error(`파일 전송 실패: ${error.message}`);
@@ -153,26 +125,24 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
         }
     };
     
-    const handleSaveRoomName = async () => { /* ... */ };
-    const handleLeaveRoom = async () => { /* ... */ };
+    const handleLeaveRoom = async () => {
+        if (!currentUserId || !currentRoomId) return;
+        if (window.confirm('정말로 이 채팅방을 나가시겠습니까?')) {
+            await supabase.from('chat_room_participants').delete().eq('user_id', currentUserId).eq('room_id', currentRoomId);
+            toast.success('채팅방에서 나갔습니다.');
+            router.push('/chatrooms');
+            router.refresh();
+        }
+    };
     
     if (!currentEmployee || !chatRoom) return <div className="p-8 text-center">로딩 중...</div>;
 
     return (
         <div className="flex flex-col h-full bg-gray-100">
             <header className="flex items-center justify-between p-4 border-b bg-white flex-shrink-0">
-                <div className="flex items-center min-w-0">
-                    <h3 className="text-lg font-bold truncate">{chatRoom.name}</h3>
-                    {isRoomCreator && !chatRoom.is_direct_message && (
-                        <button onClick={() => setIsEditingRoomName(true)} className="ml-2 p-1 text-gray-500 hover:text-gray-800 rounded-full"><EditIcon /></button>
-                    )}
-                </div>
+                <h3 className="text-lg font-bold truncate">{chatRoom.name}</h3>
                 <div className="flex items-center gap-2">
-                    {!chatRoom.is_direct_message && (
-                        <button onClick={() => setManageModalOpen(true)} className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300">
-                            참여자 관리
-                        </button>
-                    )}
+                    {!chatRoom.is_direct_message && ( <button onClick={() => setManageModalOpen(true)} className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300"> 참여자 관리 </button> )}
                     <button onClick={handleLeaveRoom} className="p-2 text-gray-500 hover:text-red-600 rounded-full"><LeaveIcon /></button>
                 </div>
             </header>
@@ -181,25 +151,16 @@ export default function GroupChatWindow({ serverChatRoom, serverInitialMessages,
                 <div className="flex flex-col gap-4">
                     {messages.map((msg) => {
                         const isSentByMe = String(msg.sender_id) === String(currentUserId);
-                        // ★★★ 4. 안 읽음 카운트 가져오기 ★★★
-                        const unreadCount = unreadCounts[msg.id];
-
                         return (
                             <div key={msg.id} className={`flex items-end gap-3 ${isSentByMe ? 'justify-end' : 'justify-start'}`}>
                                 {!isSentByMe && (
-                                    <div className="w-9 h-9 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center font-bold text-gray-600 text-sm" title={msg.sender?.full_name || '상대방'}>
+                                    <div className="w-9 h-9 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center font-bold text-gray-600 text-sm" title={msg.sender?.full_name}>
                                         {msg.sender?.full_name?.charAt(0) || 'U'}
                                     </div>
                                 )}
                                 <div className="flex flex-col gap-1 w-full max-w-md">
-                                    {!isSentByMe && <p className="text-xs text-gray-500 ml-3">{msg.sender?.full_name || '알 수 없음'}</p>}
+                                    {!isSentByMe && <p className="text-xs text-gray-500 ml-3">{msg.sender?.full_name}</p>}
                                     <div className={`flex items-end gap-2 ${isSentByMe ? 'flex-row-reverse' : ''}`}>
-                                        {/* ★★★ 5. 안 읽음 숫자 표시 ★★★ */}
-                                        {isSentByMe && unreadCount > 0 && (
-                                            <span className="text-xs text-yellow-500 self-end mb-1 font-semibold">
-                                                {unreadCount}
-                                            </span>
-                                        )}
                                         <div className={`p-1 rounded-2xl ${isSentByMe ? 'bg-blue-600 text-white' : 'bg-white text-gray-800 border'}`}>
                                             <div className="p-2"><MessageContent msg={msg} /></div>
                                         </div>
