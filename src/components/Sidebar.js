@@ -1,3 +1,4 @@
+// 파일 경로: src/components/Sidebar.js
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -17,6 +18,7 @@ const ChatIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className=
 const UserCircleIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
 const LogoutIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
 const ChevronDownIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5" {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg> );
+const BriefcaseIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.25L13 21h-2L3 13.25V9h18v4.25zM12 21v-8h-1l-7-8h16l-7 8h-1zm-9 0h18" /></svg> );
 
 export default function Sidebar({ isOpen, onClose }) {
     const pathname = usePathname();
@@ -37,7 +39,17 @@ export default function Sidebar({ isOpen, onClose }) {
         fetchDepartments();
     }, []);
 
-    const menuItems = [ { name: '대시보드', href: '/dashboard', icon: HomeIcon }, { name: '공지사항', href: '/notices', icon: DocumentTextIcon }, { name: '조직도', href: '/organization', icon: UsersIcon }, { name: '현장 관리', href: '/sites', icon: CalendarIcon }, { name: '결재', href: '/approvals', icon: CurrencyWonIcon }, { name: '업무', href: '/work', icon: ClipboardListIcon, isDropdown: true }, { name: '채팅', href: '/chatrooms', icon: ChatIcon, count: totalUnreadCount }, { name: '마이페이지', href: '/mypage', icon: UserCircleIcon }, ];
+    const menuItems = [
+      { name: '대시보드', href: '/dashboard', icon: HomeIcon },
+      { name: '공지사항', href: '/notices', icon: DocumentTextIcon },
+      { name: '조직도', href: '/organization', icon: UsersIcon },
+      { name: '현장 관리', href: '/sites', icon: CalendarIcon },
+      // ★★★ 결재 메뉴를 '전자 결재'로 변경 및 증명서 메뉴 통합 ★★★
+      { name: '전자 결재', href: '/approvals', icon: CurrencyWonIcon },
+      { name: '업무', href: '/work', icon: ClipboardListIcon, isDropdown: true },
+      { name: '채팅', href: '/chatrooms', icon: ChatIcon, count: totalUnreadCount },
+      { name: '마이페이지', href: '/mypage', icon: UserCircleIcon },
+    ];
 
     const fetchTotalUnreadCount = useCallback(async () => {
         if (!employee) return;

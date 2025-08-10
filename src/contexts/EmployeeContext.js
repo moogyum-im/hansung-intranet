@@ -3,6 +3,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 
 const EmployeeContext = createContext(null);
 
@@ -10,6 +11,7 @@ export function EmployeeProvider({ children }) {
   const [employee, setEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const router = useRouter();
 
   const fetchEmployeeProfile = useCallback(async (user) => {
     if (!user) {
@@ -67,6 +69,34 @@ export function EmployeeProvider({ children }) {
     };
   }, [fetchEmployeeProfile]);
 
+  // ★★★ 실시간 업데이트를 위한 useEffect 훅 추가 ★★★
+  useEffect(() => {
+    if (!employee?.id) {
+        return;
+    }
+    
+    const channel = supabase
+        .channel(`profiles-status-listener-${employee.id}`)
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${employee.id}`
+            },
+            (payload) => {
+                console.log('실시간 업데이트 수신:', payload.new);
+                setEmployee(prev => ({ ...prev, ...payload.new }));
+            }
+        )
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+  }, [employee?.id]);
+
   const updateEmployeeStatus = async (userId, newStatus) => {
     if (!userId) {
       console.error("상태 업데이트 실패: 사용자 ID가 없습니다.");
@@ -74,13 +104,11 @@ export function EmployeeProvider({ children }) {
     }
 
     // 낙관적 업데이트 시작
-    const prevEmployee = employee; // 이전 employee 객체 저장
+    const prevEmployee = employee;
 
-    // 현재 로그인한 사용자의 상태가 변경되는 경우에만 UI를 즉시 업데이트
     if (employee && employee.id === userId) {
         setEmployee(prev => ({ ...prev, status: newStatus }));
     }
-    // 낙관적 업데이트 종료
 
     try {
       const { data, error } = await supabase
@@ -95,17 +123,14 @@ export function EmployeeProvider({ children }) {
       }
       
       if (data) {
-        // 본인의 프로필이 업데이트된 경우, 'profileUpdated' 이벤트를 발송하여
-        // 이 컨텍스트의 useEffect에서 fetchEmployeeProfile을 호출하게 합니다.
         window.dispatchEvent(new CustomEvent('profileUpdated'));
-        return true; // 성공적으로 업데이트됨
+        return true;
       }
       return false;
     } catch (error) {
       console.error("상태 업데이트 실패:", error.message);
-      // 낙관적 업데이트 롤백 (실패 시 이전 상태로 복구)
       if (prevEmployee && prevEmployee.id === userId) {
-          setEmployee(prevEmployee); // 이전 employee 객체로 복구
+          setEmployee(prevEmployee);
       }
       throw error;
     }

@@ -1,7 +1,7 @@
 // 파일 경로: src/app/layout.js
 import './globals.css';
-import { EmployeeProvider } from '@/contexts/EmployeeContext'; // 이 import 문 확인!
 import { Inter } from 'next/font/google';
+import { Providers } from './providers'; // 방금 만든 providers를 가져옵니다.
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -12,19 +12,17 @@ export const metadata = {
     width: 'device-width',
     initialScale: 1,
     maximumScale: 1,
-    userScalable: false, // 사용자가 임의로 확대/축소하는 것을 막아서 레이아웃이 깨지는 것을 방지
+    userScalable: false,
   },
 };
-
 
 export default function RootLayout({ children }) {
   return (
     <html lang="ko">
       <body className={inter.className}>
-        {/* <EmployeeProvider> 로 children을 감싸고 있는지 확인! */}
-        <EmployeeProvider>
+        <Providers> {/* EmployeeProvider 대신 Providers로 감싸줍니다. */}
           {children}
-        </EmployeeProvider>
+        </Providers>
       </body>
     </html>
   );
