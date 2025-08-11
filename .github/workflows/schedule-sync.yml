@@ -15,3 +15,5 @@ jobs:
           project_id: ${{ secrets.SUPABASE_PROJECT_ID }}
           access_token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           function_name: sync-tree-sales
+
+#
