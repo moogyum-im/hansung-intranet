@@ -11,16 +11,16 @@ import { v4 as uuidv4 } from 'uuid';
 export default function ApologyPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
-
     const [allEmployees, setAllEmployees] = useState([]);
     const [approvers, setApprovers] = useState([]);
+    const [referrers, setReferrers] = useState([]);
     const [formData, setFormData] = useState({
         title: '시말서',
-        incidentDate: new Date().toISOString().split('T')[0], // 발생 일시
-        incidentLocation: '', // 발생 장소
-        incidentDetails: '',  // 사건 경위
-        incidentCause: '',    // 발생 원인
-        preventionPlan: '',   // 재발 방지 대책
+        incidentDate: new Date().toISOString().split('T')[0],
+        incidentLocation: '',
+        incidentDetails: '',
+        incidentCause: '',
+        preventionPlan: '',
     });
     const [loading, setLoading] = useState(false);
     const [documentNumber, setDocumentNumber] = useState('');
@@ -56,41 +56,48 @@ export default function ApologyPage() {
     };
 
     const handleFileChange = (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-            setAttachmentFile(e.target.files[0]);
-        } else {
-            setAttachmentFile(null);
-        }
+        if (e.target.files && e.target.files.length > 0) setAttachmentFile(e.target.files[0]);
+        else setAttachmentFile(null);
     };
+
+    const addApprover = () => setApprovers([...approvers, { id: '' }]);
+    const handleApproverChange = (index, id) => {
+        const newApprovers = [...approvers];
+        newApprovers[index].id = id;
+        setApprovers(newApprovers);
+    };
+    const removeApprover = (index) => setApprovers(approvers.filter((_, i) => i !== index));
+
+    const addReferrer = () => setReferrers([...referrers, { id: '' }]);
+    const handleReferrerChange = (index, id) => {
+        const newReferrers = [...referrers];
+        newReferrers[index].id = id;
+        setReferrers(newReferrers);
+    };
+    const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-
         if (approvers.length === 0 || approvers.some(app => !app.id)) {
             toast.error("결재자를 모두 지정해주세요.");
             setLoading(false);
             return;
         }
 
-        let fileUrl = null;
-        let originalFileName = null;
-
+        let fileUrl = null, originalFileName = null;
         if (attachmentFile) {
             const fileExt = attachmentFile.name.split('.').pop();
             const safeFileName = `${uuidv4()}.${fileExt}`;
             const { data: uploadData, error: uploadError } = await supabase.storage.from('approval-documents').upload(safeFileName, attachmentFile);
-            if (uploadError) {
-                toast.error(`파일 업로드 실패: ${uploadError.message}`);
-                setLoading(false);
-                return;
-            }
+            if (uploadError) { toast.error(`파일 업로드 실패: ${uploadError.message}`); setLoading(false); return; }
             const { data: urlData } = supabase.storage.from('approval-documents').getPublicUrl(uploadData.path);
             fileUrl = urlData.publicUrl;
             originalFileName = attachmentFile.name;
         }
         
         const approver_ids = approvers.map(app => app.id);
+        const referrer_ids = referrers.map(ref => ref.id);
         const finalFormData = { ...formData, title: `시말서 (${employee?.full_name})` };
 
         const submissionData = {
@@ -98,6 +105,7 @@ export default function ApologyPage() {
             content: JSON.stringify(finalFormData),
             document_type: 'apology',
             approver_ids,
+            referrer_ids,
             attachment_url: fileUrl,
             attachment_filename: originalFileName,
         };
@@ -135,38 +143,45 @@ export default function ApologyPage() {
                             <tr><th className="p-2 bg-gray-100 font-bold text-left border-r">성명</th><td className="p-2">{employee?.full_name}</td></tr>
                         </tbody>
                     </table>
-                    
                     <div className="space-y-6">
                         <div className="grid grid-cols-2 gap-6">
                             <div><label className="block text-gray-700 font-bold mb-2 text-sm">발생 일시</label><input type="date" name="incidentDate" value={formData.incidentDate} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
                             <div><label className="block text-gray-700 font-bold mb-2 text-sm">발생 장소</label><input type="text" name="incidentLocation" value={formData.incidentLocation} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
                         </div>
-
                         <div><label className="block text-gray-700 font-bold mb-2 text-sm">사건 경위</label><textarea name="incidentDetails" value={formData.incidentDetails} onChange={handleChange} rows="5" className="w-full p-2 border rounded-md text-sm" placeholder="발생한 사건을 육하원칙에 따라 객관적으로 서술" required /></div>
                         <div><label className="block text-gray-700 font-bold mb-2 text-sm">발생 원인</label><textarea name="incidentCause" value={formData.incidentCause} onChange={handleChange} rows="5" className="w-full p-2 border rounded-md text-sm" placeholder="사건이 발생하게 된 원인 분석" required /></div>
                         <div><label className="block text-gray-700 font-bold mb-2 text-sm">대책 및 재발 방지 계획</label><textarea name="preventionPlan" value={formData.preventionPlan} onChange={handleChange} rows="5" className="w-full p-2 border rounded-md text-sm" placeholder="향후 동일한 문제가 발생하지 않도록 하기 위한 계획" required /></div>
-                        
-                        <div className="pt-8 text-center text-sm">
-                            <p className="leading-relaxed">상기 본인은 위 내용이 틀림없는 사실임을 확인하며, 이에 시말서를 제출합니다.</p>
-                            <p className="mt-8">{new Date().getFullYear()}년 {new Date().getMonth() + 1}월 {new Date().getDate()}일</p>
-                            <p className="mt-4">작성자: {employee?.full_name} (인)</p>
-                        </div>
+                        <div className="pt-8 text-center text-sm"><p className="leading-relaxed">상기 본인은 위 내용이 틀림없는 사실임을 확인하며, 이에 시말서를 제출합니다.</p><p className="mt-8">{new Date().getFullYear()}년 {new Date().getMonth() + 1}월 {new Date().getDate()}일</p><p className="mt-4">작성자: {employee?.full_name} (인)</p></div>
                     </div>
                 </div>
             </div>
             <div className="w-96 p-8">
                 <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
                     <div className="border-b pb-4">
-                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">결재선</h2><button type="button" onClick={() => setApprovers([...approvers, { id: '' }])} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
+                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">결재선</h2><button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
                         <div className="space-y-3">
                             {approvers.map((approver, index) => (
                                 <div key={index} className="flex items-center space-x-2">
                                     <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
-                                    <select value={approver.id} onChange={(e) => { const newApprovers = [...approvers]; newApprovers[index].id = e.target.value; setApprovers(newApprovers); }} className="w-full p-2 border rounded-md text-sm" required>
+                                    <select value={approver.id} onChange={(e) => handleApproverChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm" required>
                                         <option value="">결재자 선택</option>
                                         {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
-                                    <button type="button" onClick={() => setApprovers(approvers.filter((_, i) => i !== index))} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
+                                    <button type="button" onClick={() => removeApprover(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="border-b pb-4">
+                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">참조인</h2><button type="button" onClick={addReferrer} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
+                        <div className="space-y-3">
+                            {referrers.map((referrer, index) => (
+                                <div key={index} className="flex items-center space-x-2">
+                                    <select value={referrer.id} onChange={(e) => handleReferrerChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm">
+                                        <option value="">참조인 선택</option>
+                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
+                                    </select>
+                                    <button type="button" onClick={() => removeReferrer(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
                                 </div>
                             ))}
                         </div>

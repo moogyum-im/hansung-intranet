@@ -17,7 +17,7 @@ export default function WorkReportPage() {
     const router = useRouter();
 
     const [allEmployees, setAllEmployees] = useState([]);
-    const [approvers, setApprovers] = useState([]); // 결재선을 배열로 관리
+    const [approvers, setApprovers] = useState([]);
     const [formData, setFormData] = useState({
         title: '업무 보고서',
         reportType: '일일보고',
@@ -155,11 +155,14 @@ export default function WorkReportPage() {
     const quillModules = useMemo(() => ({
         toolbar: {
             container: [
-                [{ 'font': [] }], [{ 'header': [1, 2, 3, false] }],
+                [{ 'font': [] }],
+                [{ 'header': [1, 2, 3, false] }],
                 ['bold', 'italic', 'underline', 'strike'],
                 [{ 'color': [] }, { 'background': [] }],
-                [{ 'align': [] }], [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                ['link', 'image', 'table'], ['clean']
+                [{ 'align': [] }],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                ['link', 'image', 'table'],
+                ['clean']
             ],
         },
         clipboard: { matchVisual: false },
@@ -177,12 +180,18 @@ export default function WorkReportPage() {
                         <tr><th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">기안부서</th><td className="p-2 w-2/5 border-b border-r">{employee?.department}</td><th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직 위</th><td className="p-2 w-1/5 border-b">{employee?.position}</td></tr>
                         <tr><th className="p-2 bg-gray-100 font-bold text-left border-r">기안자</th><td className="p-2 border-r">{employee?.full_name}</td><th className="p-2 bg-gray-100 font-bold text-left border-r">기안일자</th><td className="p-2">{new Date().toLocaleDateString('ko-KR')}</td></tr>
                     </tbody></table></div>
+                    
                     <div className="space-y-6">
                         <div className="grid grid-cols-2 gap-6">
                             <div><label className="block text-gray-700 font-bold mb-2 text-sm">보고서 종류</label><select name="reportType" value={formData.reportType} onChange={handleChange} className="w-full p-2 border rounded-md text-sm"><option>일일보고</option><option>주간보고</option><option>월간보고</option></select></div>
                             <div><label className="block text-gray-700 font-bold mb-2 text-sm">보고일자</label><input type="date" name="reportDate" value={formData.reportDate} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
                         </div>
-                        <div><label className="block text-gray-700 font-bold mb-2 text-sm">주요 업무 내용 및 성과</label><div className="bg-white"><ReactQuill theme="snow" value={formData.achievements} onChange={handleQuillChange} modules={quillModules} style={{ height: '400px' }} /></div></div>
+                        <div>
+                            <label className="block text-gray-700 font-bold mb-2 text-sm">주요 업무 내용 및 성과</label>
+                            <div className="bg-white">
+                                <ReactQuill theme="snow" value={formData.achievements} onChange={handleQuillChange} modules={quillModules} style={{ height: '400px' }} />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
