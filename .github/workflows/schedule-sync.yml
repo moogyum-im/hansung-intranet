@@ -2,7 +2,6 @@ name: Invoke Supabase Edge Function Hourly
 
 on:
   schedule:
-    # 매 시간 5분에 실행 (구글 시트 업데이트 지연 시간 고려)
     - cron: '5 * * * *'
   workflow_dispatch:
 
@@ -10,8 +9,10 @@ jobs:
   invoke-function:
     runs-on: ubuntu-latest
     steps:
-      - name: Invoke Supabase Function via cURL
+      - name: Invoke Supabase Function via cURL with DNS Retry
         run: |
-          curl -i -X POST "https://dzouudutnlgaolzlzfzb.supabase.co/functions/v1/sync-tree-sales" \
+          curl -i -X POST "${{ secrets.SUPABASE_FUNCTION_URL }}" \
+            --dns-servers 8.8.8.8 \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Content-Type: application/json"
