@@ -9,10 +9,9 @@ jobs:
   invoke-function:
     runs-on: ubuntu-latest
     steps:
-      - name: Invoke Supabase Function via cURL with resolve
+      - name: Invoke Supabase Function via cURL
         run: |
-          curl -i -X POST "${{ secrets.SUPABASE_FUNCTION_URL }}" \
-            --resolve "dzouudutnlgaolzlzfzb.supabase.co:443:여기에_찾아낸_IP주소를_입력하세요" \
+          curl -i -X POST "${{ secrets.SUPABASE_PROJECT_URL }}/functions/v1/sync-tree-sales" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Content-Type: application/json"
