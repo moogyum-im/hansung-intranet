@@ -9,11 +9,8 @@ jobs:
   invoke-function:
     runs-on: ubuntu-latest
     steps:
-      - name: Invoke Supabase Function
-        uses: supabase/functions-action@v3
-        with:
-          project_id: ${{ secrets.SUPABASE_PROJECT_ID }}
-          access_token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          function_name: sync-tree-sales
-
-#
+      - name: Invoke Supabase Function via cURL
+        run: |
+          curl -i -X POST "https://dzouudutnlgaolzlzfzb.supabase.co/functions/v1/sync-tree-sales" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+          -H "Content-Type: application/json"
