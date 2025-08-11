@@ -2,7 +2,6 @@ name: Invoke Supabase Edge Functions Hourly
 
 on:
   schedule:
-    # 매 시간 5분에 실행 (구글 시트 업데이트 지연 시간 고려)
     - cron: '5 * * * *'
   workflow_dispatch:
 
@@ -24,7 +23,6 @@ jobs:
     steps:
       - name: Invoke Construction Sites Sync Function
         run: |
-          # ★★★ 바로 이 부분이 사용자가 주신 URL을 사용하는 부분입니다 ★★★
           curl -i -X POST "${{ secrets.SUPABASE_PROJECT_URL }}/functions/v1/sync-construction-sites" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
