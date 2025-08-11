@@ -11,6 +11,7 @@ jobs:
     steps:
       - name: Invoke Supabase Function via cURL
         run: |
-          curl -i -X POST "https://dzouudutnlgaolzlsfzb.supabase.co/functions/v1/sync-tree-sales" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+          curl -i -X POST "https://dzouudutnlgaolzlzfzb.supabase.co/functions/v1/sync-tree-sales" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
           -H "Content-Type: application/json"
