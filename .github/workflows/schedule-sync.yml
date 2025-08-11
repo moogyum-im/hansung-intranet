@@ -9,10 +9,10 @@ jobs:
   invoke-function:
     runs-on: ubuntu-latest
     steps:
-      - name: Invoke Supabase Function via cURL with DNS Retry
+      - name: Invoke Supabase Function via cURL with resolve
         run: |
           curl -i -X POST "${{ secrets.SUPABASE_FUNCTION_URL }}" \
-            --dns-servers 8.8.8.8 \
+            --resolve "dzouudutnlgaolzlzfzb.supabase.co:443:여기에_찾아낸_IP주소를_입력하세요" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Content-Type: application/json"
