@@ -1,4 +1,3 @@
-// 파일 경로: src/app/(main)/approvals/internal/page.js
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -18,7 +17,6 @@ export default function InternalApprovalPage() {
     const router = useRouter();
 
     const [allEmployees, setAllEmployees] = useState([]);
-    // ★★★ 1. formData 상태를 '내부 결재'에 맞게 변경 ★★★
     const [formData, setFormData] = useState({
         title: '내부결재',
         subject: '', // 제목
@@ -81,6 +79,13 @@ export default function InternalApprovalPage() {
             return;
         }
 
+        // --- ★★★ 수정된 부분 1: 결재자 선택 유효성 검사 추가 ★★★ ---
+        if (!formData.approverId) {
+            toast.error("결재자를 지정해주세요.");
+            setLoading(false);
+            return;
+        }
+
         let fileUrl = null;
         let originalFileName = null;
 
@@ -98,18 +103,21 @@ export default function InternalApprovalPage() {
             originalFileName = attachmentFile.name;
         }
 
-        // ★★★ 2. document_type을 'internal_approval'로 변경 ★★★
+        // --- ★★★ 수정된 부분 2: 서버가 요구하는 배열 형태로 데이터 가공 ★★★ ---
+        const approver_ids = [formData.approverId];
+
         const submissionData = {
             title: formData.title,
             content: JSON.stringify(formData),
             document_type: 'internal_approval',
-            approver_id: formData.approverId,
+            approver_ids, // 'approver_id' 대신 'approver_ids' 배열로 전달
             reference_id: formData.referenceId || null,
             attachment_url: fileUrl,
             attachment_filename: originalFileName,
         };
 
         try {
+            // API 주소는 이미 올바르게 되어 있었습니다.
             const response = await fetch('/api/submit-approval', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -129,7 +137,8 @@ export default function InternalApprovalPage() {
     };
 
     if (employeeLoading) return <div className="flex justify-center items-center h-screen">로딩 중...</div>;
-
+    
+    // --- UI(JSX) 부분은 수정할 필요 없이 그대로 사용하시면 됩니다 ---
     return (
         <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
             <div className="flex-1">
@@ -141,7 +150,6 @@ export default function InternalApprovalPage() {
                         <tr><th className="p-2 bg-gray-100 font-bold text-left border-r">기안자</th><td className="p-2 border-r">{employee?.full_name}</td><th className="p-2 bg-gray-100 font-bold text-left border-r">기안일자</th><td className="p-2">{new Date().toLocaleDateString('ko-KR')}</td></tr>
                     </tbody></table></div>
                     
-                    {/* ★★★ 3. JSX(UI)를 '내부 결재' 양식으로 변경 ★★★ */}
                     <div className="mb-8">
                         <label className="block text-gray-700 font-bold mb-2 text-sm">제목</label>
                         <input
@@ -170,7 +178,30 @@ export default function InternalApprovalPage() {
             </div>
             <div className="w-96 p-8">
                 <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
-                    <div className="border-b pb-4"><h2 className="text-lg font-bold mb-4">결재선</h2><label className="block text-gray-700 font-medium mb-2">결재자</label><select name="approverId" value={formData.approverId} onChange={handleChange} className="w-full p-2 border rounded-md mb-4 text-sm" required><option value="">결재자 선택</option>{allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}</select><label className="block text-gray-700 font-medium mb-2">참조인 (선택)</label><select name="referenceId" value={formData.referenceId} onChange={handleChange} className="w-full p-2 border rounded-md text-sm"><option value="">참조인 없음</option>{allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}</select></div>
+                    <div className="border-b pb-4">
+                        <h2 className="text-lg font-bold mb-4">결재선</h2>
+                        <label className="block text-gray-700 font-medium mb-2 text-sm">결재자</label>
+                        <select 
+                            name="approverId" 
+                            value={formData.approverId} 
+                            onChange={handleChange} 
+                            className="w-full p-2 border rounded-md mb-4 text-sm" 
+                            required
+                        >
+                            <option value="">결재자 선택</option>
+                            {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
+                        </select>
+                        <label className="block text-gray-700 font-medium mb-2 text-sm">참조인 (선택)</label>
+                        <select 
+                            name="referenceId" 
+                            value={formData.referenceId} 
+                            onChange={handleChange} 
+                            className="w-full p-2 border rounded-md text-sm"
+                        >
+                            <option value="">참조인 없음</option>
+                            {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
+                        </select>
+                    </div>
                     <div className="border-b pb-4"><h2 className="text-lg font-bold mb-2">파일 첨부</h2><input type="file" onChange={handleFileChange} className="w-full text-sm"/></div>
                     <div className="border-b pb-4"><h2 className="text-lg font-bold mb-2">기안 의견</h2><textarea placeholder="의견을 입력하세요" className="w-full p-2 border rounded-md h-20 resize-none"></textarea></div>
                     <button type="submit" disabled={loading} className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold">{loading ? '상신 중...' : '결재 상신'}</button>
