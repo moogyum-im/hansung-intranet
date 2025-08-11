@@ -1,0 +1,17 @@
+name: Invoke Supabase Edge Function Hourly
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  invoke-function:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke Supabase Function
+        uses: supabase/functions-action@v1
+        with:
+          project_id: ${{ secrets.SUPABASE_PROJECT_ID }}
+          access_token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          function_name: sync-tree-sales

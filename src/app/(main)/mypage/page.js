@@ -1,4 +1,3 @@
-// 파일 경로: src/app/(main)/mypage/page.js
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -36,10 +35,36 @@ function MyApprovalsWidget({ toReview, submitted, completed, referred }) {
         const currentStatus = statusMap[status] || { text: status, style: 'bg-gray-100 text-gray-800' };
         return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${currentStatus.style}`}>{currentStatus.text}</span>;
     };
-
+    
     const renderList = (list) => {
         if (!list || list.length === 0) return <p className="text-center text-gray-500 py-10">해당 문서가 없습니다.</p>;
-        return ( <ul className="space-y-2">{list.map(doc => (<Link key={doc.id} href={`/approvals/${doc.id}`} className="block p-3 rounded-lg hover:bg-gray-100 border"><div className="flex justify-between items-center"><p className="font-medium text-gray-800 truncate">{doc.title}</p>{getStatusChip(doc.status)}</div><p className="text-sm text-gray-500 mt-1">상신자: {doc.creator_name || '정보 없음'}</p></Link>))}</ul> );
+        return ( 
+            <ul className="space-y-2">
+                {list.map(doc => (
+                    <Link key={doc.id} href={`/approvals/${doc.id}`} className="block p-3 rounded-lg hover:bg-gray-100 border">
+                        <div className="flex justify-between items-center">
+                            <p className="font-medium text-gray-800 truncate">{doc.title}</p>
+                            {getStatusChip(doc.status)}
+                        </div>
+                        <div className="flex justify-between items-center text-sm text-gray-500 mt-1">
+                            <span>상신자: {doc.creator_name || '정보 없음'}</span>
+                            {/* ★★★ 여기가 시간까지 표시하도록 수정된 부분입니다 ★★★ */}
+                            {doc.created_at && (
+                                <span className="text-xs">
+                                    {new Date(doc.created_at).toLocaleString('ko-KR', {
+                                        year: 'numeric',
+                                        month: 'numeric',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                    })}
+                                </span>
+                            )}
+                        </div>
+                    </Link>
+                ))}
+            </ul> 
+        );
     };
 
     return (
