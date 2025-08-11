@@ -1,17 +1,31 @@
-name: Invoke Supabase Edge Function Hourly
+name: Invoke Supabase Edge Functions Hourly
 
 on:
   schedule:
+    # 매 시간 5분에 실행 (구글 시트 업데이트 지연 시간 고려)
     - cron: '5 * * * *'
   workflow_dispatch:
 
 jobs:
-  invoke-function:
+  # 첫 번째 Job: 조경수 DB 동기화
+  invoke-tree-sales-sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Invoke Supabase Function via cURL
+      - name: Invoke Tree Sales Sync Function
         run: |
           curl -i -X POST "${{ secrets.SUPABASE_PROJECT_URL }}/functions/v1/sync-tree-sales" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json"
+
+  # 두 번째 Job: 공사 현황 DB 동기화
+  invoke-construction-sites-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke Construction Sites Sync Function
+        run: |
+          # ★★★ 바로 이 부분이 사용자가 주신 URL을 사용하는 부분입니다 ★★★
+          curl -i -X POST "${{ secrets.SUPABASE_PROJECT_URL }}/functions/v1/sync-construction-sites" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Content-Type: application/json"
