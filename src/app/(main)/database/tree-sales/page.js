@@ -1,7 +1,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import SearchInput from './SearchInput'; // 검색창 컴포넌트
-
+import Link from 'next/link';
 // 서버에서 데이터를 미리 가져오는 함수 (검색 기능 포함)
 async function getSalesData(query) {
     const cookieStore = cookies();
