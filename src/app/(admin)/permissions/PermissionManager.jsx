@@ -28,7 +28,8 @@ export default function PermissionManager({ initialUsers, boards }) {
                     const newPermissionIds = hasPermission
                         ? user.permissionIds.filter(id => id !== boardId)
                         .
-                        : [...user.permissionIds, boardId];
+                        : [...user.permissionIds, boardId],
+                        
                     return { ...user, permissionIds: newPermissionIds };
                 }
                 return user;
