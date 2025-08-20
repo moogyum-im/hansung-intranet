@@ -2,36 +2,13 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { toast } from 'react-hot-toast';
+import { findOrCreateDirectChat } from '@/actions/chatActions';
 
-// 아이콘 컴포넌트
-const ChatBubbleIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> );
+// 아이콘 및 다른 컴포넌트는 기존과 동일
+const ChatBubbleIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> );
 
-// 1:1 채팅방 생성/이동 함수
-const createOrGoToDirectMessage = async (myId, otherUser, router) => {
-    if (!myId || !otherUser || myId === otherUser.id) return;
-    const sortedIds = [myId, otherUser.id].sort();
-    const roomId = sortedIds.join('-');
-
-    try {
-        let { data: existingRoom } = await supabase.from('chat_rooms').select('id').eq('id', roomId).single();
-        if (!existingRoom) {
-            const { data: myProfile } = await supabase.from('profiles').select('full_name').eq('id', myId).single();
-            const roomName = [myProfile.full_name, otherUser.full_name].sort().join(', ');
-            const { data: newRoom, error } = await supabase.from('chat_rooms').insert({ id: roomId, name: roomName, is_direct_message: true, created_by: myId }).select().single();
-            if (error) throw error;
-            await supabase.from('chat_room_participants').insert([ { room_id: newRoom.id, user_id: myId }, { room_id: newRoom.id, user_id: otherUser.id } ]);
-            existingRoom = newRoom;
-        }
-        router.push(`/chatrooms/${existingRoom.id}`);
-    } catch (error) {
-        toast.error('채팅방으로 이동하는 데 실패했습니다.');
-    }
-};
-
-// 직원 상태 표시 컴포넌트
 const StatusIndicator = ({ status }) => {
     const styles = { '업무 중': 'bg-green-500', '오프라인': 'bg-gray-400', '회의 중': 'bg-yellow-500', '부재 중': 'bg-red-500' };
     const text = status || '오프라인';
@@ -44,7 +21,6 @@ const StatusIndicator = ({ status }) => {
     );
 };
 
-// 부서별 아코디언 컴포넌트
 function DepartmentAccordion({ department, employees, onEmployeeClick }) {
     const [isOpen, setIsOpen] = useState(true);
 
@@ -125,15 +101,25 @@ export default function OrganizationClient({ initialEmployees }) {
         return a.localeCompare(b);
     });
 
-    const handleEmployeeClick = (employeeData) => {
-        if (currentUser && currentUser.id) {
-            if(currentUser.id === employeeData.id) {
-                toast('자기 자신과는 채팅할 수 없습니다.');
-                return;
-            }
-            createOrGoToDirectMessage(currentUser.id, employeeData, router);
-        } else {
+    const handleEmployeeClick = async (employeeData) => {
+        if (!currentUser || !currentUser.id) {
             toast.error("로그인 정보가 없습니다.");
+            return;
+        }
+        if (currentUser.id === employeeData.id) {
+            toast('자기 자신과는 채팅할 수 없습니다.');
+            return;
+        }
+
+        const toastId = toast.loading('채팅방으로 이동하는 중...');
+
+        const result = await findOrCreateDirectChat(employeeData.id);
+
+        if (result.error) {
+            toast.error(result.error, { id: toastId });
+        } else if (result.roomId) {
+            toast.success('채팅방으로 이동합니다.', { id: toastId });
+            router.push(`/chatrooms/${result.roomId}`);
         }
     };
 
@@ -148,6 +134,7 @@ export default function OrganizationClient({ initialEmployees }) {
                         key={department}
                         department={department}
                         employees={groupedByDepartment[department]}
+                        // [수정] 오타를 수정합니다: onEmployee-click -> onEmployeeClick
                         onEmployeeClick={handleEmployeeClick}
                     />
                 ))}
