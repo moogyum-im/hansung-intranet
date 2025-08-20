@@ -13,7 +13,8 @@ export default function GlobalChatListener() {
     const audioRef = useRef(null);
     const audioUnlocked = useRef(false);
 
-    const NOTIFICATION_SOUND_URL = '/sounds/rclick-13693.mp3';
+    // [수정] 여기 파일 경로를 새로운 알림음 파일 이름으로 변경했습니다.
+    const NOTIFICATION_SOUND_URL = '/sounds/new-notification-010-352755.mp3';
 
     const unlockAudio = useCallback(() => {
         if (audioRef.current && !audioUnlocked.current) {
@@ -33,7 +34,7 @@ export default function GlobalChatListener() {
         audioRef.current.volume = 0.5;
         document.addEventListener('click', unlockAudio, { once: true });
         return () => document.removeEventListener('click', unlockAudio);
-    }, [unlockAudio]);
+    }, [unlockAudio, NOTIFICATION_SOUND_URL]); // NOTIFICATION_SOUND_URL 종속성 추가
 
     const playNotificationSound = useCallback(() => {
         if (audioRef.current && audioUnlocked.current) {
@@ -50,12 +51,9 @@ export default function GlobalChatListener() {
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${employee.id}` },
                 async (payload) => {
                     const newNotification = payload.new;
-
-                    // ★★★ 새 알림이 오면, 앱 전체 데이터를 새로고침하라고 명령합니다. ★★★
-                    // 이것이 대시보드 알림 목록을 실시간으로 업데이트합니다.
+                    
                     router.refresh();
                     
-                    // 현재 열려있는 페이지로 이동하는 알림은 팝업을 띄우지 않습니다.
                     if (newNotification.link && pathname.includes(newNotification.link)) {
                         return;
                     }

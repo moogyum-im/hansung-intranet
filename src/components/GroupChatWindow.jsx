@@ -1,4 +1,3 @@
-// src/components/GroupChatWindow.jsx
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -8,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import ManageParticipantsModal from './ManageParticipantsModal';
-import React from 'react'; // React를 임포트합니다.
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 // 아이콘 컴포넌트들 (생략)
 const SendIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg> );
@@ -48,31 +47,6 @@ const MessageContent = ({ msg, allMessages }) => {
     }
 };
 
-const DateSeparator = ({ date }) => {
-    const today = new Date();
-    const messageDate = new Date(date);
-    let dateText;
-    if (
-        messageDate.getDate() === today.getDate() &&
-        messageDate.getMonth() === today.getMonth() &&
-        messageDate.getFullYear() === today.getFullYear()
-    ) {
-        dateText = "오늘";
-    } else {
-        const formatter = new Intl.DateTimeFormat('ko-KR', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-        });
-        dateText = formatter.format(messageDate);
-    }
-    return (
-        <div className="my-4 text-center text-xs text-gray-500">
-            <span className="bg-white px-2 py-1 rounded-full shadow-sm">{dateText}</span>
-        </div>
-    );
-};
-
 export default function GroupChatWindow({ currentUser, chatRoom, initialMessages, initialParticipants }) {
     const router = useRouter();
     const { employee, loading: employeeLoading } = useEmployee();
@@ -84,7 +58,6 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
     const [isEditingRoomName, setIsEditingRoomName] = useState(false);
     const [editedRoomName, setEditedRoomName] = useState(chatRoom?.name);
     const [isUploading, setIsUploading] = useState(false);
-    const [isSending, setIsSending] = useState(false);
     const [unreadCounts, setUnreadCounts] = useState({});
     const [replyingTo, setReplyingTo] = useState(null);
     const messagesEndRef = useRef(null);
@@ -94,9 +67,12 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
     const currentRoomId = chatRoom?.id;
     const isRoomCreator = chatRoom?.created_by === currentUserId;
 
-    useEffect(() => {
-        setMessages(initialMessages || []);
-    }, [initialMessages]);
+    const getSupabaseClient = useCallback(() => {
+        return createClientComponentClient({
+            supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+            supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        });
+    }, []);
 
     const scrollToBottom = useCallback(() => {
         setTimeout(() => {
@@ -139,6 +115,10 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
         const channel = supabase.channel(`room-final-${currentRoomId}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${currentRoomId}` }, 
                 async (payload) => {
+                    if (payload.new.sender_id === currentUserId) {
+                        return;
+                    }
+
                     const { data: newMessageData, error: fetchError } = await supabase.from('chat_messages').select('*, sender:profiles(id, full_name, avatar_url)').eq('id', payload.new.id).single();
                     if (fetchError) {
                         console.error("새 메시지 상세 정보 로딩 실패:", fetchError);
@@ -151,11 +131,7 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                             }
                             return [...prev, newMessageData];
                         });
-                        if (newMessageData.sender_id === currentUserId) {
-                            fetchUnreadCounts();
-                        } else {
-                            await markAsRead();
-                        }
+                        await markAsRead();
                     }
                 }
             )
@@ -179,115 +155,253 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                 channelRef.current = null;
             }
         };
-    }, [currentRoomId, currentUserId, fetchUnreadCounts, employee]);
+    }, [currentRoomId, currentUserId, fetchUnreadCounts]);
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        
-        if (!newMessage.trim() || !currentUserId || !currentRoomId || employeeLoading || isSending) {
-            if (isSending) toast.error("이미 메시지를 전송하고 있습니다.");
+        if (!newMessage.trim() || !currentUserId || !currentRoomId || employeeLoading) {
+            toast.error("메시지 전송에 필요한 정보가 아직 로드되지 않았습니다.");
             return;
         }
         
-        setIsSending(true);
-
         const content = newMessage.trim();
+        const repliedToId = replyingTo ? replyingTo.id : null;
+
+        setNewMessage('');
+        setReplyingTo(null);
+        if (messageInputRef.current) messageInputRef.current.focus();
+
+        const tempMessageId = Date.now().toString();
         const messageData = {
             room_id: currentRoomId,
             sender_id: currentUserId,
             content: content,
             message_type: 'text',
-            replied_to_message_id: replyingTo ? replyingTo.id : null,
+            replied_to_message_id: repliedToId,
+        };
+
+        const tempMessage = {
+            id: tempMessageId,
+            ...messageData,
+            created_at: new Date().toISOString(),
+            sender: employee,
         };
         
-        setNewMessage('');
-        setReplyingTo(null);
-        if (messageInputRef.current) messageInputRef.current.focus();
-        
-        try {
-            const { data, error } = await supabase.from('chat_messages').insert(messageData).select();
+        setMessages(prev => [...prev, tempMessage]);
+        scrollToBottom();
 
+        const localSupabase = getSupabaseClient();
+        try {
+            const { data: insertedMessage, error } = await localSupabase.from('chat_messages').insert(messageData).select('*, sender:profiles(id, full_name, avatar_url)').single();
+            
             if (error) {
-                console.error("메시지 DB 삽입 실패 오류:", error);
-                toast.error(`메시지 전송에 실패했습니다: ${error.message}`);
+                console.error("★★★ 메시지 DB 삽입 실패 오류! ★★★", error); 
+                toast.error(`메시지 전송에 실패했습니다: ${error.message}`); 
+                setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
                 setNewMessage(content);
-            } else {
-                toast.success("메시지 전송 완료!");
+            } else if (insertedMessage) {
+                setMessages(prev => prev.map(msg => msg.id === tempMessageId ? insertedMessage : msg));
+                fetchUnreadCounts();
             }
         } catch (e) {
             console.error("Supabase insert 호출 중 예외 발생:", e);
             toast.error(`메시지 전송 중 예외 발생: ${e.message || '알 수 없는 오류'}`);
+            setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
             setNewMessage(content);
-        } finally {
-            setIsSending(false);
         }
     };
-    
+
     const handleFileChange = async (event) => {
-        const files = event.target.files;
-        if (!files || files.length === 0 || !currentUserId || !currentRoomId || employeeLoading || isSending) {
-            if (!files || files.length === 0) toast.error("파일이 선택되지 않았습니다.");
+        const file = event.target.files?.[0];
+        if (!file || !currentUserId || !currentRoomId || employeeLoading) {
+            if (!file) toast.error("파일이 선택되지 않았습니다.");
             return;
         }
 
         setIsUploading(true);
-        setIsSending(true);
-        
-        const toastId = toast.loading(`${files.length}개의 파일을 업로드 중입니다...`);
-        let uploadPromises = [];
-
-        for (const file of files) {
-            if (file.size > 10 * 1024 * 1024) {
-                toast.error(`'${file.name}' 파일이 10MB를 초과하여 건너뜁니다.`);
-                continue;
-            }
-            const safeFileName = file.name.replace(/[^a-zA-Z0-9가-힣.\-_]/g, '_');
-            const filePath = `${currentUserId}/${Date.now()}_${safeFileName}`;
-            
-            const uploadPromise = supabase.storage.from('chat-files').upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false
-            })
-            .then(({ error: uploadError }) => {
-                if (uploadError) throw uploadError;
-                const { data: urlData } = supabase.storage.from('chat-files').getPublicUrl(filePath);
-                if (!urlData || !urlData.publicUrl) throw new Error("파일 URL을 가져오는 데 실패했습니다.");
-                const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(file.name.split('.').pop()?.toLowerCase()) ? 'image' : 'file';
-                const content = messageType === 'image' ? urlData.publicUrl : JSON.stringify({ name: file.name, url: urlData.publicUrl });
-                const messageData = {
-                    room_id: currentRoomId,
-                    sender_id: currentUserId,
-                    content: content,
-                    message_type: messageType,
-                    replied_to_message_id: replyingTo ? replyingTo.id : null
-                };
-                return supabase.from('chat_messages').insert(messageData).select();
-            })
-            .catch(error => {
-                console.error("파일 전송 실패:", error);
-                toast.error(`'${file.name}' 전송 실패: ${error.message || '알 수 없는 오류'}.`);
-                return null;
-            });
-            uploadPromises.push(uploadPromise);
-        }
-        
-        await Promise.allSettled(uploadPromises);
-
+        const toastId = toast.loading('파일 업로드 중...');
+        const tempMessageId = Date.now().toString();
+        const repliedToId = replyingTo ? replyingTo.id : null;
         setReplyingTo(null);
         if (messageInputRef.current) messageInputRef.current.focus();
-        toast.success("파일 업로드 및 전송 완료!", { id: toastId });
 
-        setIsUploading(false);
-        setIsSending(false);
-        if(fileInputRef.current) fileInputRef.current.value = "";
+        const tempFileMessage = {
+            id: tempMessageId,
+            room_id: currentRoomId,
+            sender_id: currentUserId,
+            content: '파일 업로드 중...',
+            message_type: 'text',
+            created_at: new Date().toISOString(),
+            sender: employee,
+            replied_to_message_id: repliedToId,
+        };
+        setMessages(prev => [...prev, tempFileMessage]);
+        scrollToBottom();
+
+        const safeFileName = file.name.replace(/[^a-zA-Z0-9가-힣.\-_]/g, '_');
+        const filePath = `${currentUserId}/${Date.now()}_${safeFileName}`;
+        const localSupabase = getSupabaseClient();
+
+        try {
+            const { error: uploadError } = await localSupabase.storage.from('chat-files').upload(filePath, file);
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = localSupabase.storage.from('chat-files').getPublicUrl(filePath);
+            if (!urlData || !urlData.publicUrl) throw new Error("파일 URL을 가져오는 데 실패했습니다.");
+
+            const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(file.name.split('.').pop()?.toLowerCase()) ? 'image' : 'file';
+            const content = messageType === 'image' ? urlData.publicUrl : JSON.stringify({ name: file.name, url: urlData.publicUrl });
+            
+            const messageData = {
+                room_id: currentRoomId, 
+                sender_id: currentUserId, 
+                content: content, 
+                message_type: messageType, 
+                replied_to_message_id: repliedToId
+            };
+            
+            const { data: insertedMessage, error: insertError } = await localSupabase.from('chat_messages').insert(messageData).select('*, sender:profiles(id, full_name, avatar_url)').single();
+            if (insertError) {
+                await localSupabase.storage.from('chat-files').remove([filePath]);
+                throw insertError;
+            }
+
+            if (insertedMessage) {
+                setMessages(prev => prev.map(msg => msg.id === tempMessageId ? insertedMessage : msg));
+                fetchUnreadCounts();
+            } else {
+                 setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+            }
+            
+            toast.success("파일 전송 완료!", { id: toastId });
+        } catch (error) {
+            toast.error(`파일 전송 실패: ${error.message || '알 수 없는 오류'}.`, { id: toastId });
+            setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+        } finally {
+            setIsUploading(false);
+            if(fileInputRef.current) fileInputRef.current.value = "";
+        }
     };
-    const handleSaveRoomName = async () => { /* ... */ };
-    const handleLeaveRoom = async () => { /* ... */ };
-    const handleSetReply = (message) => { /* ... */ };
+    
+    const handleSaveRoomName = async () => {
+        if (!editedRoomName.trim() || editedRoomName === chatRoom.name) {
+            setIsEditingRoomName(false);
+            return;
+        }
+        const toastId = toast.loading('채팅방 이름을 변경 중입니다...');
+        try {
+            const { error } = await supabase
+                .from('chat_rooms')
+                .update({ name: editedRoomName.trim() })
+                .eq('id', currentRoomId);
+            if (error) throw error;
+            setEditedRoomName(editedRoomName.trim());
+            setIsEditingRoomName(false);
+            toast.success('채팅방 이름이 변경되었습니다.', { id: toastId });
+        } catch (error) {
+            console.error("채팅방 이름 변경 실패:", error);
+            toast.error(`이름 변경 실패: ${error.message}`, { id: toastId });
+        }
+    };
+    const handleLeaveRoom = async () => {
+        if (!currentUserId || !currentRoomId) {
+            toast.error("채팅방 정보를 찾을 수 없습니다.");
+            return;
+        }
+        if (window.confirm('정말로 이 채팅방을 나가시겠습니까?')) {
+            const toastId = toast.loading('채팅방을 나가는 중...');
+            try {
+                const { error } = await supabase.from('chat_room_participants').delete().eq('user_id', currentUserId).eq('room_id', currentRoomId);
+                if (error) throw error;
+                const { count: remainingParticipantsCount, error: countError } = await supabase
+                    .from('chat_room_participants')
+                    .select('*', { count: 'exact' })
+                    .eq('room_id', currentRoomId);
+                if (countError) console.warn("남은 참여자 수 확인 실패:", countError);
+                if (remainingParticipantsCount === 0) {
+                    const { error: roomDeleteError } = await supabase
+                        .from('chat_rooms')
+                        .delete()
+                        .eq('id', currentRoomId);
+                    if (roomDeleteError) console.error("빈 채팅방 삭제 실패:", roomDeleteError);
+                }
+                toast.success('채팅방에서 나갔습니다.', { id: toastId });
+                router.push('/chatrooms');
+                router.refresh();
+            } catch (error) {
+                console.error('채팅방 나가기 실패:', error);
+                toast.error(`오류가 발생했습니다: ${error.message}`);
+            }
+        }
+    };
+
+    const handleSetReply = (message) => {
+        setReplyingTo(message);
+        messageInputRef.current?.focus();
+    };
+
 
     if (!currentUser || !chatRoom || employeeLoading) return <div className="p-8 text-center">채팅 정보를 불러오는 중...</div>;
     
-    let lastDate = null;
+    // [신규] 날짜 구분선을 포함한 메시지 렌더링 함수
+    const renderMessagesWithDateSeparator = () => {
+        let lastDate = null;
+        const messageElements = [];
+
+        messages.forEach((msg) => {
+            if (!msg.created_at) return; // created_at이 없는 임시 메시지는 건너뛰기
+
+            const messageDateStr = new Date(msg.created_at).toDateString(); // 'Wed Aug 20 2025' 형식
+
+            if (messageDateStr !== lastDate) {
+                lastDate = messageDateStr;
+                const formattedDate = new Date(msg.created_at).toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    weekday: 'long',
+                });
+
+                messageElements.push(
+                    <div key={`date-separator-${lastDate}`} className="text-center my-4">
+                        <span className="bg-gray-200 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full">
+                            {formattedDate}
+                        </span>
+                    </div>
+                );
+            }
+
+            const isSentByMe = String(msg.sender_id) === String(currentUserId);
+            const unreadCount = unreadCounts[msg.id] || 0;
+
+            messageElements.push(
+                <div key={msg.id} onClick={() => handleSetReply(msg)} className={`flex items-end gap-3 cursor-pointer ${isSentByMe ? 'justify-end' : 'justify-start'}`}>
+                    {!isSentByMe && (
+                        <div className="w-9 h-9 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center font-bold text-gray-600 text-sm" title={msg.sender?.full_name}>
+                            {msg.sender?.full_name?.charAt(0) || 'U'}
+                        </div>
+                    )}
+                    <div className="flex flex-col gap-1 w-full max-w-md">
+                        {!isSentByMe && <p className="text-xs text-gray-500 ml-3">{msg.sender?.full_name}</p>}
+                        <div className={`flex items-end gap-2 ${isSentByMe ? 'flex-row-reverse' : ''}`}>
+                            {isSentByMe && unreadCount > 0 && (
+                                <span className="text-xs text-yellow-500 self-end mb-1 font-semibold">{unreadCount}</span>
+                            )}
+                            <div className={`p-1 rounded-2xl ${isSentByMe ? 'bg-blue-600 text-white rounded-br-lg' : 'bg-white text-gray-800 rounded-bl-lg border'}`}>
+                                <div className="p-2"><MessageContent msg={msg} allMessages={messages} /></div>
+                            </div>
+                            <span className="text-xs text-gray-400 self-end flex-shrink-0">
+                                {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: false })}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            );
+        });
+        return messageElements;
+    };
+
+
     return (
         <div className="flex flex-col h-full bg-gray-100">
             <header className="flex items-center justify-between p-4 border-b bg-white flex-shrink-0">
@@ -321,44 +435,14 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                 </div>
             </header>
 
+            {/* [수정] 날짜 구분선 렌더링 함수를 호출하도록 변경 */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6">
                 <div className="flex flex-col gap-4">
-                    {messages.map((msg, index) => {
-                        const messageDate = new Date(msg.created_at).toDateString();
-                        const prevMessageDate = index > 0 ? new Date(messages[index - 1].created_at).toDateString() : null;
-                        const isNewDay = messageDate !== prevMessageDate;
-                        const isSentByMe = String(msg.sender_id) === String(currentUserId);
-                        const unreadCount = unreadCounts[msg.id] || 0;
-                        return (
-                            <React.Fragment key={msg.id}>
-                                {isNewDay && <DateSeparator date={msg.created_at} />}
-                                <div onClick={() => handleSetReply(msg)} className={`flex items-end gap-3 cursor-pointer ${isSentByMe ? 'justify-end' : 'justify-start'}`}>
-                                    {!isSentByMe && (
-                                        <div className="w-9 h-9 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center font-bold text-gray-600 text-sm" title={msg.sender?.full_name}>
-                                            {msg.sender?.full_name?.charAt(0) || 'U'}
-                                        </div>
-                                    )}
-                                    <div className="flex flex-col gap-1 w-full max-w-md">
-                                        {!isSentByMe && <p className="text-xs text-gray-500 ml-3">{msg.sender?.full_name}</p>}
-                                        <div className={`flex items-end gap-2 ${isSentByMe ? 'flex-row-reverse' : ''}`}>
-                                            {isSentByMe && unreadCount > 0 && (
-                                                <span className="text-xs text-yellow-500 self-end mb-1 font-semibold">{unreadCount}</span>
-                                            )}
-                                            <div className={`p-1 rounded-2xl ${isSentByMe ? 'bg-blue-600 text-white rounded-br-lg' : 'bg-white text-gray-800 rounded-bl-lg border'}`}>
-                                                <div className="p-2"><MessageContent msg={msg} allMessages={messages} /></div>
-                                            </div>
-                                            <span className="text-xs text-gray-400 self-end flex-shrink-0">
-                                                {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: false })}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </React.Fragment>
-                        );
-                    })}
+                    {renderMessagesWithDateSeparator()}
                 </div>
                 <div ref={messagesEndRef} />
             </div>
+
             <footer className="p-4 bg-white border-t flex-shrink-0">
                 {replyingTo && (
                     <div className="p-2 mb-2 bg-gray-100 rounded-lg text-sm border-l-4 border-blue-500">
@@ -373,19 +457,28 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                         </div>
                     </div>
                 )}
-                <form className="flex items-center gap-3" onSubmit={handleSendMessage}>
-                    <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple />
-                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || employeeLoading || isSending} className="p-2 rounded-full hover:bg-gray-200 disabled:opacity-50">
+                <form onSubmit={handleSendMessage} className="flex items-center gap-3">
+                    <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || employeeLoading} className="p-2 rounded-full hover:bg-gray-200 disabled:opacity-50">
                         <FileAttachIcon />
                     </button>
                     <input ref={messageInputRef} type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="메시지를 입력하세요..." className="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800" autoFocus />
-                    <button type="submit" className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-400" disabled={!newMessage.trim() || isUploading || employeeLoading || isSending}>
+                    <button type="submit" className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-400" disabled={!newMessage.trim() || isUploading || employeeLoading}>
                         <SendIcon />
                     </button>
                 </form>
             </footer>
             {isManageModalOpen && (
-                <ManageParticipantsModal isOpen={isManageModalOpen} onClose={(isChanged) => { setManageModalOpen(false); if(isChanged) router.refresh(); }} chatRoom={chatRoom} initialParticipants={initialParticipants} />
+                <ManageParticipantsModal 
+                  isOpen={isManageModalOpen} 
+                  onClose={(isChanged) => { 
+                    setManageModalOpen(false); 
+                    if(isChanged) router.refresh(); 
+                  }} 
+                  room={chatRoom} 
+                  participants={participants} 
+                  currentUser={currentUser}
+                />
             )}
         </div>
     );
