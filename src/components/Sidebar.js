@@ -20,6 +20,7 @@ const LogoutIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" classNam
 const ChevronDownIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5" {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg> );
 const DatabaseIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4M4 7c-2.21 0-4 1.79-4 4s1.79 4 4 4m16-8c2.21 0 4 1.79 4 4s-1.79 4-4 4" /></svg> );
 const KeyIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.629 5.858a6 6 0 01-8.237-8.237A6 6 0 0115 7zm0 0a2 2 0 00-2-2m-2 2a2 2 0 00-2-2m2 2a2 2 0 00-2 2" /></svg> );
+const FolderDownloadIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> );
 
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -29,19 +30,13 @@ export default function Sidebar({ isOpen, onClose }) {
     const [totalUnreadCount, setTotalUnreadCount] = useState(0);
     const [isWorkMenuOpen, setIsWorkMenuOpen] = useState(false);
     const [isDbMenuOpen, setIsDbMenuOpen] = useState(false);
-    
-    // ★★★ 관리자 메뉴 상태 추가 ★★★
     const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
-
     const [departments, setDepartments] = useState([]);
-    
-    // ★★★ 접근 가능한 DB 메뉴 목록 상태 추가 ★★★
     const [accessibleBoards, setAccessibleBoards] = useState([]);
 
     useEffect(() => {
         setIsWorkMenuOpen(pathname.startsWith('/work'));
         setIsDbMenuOpen(pathname.startsWith('/database'));
-        // ★★★ 관리자 메뉴 경로 추가 ★★★
         setIsAdminMenuOpen(pathname.startsWith('/admin'));
     }, [pathname]);
 
@@ -54,7 +49,6 @@ export default function Sidebar({ isOpen, onClose }) {
         fetchDepartments();
     }, []);
 
-    // ★★★ 사용자의 DB 게시판 접근 권한을 확인하는 로직 추가 ★★★
     useEffect(() => {
         const fetchAccessibleBoards = async () => {
             if (!employee) return;
@@ -84,7 +78,7 @@ export default function Sidebar({ isOpen, onClose }) {
       { name: '전자 결재', href: '/approvals', icon: CurrencyWonIcon },
       { name: '업무', href: '/work', icon: ClipboardListIcon, isDropdown: true, menuKey: 'work' },
       { name: 'DB', href: '/database', icon: DatabaseIcon, isDropdown: true, menuKey: 'db', requiresPermission: true },
-      // ★★★ 관리자 메뉴 조건부 렌더링 추가 ★★★
+      { name: '자료실', href: '/resources', icon: FolderDownloadIcon },
       ...(employee && employee.role === 'admin' ? [{ 
           name: '관리', 
           href: '/admin', 
@@ -119,7 +113,6 @@ export default function Sidebar({ isOpen, onClose }) {
     const toggleDropdown = (menuKey) => {
         if (menuKey === 'work') setIsWorkMenuOpen(!isWorkMenuOpen);
         if (menuKey === 'db') setIsDbMenuOpen(!isDbMenuOpen);
-        // ★★★ 관리자 메뉴 토글 로직 추가 ★★★
         if (menuKey === 'admin') setIsAdminMenuOpen(!isAdminMenuOpen);
     };
 
@@ -132,7 +125,6 @@ export default function Sidebar({ isOpen, onClose }) {
                 </div>
                 <nav className="flex-1 px-4 py-6 space-y-2">
                     {menuItems.map((item) => {
-                        // DB 메뉴일 경우, 접근 가능한 게시판이 없으면 렌더링하지 않음
                         if (item.requiresPermission && accessibleBoards.length === 0) {
                             return null;
                         }
@@ -165,7 +157,6 @@ export default function Sidebar({ isOpen, onClose }) {
                                     </ul>
                                 )}
                                 
-                                {/* ★★★ 관리자 하위 메뉴 추가 ★★★ */}
                                 {item.menuKey === 'admin' && isAdminMenuOpen && (
                                     <ul className="pt-2 pl-6 space-y-1">
                                         <li>
@@ -173,7 +164,12 @@ export default function Sidebar({ isOpen, onClose }) {
                                                 DB 권한 관리
                                             </Link>
                                         </li>
-                                        {/* 여기에 다른 관리자 메뉴를 추가할 수 있습니다. */}
+                                        {/* ▼▼▼ 여기에 '자료실 관리' 메뉴를 추가했습니다 ▼▼▼ */}
+                                        <li>
+                                            <Link href="/admin/resources" className={`block px-3 py-2 text-sm rounded-md ${pathname.startsWith('/admin/resources') ? 'bg-gray-600 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}>
+                                                자료실 관리
+                                            </Link>
+                                        </li>
                                     </ul>
                                 )}
                             </div>
