@@ -1,13 +1,18 @@
 // 파일 경로: src/app/api/files/download/route.js
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 export async function GET(request) {
-  // ★★★ 여기가 수정된 핵심입니다: 서버 환경에 맞는 클라이언트 생성 ★★★
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+  // ★★★ 여기가 수정된 핵심입니다: 환경 변수를 직접 사용해서 클라이언트 생성 ★★★
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  if (!supabaseUrl || !supabaseKey) {
+    return new NextResponse('Supabase 환경 변수가 설정되지 않았습니다.', { status: 500 });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  
   const { searchParams } = new URL(request.url);
   const path = searchParams.get('path');
 
@@ -31,6 +36,7 @@ export async function GET(request) {
 
     const fileName = path.split('/').pop();
 
+    // NextResponse를 사용하여 파일 스트림과 헤더를 설정합니다.
     return new NextResponse(data, {
       headers: {
         'Content-Type': data.type,
