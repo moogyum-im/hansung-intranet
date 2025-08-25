@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-
+// 최종 업데이트 (2025-08-25)
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
