@@ -1,42 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const path = searchParams.get('path');
-
-  if (!path) {
-    return NextResponse.json({ error: '파일 경로가 필요합니다.' }, { status: 400 });
-  }
-
-  // ⭐⭐ 여기가 바뀐 부분입니다! ⭐⭐
-  // 서버에서만 사용되므로, 접두사 없이 환경 변수를 읽습니다.
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  // ⭐⭐ 현재 서버 환경 변수들을 로그에 기록합니다. ⭐⭐
+  console.log('--- VERCEL 환경 변수 디버깅 로그 ---');
+  console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
+  console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY);
+  console.log('NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+  console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  console.log('-----------------------------------');
   
-  if (!supabaseUrl || !supabaseKey) {
-    console.error('환경 변수 누락: Supabase URL 또는 Key가 로드되지 않았습니다.');
-    return NextResponse.json({ error: '서버 설정 오류' }, { status: 500 });
-  }
-
-  // 직접 환경 변수를 전달하여 Supabase 클라이언트를 만듭니다.
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
-  try {
-    const { data, error } = await supabase.storage
-      .from('resources')
-      .createSignedUrl(path, 60);
-
-    if (error) {
-      throw error;
-    }
-
-    return NextResponse.redirect(data.signedUrl);
-
-  } catch (error) {
-    console.error('다운로드 링크 생성 오류:', error);
-    return NextResponse.json({ error: '파일을 다운로드하는 데 실패했습니다.' }, { status: 500 });
-  }
+  // 에러를 발생시키지 않고 바로 응답을 보냅니다.
+  return NextResponse.json({ message: '디버깅 모드입니다. 로그를 확인해주세요.' });
 }
