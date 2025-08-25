@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export async function GET(request) {
-  // ★★★ 여기가 수정된 핵심입니다: 서버 전용 클라이언트 생성 ★★★
+  // ★★★ 여기가 수정된 핵심입니다: 서버 환경에 맞는 클라이언트 생성 ★★★
   const cookieStore = cookies();
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
@@ -31,7 +31,6 @@ export async function GET(request) {
 
     const fileName = path.split('/').pop();
 
-    // NextResponse를 사용하여 파일 스트림과 헤더를 설정합니다.
     return new NextResponse(data, {
       headers: {
         'Content-Type': data.type,
