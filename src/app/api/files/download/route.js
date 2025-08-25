@@ -4,33 +4,43 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export async function GET(request) {
-    const { searchParams } = new URL(request.url);
-    const filePath = searchParams.get('path');
-    const fileName = searchParams.get('name');
+  // ★★★ 여기가 수정된 핵심입니다: 서버 전용 클라이언트 생성 ★★★
+  const cookieStore = cookies();
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
-    if (!filePath) {
-        return new NextResponse('File path is required', { status: 400 });
+  const { searchParams } = new URL(request.url);
+  const path = searchParams.get('path');
+
+  if (!path) {
+    return new NextResponse('파일 경로가 필요합니다.', { status: 400 });
+  }
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return new NextResponse('인증이 필요합니다.', { status: 401 });
     }
 
-    const supabase = createRouteHandlerClient({ cookies });
-
-    // 1. Storage에서 파일 데이터를 blob 형태로 다운로드합니다.
-    const { data: blob, error } = await supabase.storage
-        .from('chat-attachments')
-        .download(filePath);
+    // 파일 다운로드
+    const { data, error } = await supabase.storage.from('library-files').download(path);
 
     if (error) {
-        console.error("파일 다운로드 실패:", error);
-        return new NextResponse(error.message, { status: 500 });
+      console.error('파일 다운로드 오류:', error);
+      return new NextResponse(`파일 다운로드 실패: ${error.message}`, { status: 500 });
     }
-    
-    // 2. 브라우저에게 "이것은 다운로드할 파일이다" 라고 알려주는 헤더를 설정합니다.
-    const headers = new Headers();
-    // 'attachment'는 다운로드를, 'inline'은 브라우저에서 바로 열기를 의미합니다.
-    // filename* 지시어는 한글 파일명을 안전하게 인코딩합니다.
-    headers.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-    headers.set('Content-Type', blob.type); // 파일의 MIME 타입 설정
 
-    // 3. 파일 데이터와 헤더를 함께 응답으로 보냅니다.
-    return new NextResponse(blob, { status: 200, statusText: 'OK', headers });
+    const fileName = path.split('/').pop();
+
+    // NextResponse를 사용하여 파일 스트림과 헤더를 설정합니다.
+    return new NextResponse(data, {
+      headers: {
+        'Content-Type': data.type,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+      },
+    });
+
+  } catch (e) {
+    console.error('서버 오류:', e);
+    return new NextResponse('서버 내부 오류가 발생했습니다.', { status: 500 });
+  }
 }

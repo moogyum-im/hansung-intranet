@@ -8,11 +8,21 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'HANSUNG 인트라넷',
   description: '한성 인트라넷 시스템',
-  // [수정] 아이콘(파비콘) 경로를 추가합니다.
-  // public 폴더에 있는 favicon.ico 파일을 기본 아이콘으로 사용합니다.
+  
+  // [수정] 아이콘 설정을 모든 기기에 대응하도록 매우 구체적으로 변경합니다.
+  // 이렇게 하면 Next.js의 다른 자동 파일 규칙을 무시하고 이 설정을 우선하게 됩니다.
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.ico', type: 'image/x-icon' },
+      { url: '/favicon-16x16.png', type: 'image/png', sizes: '16x16' },
+      { url: '/favicon-32x32.png', type: 'image/png', sizes: '32x32' },
+    ],
+    shortcut: ['/favicon.ico'],
+    apple: [
+      { url: '/apple-icon.png', sizes: '180x180' },
+    ],
   },
+
   viewport: {
     width: 'device-width',
     initialScale: 1,
