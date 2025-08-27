@@ -40,7 +40,8 @@ const MessageContent = ({ msg, allMessages }) => {
         case 'file':
             try {
                 const fileInfo = JSON.parse(msg.content);
-                return ( <div> {renderRepliedMessage()} <a href={fileInfo.url} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 bg-gray-100 rounded-lg hover:bg-gray-200 border max-w-xs"><DownloadIcon /><span className="truncate underline text-sm">{fileInfo.name}</span></a></div> );
+                // [수정] 아래 <a> 태그에 download 속성 추가 및 글자색 클래스(text-gray-800) 추가
+                return ( <div> {renderRepliedMessage()} <a href={fileInfo.url} download={fileInfo.name} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 bg-gray-100 rounded-lg hover:bg-gray-200 border max-w-xs text-gray-800"><DownloadIcon /><span className="truncate underline text-sm">{fileInfo.name}</span></a></div> );
             } catch (e) { return <p className="text-sm text-red-500">파일 정보를 표시할 수 없습니다.</p>; }
         default: 
             return ( <div> {renderRepliedMessage()} <p className="text-sm whitespace-pre-wrap">{msg.content}</p> </div> );
@@ -225,7 +226,6 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
         if (messageInputRef.current) messageInputRef.current.focus();
 
         const uploadPromises = Array.from(files).map(async (file) => {
-            // [수정] OS별 한글 처리 방식 차이를 없애기 위해 파일 이름을 표준화합니다.
             const normalizedFileName = file.name.normalize('NFC');
             
             const tempMessageId = `${Date.now()}-${normalizedFileName}`;
@@ -256,9 +256,7 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                 const { data: urlData } = localSupabase.storage.from('chat-files').getPublicUrl(filePath);
                 if (!urlData || !urlData.publicUrl) throw new Error("파일 URL을 가져오는 데 실패했습니다.");
 
-                // [수정] 표준화된 파일 이름을 사용해 이미지 타입을 결정합니다.
                 const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(normalizedFileName.split('.').pop()?.toLowerCase()) ? 'image' : 'file';
-                // [수정] DB에 저장할 content에는 표준화된 원본 파일 이름을 사용합니다.
                 const content = messageType === 'image' ? urlData.publicUrl : JSON.stringify({ name: normalizedFileName, url: urlData.publicUrl });
                 
                 const messageData = {
