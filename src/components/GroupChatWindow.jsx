@@ -211,7 +211,6 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
         }
     };
     
-    // =================  afectada =================
     const handleFileChange = async (event) => {
         const files = event.target.files;
         if (!files || files.length === 0 || !currentUserId || !currentRoomId || employeeLoading) {
@@ -226,13 +225,16 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
         if (messageInputRef.current) messageInputRef.current.focus();
 
         const uploadPromises = Array.from(files).map(async (file) => {
-            const tempMessageId = `${Date.now()}-${file.name}`;
+            // [수정] OS별 한글 처리 방식 차이를 없애기 위해 파일 이름을 표준화합니다.
+            const normalizedFileName = file.name.normalize('NFC');
+            
+            const tempMessageId = `${Date.now()}-${normalizedFileName}`;
             
             const tempFileMessage = {
                 id: tempMessageId,
                 room_id: currentRoomId,
                 sender_id: currentUserId,
-                content: `"${file.name}" 파일 업로드 중...`,
+                content: `"${normalizedFileName}" 파일 업로드 중...`,
                 message_type: 'text',
                 created_at: new Date().toISOString(),
                 sender: employee,
@@ -242,8 +244,7 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
             scrollToBottom();
 
             try {
-                // [수정] 파일 저장 방식을 무작위 UUID 이름으로 변경하여 안정성 확보
-                const fileExtension = file.name.split('.').pop() ?? '';
+                const fileExtension = normalizedFileName.split('.').pop() ?? '';
                 const randomFileName = `${crypto.randomUUID()}.${fileExtension}`;
                 const filePath = `${currentUserId}/${randomFileName}`;
                 
@@ -255,9 +256,10 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                 const { data: urlData } = localSupabase.storage.from('chat-files').getPublicUrl(filePath);
                 if (!urlData || !urlData.publicUrl) throw new Error("파일 URL을 가져오는 데 실패했습니다.");
 
-                const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(file.name.split('.').pop()?.toLowerCase()) ? 'image' : 'file';
-                // [수정] DB에 저장할 content에는 원본 파일 이름(file.name)을 사용합니다.
-                const content = messageType === 'image' ? urlData.publicUrl : JSON.stringify({ name: file.name, url: urlData.publicUrl });
+                // [수정] 표준화된 파일 이름을 사용해 이미지 타입을 결정합니다.
+                const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(normalizedFileName.split('.').pop()?.toLowerCase()) ? 'image' : 'file';
+                // [수정] DB에 저장할 content에는 표준화된 원본 파일 이름을 사용합니다.
+                const content = messageType === 'image' ? urlData.publicUrl : JSON.stringify({ name: normalizedFileName, url: urlData.publicUrl });
                 
                 const messageData = {
                     room_id: currentRoomId, 
@@ -279,9 +281,9 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                     setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
                 }
             } catch (error) {
-                console.error(`"${file.name}" 업로드 실패:`, error);
+                console.error(`"${normalizedFileName}" 업로드 실패:`, error);
                 setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
-                throw new Error(`"${file.name}" 업로드 실패`);
+                throw new Error(`"${normalizedFileName}" 업로드 실패`);
             }
         });
 
@@ -296,7 +298,6 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
             if(fileInputRef.current) fileInputRef.current.value = "";
         }
     };
-    // =============================================
     
     const handleSaveRoomName = async () => {
         if (!editedRoomName.trim() || editedRoomName === chatRoom.name) {
