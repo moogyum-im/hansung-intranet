@@ -6,8 +6,6 @@ import { useState, useMemo } from 'react';
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V3" /></svg>;
 
-// [수정] FileTypeIcon 헬퍼 컴포넌트를 삭제했습니다.
-
 export default function ResourcesClient({ initialResources }) {
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -50,7 +48,6 @@ export default function ResourcesClient({ initialResources }) {
                         {filteredResources.map(resource => (
                             <div key={resource.id} className="bg-white rounded-lg shadow-md border border-gray-200 flex flex-col overflow-hidden transition-transform hover:scale-105 hover:shadow-xl">
                                 <div className="p-6 flex-grow">
-                                    {/* [수정] FileTypeIcon 호출 부분을 삭제하고 내부 div 구조를 단순화했습니다. */}
                                     <div>
                                         <span className="px-2 py-1 text-xs font-semibold text-indigo-800 bg-indigo-100 rounded-full">{resource.category || '기타'}</span>
                                         <h3 className="mt-2 text-lg font-semibold text-gray-800">{resource.name}</h3>
@@ -58,8 +55,9 @@ export default function ResourcesClient({ initialResources }) {
                                     </div>
                                 </div>
                                 <div className="bg-gray-50 p-4 border-t">
+                                    {/* [수정] a 태그의 href에 파일 원본 이름(name)을 추가로 전달합니다. */}
                                     <a
-                                        href={`/api/download?path=${encodeURIComponent(resource.file_path)}`}
+                                        href={`/api/download?path=${encodeURIComponent(resource.file_path)}&name=${encodeURIComponent(resource.name)}`}
                                         className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition"
                                     >
                                         <DownloadIcon />
