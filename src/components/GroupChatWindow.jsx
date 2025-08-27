@@ -210,73 +210,88 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
             setNewMessage(content);
         }
     };
-
+    
+    // [수정] 파일 업로드 함수 (여러 파일 동시 처리 및 한글 파일명 오류 해결)
     const handleFileChange = async (event) => {
-        const file = event.target.files?.[0];
-        if (!file || !currentUserId || !currentRoomId || employeeLoading) {
-            if (!file) toast.error("파일이 선택되지 않았습니다.");
+        const files = event.target.files;
+        if (!files || files.length === 0 || !currentUserId || !currentRoomId || employeeLoading) {
+            if (!files || files.length === 0) toast.error("파일이 선택되지 않았습니다.");
             return;
         }
 
         setIsUploading(true);
-        const toastId = toast.loading('파일 업로드 중...');
-        const tempMessageId = Date.now().toString();
+        const toastId = toast.loading(`${files.length}개의 파일 업로드 중...`);
         const repliedToId = replyingTo ? replyingTo.id : null;
         setReplyingTo(null);
         if (messageInputRef.current) messageInputRef.current.focus();
 
-        const tempFileMessage = {
-            id: tempMessageId,
-            room_id: currentRoomId,
-            sender_id: currentUserId,
-            content: '파일 업로드 중...',
-            message_type: 'text',
-            created_at: new Date().toISOString(),
-            sender: employee,
-            replied_to_message_id: repliedToId,
-        };
-        setMessages(prev => [...prev, tempFileMessage]);
-        scrollToBottom();
+        const uploadPromises = Array.from(files).map(async (file) => {
+            const tempMessageId = `${Date.now()}-${file.name}`;
+            
+            // UI에 '업로드 중' 메시지 먼저 표시
+            const tempFileMessage = {
+                id: tempMessageId,
+                room_id: currentRoomId,
+                sender_id: currentUserId,
+                content: `"${file.name}" 파일 업로드 중...`,
+                message_type: 'text',
+                created_at: new Date().toISOString(),
+                sender: employee,
+                replied_to_message_id: repliedToId,
+            };
+            setMessages(prev => [...prev, tempFileMessage]);
+            scrollToBottom();
 
-        const safeFileName = file.name.replace(/[^a-zA-Z0-9가-힣.\-_]/g, '_');
-        const filePath = `${currentUserId}/${Date.now()}_${safeFileName}`;
-        const localSupabase = getSupabaseClient();
+            try {
+                // [수정] 한글 및 특수문자 파일명을 위한 URL 인코딩 처리
+                const encodedFileName = encodeURIComponent(file.name);
+                const filePath = `${currentUserId}/${Date.now()}_${encodedFileName}`;
+                
+                const localSupabase = getSupabaseClient();
+                const { error: uploadError } = await localSupabase.storage.from('chat-files').upload(filePath, file);
+                if (uploadError) throw uploadError;
+
+                const { data: urlData } = localSupabase.storage.from('chat-files').getPublicUrl(filePath);
+                if (!urlData || !urlData.publicUrl) throw new Error("파일 URL을 가져오는 데 실패했습니다.");
+
+                const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(file.name.split('.').pop()?.toLowerCase()) ? 'image' : 'file';
+                const content = messageType === 'image' ? urlData.publicUrl : JSON.stringify({ name: file.name, url: urlData.publicUrl });
+                
+                const messageData = {
+                    room_id: currentRoomId, 
+                    sender_id: currentUserId, 
+                    content: content, 
+                    message_type: messageType, 
+                    replied_to_message_id: repliedToId
+                };
+                
+                const { data: insertedMessage, error: insertError } = await localSupabase.from('chat_messages').insert(messageData).select('*, sender:profiles(id, full_name, avatar_url)').single();
+                if (insertError) {
+                    await localSupabase.storage.from('chat-files').remove([filePath]);
+                    throw insertError;
+                }
+
+                if (insertedMessage) {
+                    // 성공 시, 임시 메시지를 실제 메시지로 교체
+                    setMessages(prev => prev.map(msg => msg.id === tempMessageId ? insertedMessage : msg));
+                } else {
+                    // 실패 시, 임시 메시지 제거
+                    setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+                }
+            } catch (error) {
+                console.error(`"${file.name}" 업로드 실패:`, error);
+                // 실패 시, 임시 메시지를 에러 메시지로 변경 또는 제거
+                setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+                throw new Error(`"${file.name}" 업로드 실패`); // Promise.all이 에러를 인지하도록 에러를 다시 던짐
+            }
+        });
 
         try {
-            const { error: uploadError } = await localSupabase.storage.from('chat-files').upload(filePath, file);
-            if (uploadError) throw uploadError;
-
-            const { data: urlData } = localSupabase.storage.from('chat-files').getPublicUrl(filePath);
-            if (!urlData || !urlData.publicUrl) throw new Error("파일 URL을 가져오는 데 실패했습니다.");
-
-            const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(file.name.split('.').pop()?.toLowerCase()) ? 'image' : 'file';
-            const content = messageType === 'image' ? urlData.publicUrl : JSON.stringify({ name: file.name, url: urlData.publicUrl });
-            
-            const messageData = {
-                room_id: currentRoomId, 
-                sender_id: currentUserId, 
-                content: content, 
-                message_type: messageType, 
-                replied_to_message_id: repliedToId
-            };
-            
-            const { data: insertedMessage, error: insertError } = await localSupabase.from('chat_messages').insert(messageData).select('*, sender:profiles(id, full_name, avatar_url)').single();
-            if (insertError) {
-                await localSupabase.storage.from('chat-files').remove([filePath]);
-                throw insertError;
-            }
-
-            if (insertedMessage) {
-                setMessages(prev => prev.map(msg => msg.id === tempMessageId ? insertedMessage : msg));
-                fetchUnreadCounts();
-            } else {
-                 setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
-            }
-            
-            toast.success("파일 전송 완료!", { id: toastId });
+            await Promise.all(uploadPromises);
+            fetchUnreadCounts();
+            toast.success(`${files.length}개 파일 전송 완료!`, { id: toastId });
         } catch (error) {
-            toast.error(`파일 전송 실패: ${error.message || '알 수 없는 오류'}.`, { id: toastId });
-            setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+            toast.error(`일부 파일 전송 실패.`, { id: toastId });
         } finally {
             setIsUploading(false);
             if(fileInputRef.current) fileInputRef.current.value = "";
@@ -303,6 +318,7 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
             toast.error(`이름 변경 실패: ${error.message}`, { id: toastId });
         }
     };
+
     const handleLeaveRoom = async () => {
         if (!currentUserId || !currentRoomId) {
             toast.error("채팅방 정보를 찾을 수 없습니다.");
@@ -340,18 +356,16 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
         messageInputRef.current?.focus();
     };
 
-
     if (!currentUser || !chatRoom || employeeLoading) return <div className="p-8 text-center">채팅 정보를 불러오는 중...</div>;
     
-    // [신규] 날짜 구분선을 포함한 메시지 렌더링 함수
     const renderMessagesWithDateSeparator = () => {
         let lastDate = null;
         const messageElements = [];
 
         messages.forEach((msg) => {
-            if (!msg.created_at) return; // created_at이 없는 임시 메시지는 건너뛰기
+            if (!msg.created_at) return;
 
-            const messageDateStr = new Date(msg.created_at).toDateString(); // 'Wed Aug 20 2025' 형식
+            const messageDateStr = new Date(msg.created_at).toDateString();
 
             if (messageDateStr !== lastDate) {
                 lastDate = messageDateStr;
@@ -435,7 +449,6 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                 </div>
             </header>
 
-            {/* [수정] 날짜 구분선 렌더링 함수를 호출하도록 변경 */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6">
                 <div className="flex flex-col gap-4">
                     {renderMessagesWithDateSeparator()}
@@ -458,7 +471,8 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                     </div>
                 )}
                 <form onSubmit={handleSendMessage} className="flex items-center gap-3">
-                    <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
+                    {/* [신규] 여러 파일을 선택할 수 있도록 multiple 속성 추가 */}
+                    <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple />
                     <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || employeeLoading} className="p-2 rounded-full hover:bg-gray-200 disabled:opacity-50">
                         <FileAttachIcon />
                     </button>
