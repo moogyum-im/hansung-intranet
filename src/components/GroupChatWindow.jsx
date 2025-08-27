@@ -211,7 +211,7 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
         }
     };
     
-    // [수정] 파일 업로드 함수 (여러 파일 동시 처리 및 한글 파일명 오류 해결)
+    // =================  afectada =================
     const handleFileChange = async (event) => {
         const files = event.target.files;
         if (!files || files.length === 0 || !currentUserId || !currentRoomId || employeeLoading) {
@@ -228,7 +228,6 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
         const uploadPromises = Array.from(files).map(async (file) => {
             const tempMessageId = `${Date.now()}-${file.name}`;
             
-            // UI에 '업로드 중' 메시지 먼저 표시
             const tempFileMessage = {
                 id: tempMessageId,
                 room_id: currentRoomId,
@@ -243,11 +242,13 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
             scrollToBottom();
 
             try {
-                // [수정] 한글 및 특수문자 파일명을 위한 URL 인코딩 처리
-                const encodedFileName = encodeURIComponent(file.name);
-                const filePath = `${currentUserId}/${Date.now()}_${encodedFileName}`;
+                // [수정] 파일 저장 방식을 무작위 UUID 이름으로 변경하여 안정성 확보
+                const fileExtension = file.name.split('.').pop() ?? '';
+                const randomFileName = `${crypto.randomUUID()}.${fileExtension}`;
+                const filePath = `${currentUserId}/${randomFileName}`;
                 
                 const localSupabase = getSupabaseClient();
+
                 const { error: uploadError } = await localSupabase.storage.from('chat-files').upload(filePath, file);
                 if (uploadError) throw uploadError;
 
@@ -255,6 +256,7 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                 if (!urlData || !urlData.publicUrl) throw new Error("파일 URL을 가져오는 데 실패했습니다.");
 
                 const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(file.name.split('.').pop()?.toLowerCase()) ? 'image' : 'file';
+                // [수정] DB에 저장할 content에는 원본 파일 이름(file.name)을 사용합니다.
                 const content = messageType === 'image' ? urlData.publicUrl : JSON.stringify({ name: file.name, url: urlData.publicUrl });
                 
                 const messageData = {
@@ -272,17 +274,14 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                 }
 
                 if (insertedMessage) {
-                    // 성공 시, 임시 메시지를 실제 메시지로 교체
                     setMessages(prev => prev.map(msg => msg.id === tempMessageId ? insertedMessage : msg));
                 } else {
-                    // 실패 시, 임시 메시지 제거
                     setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
                 }
             } catch (error) {
                 console.error(`"${file.name}" 업로드 실패:`, error);
-                // 실패 시, 임시 메시지를 에러 메시지로 변경 또는 제거
                 setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
-                throw new Error(`"${file.name}" 업로드 실패`); // Promise.all이 에러를 인지하도록 에러를 다시 던짐
+                throw new Error(`"${file.name}" 업로드 실패`);
             }
         });
 
@@ -297,6 +296,7 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
             if(fileInputRef.current) fileInputRef.current.value = "";
         }
     };
+    // =============================================
     
     const handleSaveRoomName = async () => {
         if (!editedRoomName.trim() || editedRoomName === chatRoom.name) {
@@ -471,7 +471,6 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                     </div>
                 )}
                 <form onSubmit={handleSendMessage} className="flex items-center gap-3">
-                    {/* [신규] 여러 파일을 선택할 수 있도록 multiple 속성 추가 */}
                     <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple />
                     <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || employeeLoading} className="p-2 rounded-full hover:bg-gray-200 disabled:opacity-50">
                         <FileAttachIcon />
