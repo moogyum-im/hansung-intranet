@@ -55,9 +55,9 @@ export default function ResourcesClient({ initialResources }) {
                                     </div>
                                 </div>
                                 <div className="bg-gray-50 p-4 border-t">
-                                    {/* [수정] a 태그의 href에 파일 원본 이름(name)을 추가로 전달합니다. */}
+                                    {/* [수정] a 태그의 href 경로를 실제 API 경로로 변경합니다. */}
                                     <a
-                                        href={`/api/download?path=${encodeURIComponent(resource.file_path)}&name=${encodeURIComponent(resource.name)}`}
+                                        href={`/api/files/download?path=${encodeURIComponent(resource.file_path)}&name=${encodeURIComponent(resource.name)}`}
                                         className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition"
                                     >
                                         <DownloadIcon />
