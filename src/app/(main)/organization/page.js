@@ -1,4 +1,3 @@
-// 파일 경로: src/app/(main)/organization/page.js
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import OrganizationClient from './OrganizationClient';
@@ -12,6 +11,7 @@ async function getOrganizationData() {
         .from('profiles')
         .select('*')
         .filter('department', 'neq', '시스템 관리팀')
+        .eq('employment_status', '재직') // [수정] 재직 중인 직원만 필터링합니다.
         .order('id', { ascending: true }); // 일관된 순서를 위해 ID 정렬 추가 (선택 사항)
 
     if (error) {

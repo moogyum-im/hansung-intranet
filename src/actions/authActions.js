@@ -14,10 +14,31 @@ export async function loginAction(formData) {
         return { success: false, error: '이메일과 비밀번호를 모두 입력해주세요.' };
     }
     
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // 1. 이메일/비밀번호로 1차 인증
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-        return { success: false, error: '로그인 실패: ' + error.message };
+    if (authError) {
+        return { success: false, error: '로그인 실패: ' + authError.message };
+    }
+
+    // [수정] 2. 인증 성공 후, 재직 상태 확인
+    if (authData.user) {
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('employment_status')
+            .eq('id', authData.user.id)
+            .single();
+
+        if (profileError || !profile) {
+            await supabase.auth.signOut(); // 프로필 조회 실패 시 보안을 위해 로그아웃
+            return { success: false, error: '사용자 프로필을 불러올 수 없습니다.' };
+        }
+
+        // [수정] 3. 재직 상태가 '재직'이 아니면 로그인 차단
+        if (profile.employment_status !== '재직') {
+            await supabase.auth.signOut(); // 재직 상태가 아니므로 즉시 로그아웃
+            return { success: false, error: '퇴사 처리되었거나 비활성화된 계정입니다.' };
+        }
     }
     
     redirect('/dashboard');
