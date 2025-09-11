@@ -172,7 +172,7 @@ const SiteEditForm = ({ site, allUsers, onSave, onCancel, isSaving }) => {
 
 
 // 현장 상세 정보 읽기 전용 뷰 컴포넌트 (UI 서류 형식)
-const SiteDetailView = ({ site, onEdit, siteMembers, allUsers, onAddMember, isAddingMember }) => {
+const SiteDetailView = ({ site, onEdit, siteMembers, allUsers, onAddMember, isAddingMember, onDeleteSite }) => {
     // PM 이름 찾기
     const pm = useMemo(() => allUsers.find(user => user.id === site.pm_id), [allUsers, site.pm_id]);
 
@@ -282,7 +282,13 @@ const SiteDetailView = ({ site, onEdit, siteMembers, allUsers, onAddMember, isAd
                 </div>
             </div>
 
-            <div className="mt-8 flex justify-end">
+            <div className="mt-8 flex justify-end space-x-3"> {/* 버튼 간격 추가 */}
+                <button
+                    onClick={onDeleteSite} // 삭제 버튼 클릭 시 onDeleteSite 함수 호출
+                    className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold transition-colors duration-200 shadow-md"
+                >
+                    현장 삭제
+                </button>
                 <button
                     onClick={onEdit}
                     className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-semibold transition-colors duration-200 shadow-md"
@@ -373,6 +379,20 @@ export default function SiteDetailPage({ params }) {
     const [showAddMemberModal, setShowAddMemberModal] = useState(false); 
     const [isAddingMember, setIsAddingMember] = useState(false); 
 
+    // ★★★ 이 useMemo들은 if (loading) 또는 if (!site) 같은 조건부 렌더링보다 위에 있어야 합니다. ★★★
+    // SiteDetailView에서 사용될 PM 정보
+    const pm = useMemo(() => {
+        if (!site || !allUsers.length) return null; // site나 allUsers가 아직 로딩되지 않았다면 null 반환
+        return allUsers.find(user => user.id === site.pm_id);
+    }, [allUsers, site]);
+
+    // AddMemberModal 및 SiteMembersSection에서 사용될 사용 가능한 멤버 목록
+    const currentMemberUserIds = useMemo(() => new Set(siteMembers.map(member => member.user_id)), [siteMembers]); 
+    const availableUsers = useMemo(() => allUsers.filter(user => 
+        !currentMemberUserIds.has(user.id) // 이미 현장 멤버인 경우 제외
+    ), [allUsers, currentMemberUserIds]);
+
+
     // 현장 상세 정보, 참여자 목록, 모든 사용자 목록을 가져오는 함수
     const fetchSiteDetails = useCallback(async () => {
         if (!employee) {
@@ -392,7 +412,7 @@ export default function SiteDetailPage({ params }) {
             if (siteError || !siteData) {
                 console.error("현장 정보 조회 실패:", siteError);
                 setSite(null);
-                notFound();
+                // notFound(); // notFound() 호출 시 Vercel 빌드 에러가 나지 않도록 주석 처리하거나, 적절히 에러 페이지 렌더링으로 대체
                 return;
             }
             setSite(siteData);
@@ -426,7 +446,7 @@ export default function SiteDetailPage({ params }) {
         } finally {
             setLoading(false);
         }
-    }, [siteId, employee]);
+    }, [siteId, employee]); // employee를 종속성 배열에 추가
 
     useEffect(() => {
         fetchSiteDetails();
@@ -436,9 +456,15 @@ export default function SiteDetailPage({ params }) {
     const handleSaveSite = async (updatedFormData) => {
         setIsSaving(true);
         try {
+            // pm_id가 빈 문자열이면 null로 변환하여 전송 (UUID 오류 방지)
+            const dataToUpdate = {
+                ...updatedFormData,
+                pm_id: updatedFormData.pm_id === '' ? null : updatedFormData.pm_id
+            };
+
             const { error } = await supabase
                 .from('construction_sites')
-                .update(updatedFormData)
+                .update(dataToUpdate)
                 .eq('id', siteId);
 
             if (error) throw error;
@@ -485,6 +511,29 @@ export default function SiteDetailPage({ params }) {
         }
     };
 
+    // 현장 삭제 처리 함수 추가
+    const handleDeleteSite = async () => {
+        if (!confirm(`정말로 현장 "${site.name}"을(를) 삭제하시겠습니까?\n모든 관련 데이터가 영구적으로 삭제됩니다.`)) {
+            return;
+        }
+
+        try {
+            const { error } = await supabase
+                .from('construction_sites')
+                .delete()
+                .eq('id', siteId);
+
+            if (error) throw error;
+
+            toast.success('현장이 성공적으로 삭제되었습니다.');
+            router.push('/sites'); // 삭제 후 현장 목록 페이지로 이동
+        } catch (error) {
+            console.error("현장 삭제 실패:", error);
+            toast.error(`현장 삭제 실패: ${error.message}`);
+        }
+    };
+
+
     if (loading) {
         return <div className="h-full flex items-center justify-center text-gray-600"><p>현장 정보를 불러오는 중입니다...</p></div>;
     }
@@ -501,7 +550,6 @@ export default function SiteDetailPage({ params }) {
         );
     }
     
-    // ★★★ 탭 배열 정의 (기존 탭 구조 복원) ★★★
     const tabs = [
         { id: 'overview', label: '개요' },
         { id: 'reports', label: '일일 보고' },
@@ -560,6 +608,7 @@ export default function SiteDetailPage({ params }) {
                                 allUsers={allUsers}
                                 onAddMember={() => setShowAddMemberModal(true)}
                                 isAddingMember={isAddingMember}
+                                onDeleteSite={handleDeleteSite} // onDeleteSite prop 전달
                             />
                         )}
                     </div>
