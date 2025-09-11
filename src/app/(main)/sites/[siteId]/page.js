@@ -174,6 +174,8 @@ const SiteEditForm = ({ site, allUsers, onSave, onCancel, isSaving }) => {
 // 현장 상세 정보 읽기 전용 뷰 컴포넌트 (UI 서류 형식)
 const SiteDetailView = ({ site, onEdit, siteMembers, allUsers, onAddMember, isAddingMember, onDeleteSite }) => {
     // PM 이름 찾기
+    // ★★★ 이 부분의 useMemo는 SiteDetailView 컴포넌트의 최상위에서 직접 호출됩니다. ★★★
+    // SiteDetailView는 상위 컴포넌트에서 site가 null이 아닐 때만 렌더링되므로, site에 대한 추가 null 체크는 필요 없습니다.
     const pm = useMemo(() => allUsers.find(user => user.id === site.pm_id), [allUsers, site.pm_id]);
 
     const statusStyles = {
@@ -182,6 +184,7 @@ const SiteDetailView = ({ site, onEdit, siteMembers, allUsers, onAddMember, isAd
         '보류': 'bg-yellow-100 text-yellow-800 ring-yellow-500/10',
         '중단': 'bg-red-100 text-red-800 ring-red-500/10',
     };
+
 
     return (
         <div className="bg-white p-10 rounded-xl shadow-lg border border-gray-100 animate-fade-in">
