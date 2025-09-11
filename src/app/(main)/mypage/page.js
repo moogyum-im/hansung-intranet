@@ -46,9 +46,9 @@ function MyApprovalsWidget({ toReview, submitted, completed, referred }) {
                             <p className="font-medium text-gray-800 truncate">{doc.title}</p>
                             {getStatusChip(doc.status)}
                         </div>
+                        {/* [핵심 수정] 날짜를 표시하는 코드를 추가합니다. */}
                         <div className="flex justify-between items-center text-sm text-gray-500 mt-1">
                             <span>상신자: {doc.creator_name || '정보 없음'}</span>
-                            {/* ★★★ 여기가 시간까지 표시하도록 수정된 부분입니다 ★★★ */}
                             {doc.created_at && (
                                 <span className="text-xs">
                                     {new Date(doc.created_at).toLocaleString('ko-KR', {

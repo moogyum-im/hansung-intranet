@@ -1,41 +1,23 @@
-// 파일 경로: src/app/(main)/approvals/internal/page.js
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
-import dynamic from 'next/dynamic';
-import 'react-quill/dist/quill.snow.css';
-
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 export default function InternalApprovalPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
+
     const [allEmployees, setAllEmployees] = useState([]);
     const [formData, setFormData] = useState({
-        title: '내부결재',
-        subject: '',
-        body: '',
+        title: '',
+        content: '',
     });
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [documentNumber, setDocumentNumber] = useState('');
-    const [attachmentFile, setAttachmentFile] = useState(null);
-
-    useEffect(() => {
-        const date = new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const timestamp = date.getTime().toString().slice(-4);
-        const documentPrefix = '내부';
-        setDocumentNumber(`${documentPrefix}-${year}${month}${day}-${timestamp}`);
-    }, []);
 
     useEffect(() => {
         const fetchEmployees = async () => {
@@ -45,7 +27,8 @@ export default function InternalApprovalPage() {
         };
         if (!employeeLoading && employee) {
             fetchEmployees();
-            if (employee?.team_leader_id) {
+            // 팀장이 있으면 기본 결재자로 설정 (옵션)
+            if (employee.team_leader_id && employee.id !== employee.team_leader_id) {
                 setApprovers([{ id: employee.team_leader_id }]);
             }
         }
@@ -55,16 +38,11 @@ export default function InternalApprovalPage() {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
-    const handleQuillChange = (value) => setFormData(prev => ({ ...prev, body: value }));
-    const handleFileChange = (e) => {
-        if (e.target.files && e.target.files.length > 0) setAttachmentFile(e.target.files[0]);
-        else setAttachmentFile(null);
-    };
-    
+
     const addApprover = () => setApprovers([...approvers, { id: '' }]);
     const handleApproverChange = (index, id) => {
         const newApprovers = [...approvers];
-        newApprovers[index].id = id;
+        newApprovers[index] = { id };
         setApprovers(newApprovers);
     };
     const removeApprover = (index) => setApprovers(approvers.filter((_, i) => i !== index));
@@ -72,7 +50,7 @@ export default function InternalApprovalPage() {
     const addReferrer = () => setReferrers([...referrers, { id: '' }]);
     const handleReferrerChange = (index, id) => {
         const newReferrers = [...referrers];
-        newReferrers[index].id = id;
+        newReferrers[index] = { id };
         setReferrers(newReferrers);
     };
     const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
@@ -80,36 +58,43 @@ export default function InternalApprovalPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+
         if (approvers.length === 0 || approvers.some(app => !app.id)) {
             toast.error("결재자를 모두 지정해주세요.");
             setLoading(false);
             return;
         }
 
-        let fileUrl = null, originalFileName = null;
-        if (attachmentFile) {
-            const fileExt = attachmentFile.name.split('.').pop();
-            const safeFileName = `${uuidv4()}.${fileExt}`;
-            const { data: uploadData, error: uploadError } = await supabase.storage.from('approval-documents').upload(safeFileName, attachmentFile);
-            if (uploadError) { toast.error(`파일 업로드 실패: ${uploadError.message}`); setLoading(false); return; }
-            const { data: urlData } = supabase.storage.from('approval-documents').getPublicUrl(uploadData.path);
-            fileUrl = urlData.publicUrl;
-            originalFileName = attachmentFile.name;
-        }
-        
-        const approver_ids = approvers.map(app => app.id);
-        const referrer_ids = referrers.map(ref => ref.id);
+        const approver_ids_with_names = approvers.map(app => ({
+            id: app.id,
+            full_name: allEmployees.find(emp => emp.id === app.id)?.full_name || '알 수 없음',
+            position: allEmployees.find(emp => emp.id === app.id)?.position || '알 수 없음',
+        }));
+        const referrer_ids_with_names = referrers.map(ref => ({
+            id: ref.id,
+            full_name: allEmployees.find(emp => emp.id === ref.id)?.full_name || '알 수 없음',
+            position: allEmployees.find(emp => emp.id === ref.id)?.position || '알 수 없음',
+        }));
 
         const submissionData = {
             title: formData.title,
-            content: JSON.stringify(formData),
-            document_type: 'internal_approval',
-            approver_ids,
-            referrer_ids,
-            attachment_url: fileUrl,
-            attachment_filename: originalFileName,
+            // [핵심 수정] content JSON에 기안자 정보를 포함시킵니다.
+            content: JSON.stringify({
+                ...formData,
+                requesterName: employee.full_name,
+                requesterDepartment: employee.department,
+                requesterPosition: employee.position,
+            }),
+            document_type: 'internal_approval', // 문서 타입
+            approver_ids: approver_ids_with_names,
+            referrer_ids: referrer_ids_with_names,
+            // [핵심 수정] API가 사용할 수 있도록 기안자 정보를 별도로 전달합니다.
+            requester_id: employee.id,
+            requester_name: employee.full_name,
+            requester_department: employee.department,
+            requester_position: employee.position,
         };
-
+        
         try {
             const response = await fetch('/api/submit-approval', {
                 method: 'POST',
@@ -120,47 +105,51 @@ export default function InternalApprovalPage() {
                 const errorData = await response.json().catch(() => ({ error: '서버 응답 없음' }));
                 throw new Error(errorData.error || '상신 실패');
             }
-            toast.success("내부결재 문서가 성공적으로 상신되었습니다.");
-            router.push('/approvals');
+            toast.success("내부 결재 문서가 성공적으로 상신되었습니다.");
+            router.push('/mypage');
         } catch (error) {
-            toast.error(`내부결재 상신 실패: ${error.message}`);
+            toast.error(`내부 결재 상신 실패: ${error.message}`);
         } finally {
             setLoading(false);
         }
     };
-    
-    const quillModules = useMemo(() => ({
-        toolbar: {
-            container: [
-                [{ 'font': [] }], [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline', 'strike'],
-                [{ 'color': [] }, { 'background': [] }],
-                [{ 'align': [] }], [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                ['link', 'image', 'table'], ['clean']
-            ],
-        },
-        clipboard: { matchVisual: false },
-    }), []);
 
     if (employeeLoading) return <div className="flex justify-center items-center h-screen">로딩 중...</div>;
+    if (!employee) return <div className="flex justify-center items-center h-screen text-red-500">직원 정보를 불러올 수 없습니다.</div>;
 
     return (
         <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
             <div className="flex-1">
                 <div className="bg-white p-10 rounded-xl shadow-lg border">
                     <h1 className="text-2xl font-bold text-center mb-8">내부 결재</h1>
-                    <div className="text-right text-sm text-gray-500 mb-4"><p>문서번호: {documentNumber}</p><p>작성일: {new Date().toLocaleDateString('ko-KR')}</p></div>
-                    <div className="mb-8 border border-gray-300"><table className="w-full text-sm border-collapse"><tbody>
-                        <tr><th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">기안부서</th><td className="p-2 w-2/5 border-b border-r">{employee?.department}</td><th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직 위</th><td className="p-2 w-1/5 border-b">{employee?.position}</td></tr>
-                        <tr><th className="p-2 bg-gray-100 font-bold text-left border-r">기안자</th><td className="p-2 border-r">{employee?.full_name}</td><th className="p-2 bg-gray-100 font-bold text-left border-r">기안일자</th><td className="p-2">{new Date().toLocaleDateString('ko-KR')}</td></tr>
-                    </tbody></table></div>
-                    <div className="mb-8">
-                        <label className="block text-gray-700 font-bold mb-2 text-sm">제목</label>
-                        <input type="text" name="subject" value={formData.subject} onChange={handleChange} placeholder="결재 문서의 제목을 입력하세요" className="w-full p-2 border rounded-md text-sm" required />
+                    <div className="mb-8 border border-gray-300">
+                        <table className="w-full text-sm border-collapse">
+                            <tbody>
+                                <tr>
+                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">소속</th>
+                                    <td className="p-2 w-2/5 border-b border-r">{employee?.department}</td>
+                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직위</th>
+                                    <td className="p-2 w-1/5 border-b">{employee?.position}</td>
+                                </tr>
+                                <tr>
+                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">성명</th>
+                                    <td className="p-2 border-r">{employee?.full_name}</td>
+                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">작성일</th>
+                                    <td className="p-2">{new Date().toLocaleDateString('ko-KR')}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                    <div>
-                        <label className="block text-gray-700 font-bold mb-2 text-sm">내용</label>
-                        <div className="bg-white"><ReactQuill theme="snow" value={formData.body} onChange={handleQuillChange} modules={quillModules} style={{ height: '400px' }} /></div>
+                    
+                    <div className="space-y-6">
+                        <div>
+                            <label className="block text-gray-700 font-bold mb-2 text-sm">제목</label>
+                            <input type="text" name="title" value={formData.title} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required />
+                        </div>
+                        <div>
+                            <label className="block text-gray-700 font-bold mb-2 text-sm">내용</label>
+                            <textarea name="content" value={formData.content} onChange={handleChange} className="w-full p-3 border rounded-md h-40 resize-none" required />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -195,8 +184,6 @@ export default function InternalApprovalPage() {
                             ))}
                         </div>
                     </div>
-                    <div className="border-b pb-4"><h2 className="text-lg font-bold mb-2">파일 첨부</h2><input type="file" onChange={handleFileChange} className="w-full text-sm"/></div>
-                    <div className="border-b pb-4"><h2 className="text-lg font-bold mb-2">기안 의견</h2><textarea placeholder="의견을 입력하세요" className="w-full p-2 border rounded-md h-20 resize-none"></textarea></div>
                     <button type="submit" disabled={loading} className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold">{loading ? '상신 중...' : '결재 상신'}</button>
                 </form>
             </div>

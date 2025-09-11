@@ -1,4 +1,3 @@
-// 파일 경로: src/app/(main)/approvals/expense/page.js
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -20,8 +19,8 @@ export default function ExpenseReportPage() {
         paymentMethod: '법인카드',
         amount: '',
         description: '',
+        cardNumberLastFour: '',
     });
-    // ★★★ 1. 결재선과 참조인을 배열로 관리하도록 변경 ★★★
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
 
@@ -48,7 +47,9 @@ export default function ExpenseReportPage() {
         if (!employeeLoading && employee) {
             fetchEmployees();
             if (employee?.team_leader_id) {
-                setApprovers([{ id: employee.team_leader_id }]);
+                if (employee.id !== employee.team_leader_id) {
+                    setApprovers([{ id: employee.team_leader_id, full_name: '', position: '' }]);
+                }
             }
         }
     }, [employee, employeeLoading]);
@@ -65,12 +66,16 @@ export default function ExpenseReportPage() {
             setAttachmentFile(null);
         }
     };
-    
-    // ★★★ 2. 결재선/참조인 추가, 변경, 삭제를 위한 함수들 ★★★
+
     const addApprover = () => setApprovers([...approvers, { id: '' }]);
     const handleApproverChange = (index, id) => {
         const newApprovers = [...approvers];
-        newApprovers[index].id = id;
+        const selectedEmployee = allEmployees.find(emp => emp.id === id);
+        newApprovers[index] = {
+            id: id,
+            full_name: selectedEmployee?.full_name || '',
+            position: selectedEmployee?.position || '',
+        };
         setApprovers(newApprovers);
     };
     const removeApprover = (index) => setApprovers(approvers.filter((_, i) => i !== index));
@@ -78,7 +83,12 @@ export default function ExpenseReportPage() {
     const addReferrer = () => setReferrers([...referrers, { id: '' }]);
     const handleReferrerChange = (index, id) => {
         const newReferrers = [...referrers];
-        newReferrers[index].id = id;
+        const selectedEmployee = allEmployees.find(emp => emp.id === id);
+        newReferrers[index] = {
+            id: id,
+            full_name: selectedEmployee?.full_name || '',
+            position: selectedEmployee?.position || '',
+        };
         setReferrers(newReferrers);
     };
     const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
@@ -107,19 +117,39 @@ export default function ExpenseReportPage() {
             originalFileName = attachmentFile.name;
         }
 
-        // ★★★ 3. ID 목록을 배열로 만들어 API에 전달 ★★★
-        const approver_ids = approvers.map(app => app.id);
-        const referrer_ids = referrers.map(ref => ref.id);
+        const approver_ids_with_names = approvers.map(app => ({
+            id: app.id,
+            full_name: allEmployees.find(emp => emp.id === app.id)?.full_name || '알 수 없음',
+            position: allEmployees.find(emp => emp.id === app.id)?.position || '알 수 없음',
+        }));
+        const referrer_ids_with_names = referrers.map(ref => ({
+            id: ref.id,
+            full_name: allEmployees.find(emp => emp.id === ref.id)?.full_name || '알 수 없음',
+            position: allEmployees.find(emp => emp.id === ref.id)?.position || '알 수 없음',
+        }));
 
         const submissionData = {
             title: formData.title,
-            content: JSON.stringify(formData),
+            content: JSON.stringify({
+                ...formData,
+                // [수정] requesterName, Department, Position은 여기서 바로 formData에 추가
+                requesterName: employee.full_name,
+                requesterDepartment: employee.department,
+                requesterPosition: employee.position,
+            }),
             document_type: 'expense_report',
-            approver_ids,
-            referrer_ids,
+            approver_ids: approver_ids_with_names,
+            referrer_ids: referrer_ids_with_names,
             attachment_url: fileUrl,
             attachment_filename: originalFileName,
+            // [추가] API Route에서 직접 사용할 requester 정보들을 추가
+            requester_id: employee.id,
+            requester_name: employee.full_name,
+            requester_department: employee.department,
+            requester_position: employee.position,
         };
+        
+        console.log("Submitting:", submissionData);
 
         try {
             const response = await fetch('/api/submit-approval', {
@@ -132,7 +162,7 @@ export default function ExpenseReportPage() {
                 throw new Error(errorData.error || '상신 실패');
             }
             toast.success("지출결의서가 성공적으로 상신되었습니다.");
-            router.push('/approvals');
+            router.push('/mypage');
         } catch (error) {
             toast.error(`지출결의서 상신 실패: ${error.message}`);
         } finally {
@@ -141,6 +171,8 @@ export default function ExpenseReportPage() {
     };
 
     if (employeeLoading) return <div className="flex justify-center items-center h-screen">로딩 중...</div>;
+    // employee가 없으면 (로그인 안 된 경우 등) 로그인 페이지로 리다이렉트 또는 에러 메시지
+    if (!employee) return <div className="flex justify-center items-center h-screen text-red-500">직원 정보를 불러올 수 없습니다. 다시 로그인 해주세요.</div>;
 
     return (
         <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
@@ -152,7 +184,7 @@ export default function ExpenseReportPage() {
                         <tr><th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">기안부서</th><td className="p-2 w-2/5 border-b border-r">{employee?.department}</td><th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직 위</th><td className="p-2 w-1/5 border-b">{employee?.position}</td></tr>
                         <tr><th className="p-2 bg-gray-100 font-bold text-left border-r">기안자</th><td className="p-2 border-r">{employee?.full_name}</td><th className="p-2 bg-gray-100 font-bold text-left border-r">기안일자</th><td className="p-2">{new Date().toLocaleDateString('ko-KR')}</td></tr>
                     </tbody></table></div>
-                    
+
                     <div className="mb-8 border border-gray-300">
                         <h2 className="p-2 bg-gray-100 font-bold border-b">지출 정보</h2>
                         <div className="p-4 space-y-4">
@@ -164,6 +196,15 @@ export default function ExpenseReportPage() {
                                 <div><label className="block text-gray-700 font-bold mb-2 text-sm">계정 과목</label><select name="accountType" value={formData.accountType} onChange={handleChange} className="w-full p-2 border rounded-md text-sm"><option>교통비</option><option>식비</option><option>비품구매</option><option>접대비</option><option>기타</option></select></div>
                                 <div><label className="block text-gray-700 font-bold mb-2 text-sm">결제 수단</label><select name="paymentMethod" value={formData.paymentMethod} onChange={handleChange} className="w-full p-2 border rounded-md text-sm"><option>법인카드</option><option>개인카드</option><option>현금</option></select></div>
                             </div>
+                            {formData.paymentMethod === '법인카드' && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-gray-700 font-bold mb-2 text-sm">카드번호 뒷 4자리</label>
+                                        <input type="text" name="cardNumberLastFour" value={formData.cardNumberLastFour} onChange={handleChange} placeholder="XXXX" maxLength="4" className="w-full p-2 border rounded-md text-sm" />
+                                    </div>
+                                    <div>{/* 빈 공간 */}</div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -172,7 +213,6 @@ export default function ExpenseReportPage() {
             </div>
             <div className="w-96 p-8">
                 <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
-                    {/* ★★★ 4. 결재선과 참조인 UI를 동적으로 변경 ★★★ */}
                     <div className="border-b pb-4">
                         <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">결재선</h2><button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
                         <div className="space-y-3">
