@@ -1,10 +1,11 @@
 "use client";
 import { useState } from 'react';
 
-const DEPARTMENTS = ['최고 경영진', '비서실', '전략기획부', '관리부', '공무부', '공사부', '시설부', '장비지원부'];
-// ★★★ '부사장'이 제거되고, '상무'가 '이사'로 변경되었습니다. ★★★
+const DEPARTMENTS = ['최고 경영진', '비서실', '전략기획부', '관리부', '공무부', '공사부', '시설부', '장비지원부', '굴취팀'];
 const POSITIONS = ['회장', '대표', '이사', '부장', '차장', '과장', '대리', '주임', '사원'];
 const STATUSES = ['업무중', '외근중', '회의중', '휴가중', '연차중', '오프라인'];
+// --- [추가] 재직 상태 목록 ---
+const EMPLOYMENT_STATUSES = ['재직', '휴직', '퇴사'];
 
 export default function UserModal({ userToEdit, onClose, onSave }) {
     const isEditMode = Boolean(userToEdit);
@@ -17,6 +18,8 @@ export default function UserModal({ userToEdit, onClose, onSave }) {
         phone: userToEdit?.phone || '',
         status: userToEdit?.status || '업무중',
         role: userToEdit?.role || 'user',
+        // --- [추가] 재직 상태 필드 ---
+        employment_status: userToEdit?.employment_status || '재직',
     });
     
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -35,6 +38,8 @@ export default function UserModal({ userToEdit, onClose, onSave }) {
                         <div><label>직급</label><select name="position" value={formData.position} onChange={handleChange} className="w-full p-2 border rounded mt-1 bg-white">{POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
                         <div><label>연락처</label><input name="phone" value={formData.phone} onChange={handleChange} className="w-full p-2 border rounded mt-1"/></div>
                         <div><label>활동 상태</label><select name="status" value={formData.status} onChange={handleChange} className="w-full p-2 border rounded mt-1 bg-white">{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                        {/* --- [추가] 재직 상태 선택 드롭다운 --- */}
+                        <div><label>재직 상태</label><select name="employment_status" value={formData.employment_status} onChange={handleChange} className="w-full p-2 border rounded mt-1 bg-white">{EMPLOYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                         <div><label>역할 (Role)</label><select name="role" value={formData.role} onChange={handleChange} className="w-full p-2 border rounded mt-1 bg-white"><option value="user">User</option><option value="admin">Admin</option></select></div>
                     </div>
                     <div className="flex justify-end gap-4 pt-6"><button type="button" onClick={onClose} className="px-6 py-2 bg-gray-200 rounded-md">취소</button><button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-md">{isEditMode ? '수정사항 저장' : '직원 추가'}</button></div>
