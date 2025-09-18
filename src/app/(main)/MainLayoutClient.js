@@ -1,5 +1,5 @@
 // 파일 경로: src/app/(main)/MainLayoutClient.js
-'use client'; // 이 파일이 클라이언트 컴포넌트임을 명시합니다.
+'use client'; 
 
 import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
@@ -18,9 +18,23 @@ export default function MainLayoutClient({ children }) {
     const isChatRoomPage = pathname.startsWith('/chatrooms/');
 
     useEffect(() => {
+        // --- [수정] 서비스 워커 등록을 직접 확인하는 디버깅 코드로 변경 ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('✅ Service Worker registered successfully:', registration);
+                    // 등록 성공 후, 푸시 알림 구독 로직을 여기에 추가할 수 있습니다.
+                    // (일단 등록부터 확인하는 것이 우선입니다.)
+                })
+                .catch(error => {
+                    console.error('🚨 Service Worker registration failed:', error);
+                });
+        } else {
+            console.warn('Service Worker is not supported in this browser.');
+        }
+
         const checkSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            
             if (!session) {
                 router.push('/login');
             }
