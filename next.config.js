@@ -5,6 +5,8 @@ const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
   skipWaiting: true,
+  // --- [추가] 우리가 만든 커스텀 워커 파일을 PWA 설정에 등록합니다. ---
+  swSrc: 'public/worker.js', 
 });
 
 // 기존 Next.js 설정을 이곳에 유지합니다.

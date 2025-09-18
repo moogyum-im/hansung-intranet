@@ -1,22 +1,23 @@
+# supabase/config.toml
 
 [functions.process-leave-approval]
 enabled = true
 verify_jwt = true
 import_map = "./functions/process-leave-approval/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/process-leave-approval/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/process-leave-approval/*.html" ]
 
 [functions.sync-tree-sales]
 enabled = true
 verify_jwt = true
 import_map = "./functions/sync-tree-sales/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/sync-tree-sales/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/sync-tree-sales/*.html" ]
+
+# --- [수정] 이 섹션의 import_map 경로를 수정합니다. ---
+[functions.push-sender]
+enabled = true
+verify_jwt = true
+# deno.json 대신 import_map.json을 사용하도록 경로를 수정합니다.
+import_map = "./functions/push-sender/import_map.json" 
+entrypoint = "./functions/push-sender/index.ts"
+
+# 맨 아래에 중복으로 추가했던 부분은 삭제합니다.
