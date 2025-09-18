@@ -1,5 +1,19 @@
 // public/worker.js
 
+// Workbox 라이브러리를 import 합니다.
+if (typeof importScripts === 'function') {
+  importScripts('https://storage.googleapis.com/workbox-cdn/releases/6.4.1/workbox-sw.js');
+}
+
+// Workbox가 precache할 파일 목록을 주입할 자리입니다.
+// 이 변수 이름은 반드시 self.__WB_MANIFEST 이어야 합니다.
+if (self.workbox) {
+  self.workbox.precaching.precacheAndRoute(self.__WB_MANIFEST || []);
+}
+
+
+// --- 기존 푸시 알림 로직은 여기에 그대로 유지합니다 ---
+
 // 서비스 워커가 설치될 때 즉시 활성화되도록 합니다.
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
@@ -24,7 +38,7 @@ self.addEventListener('push', (event) => {
     },
   };
 
-  if ('setAppBadge' in navigator) {
+  if ('setAppBadge' in navigator && navigator.setAppBadge) {
     if (payload.badgeCount) {
       navigator.setAppBadge(payload.badgeCount);
     }
@@ -37,6 +51,6 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
-    clients.openWindow(event.notification.data.url || '/')
+    self.clients.openWindow(event.notification.data.url || '/')
   );
 });
