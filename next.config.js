@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 
-// --- [수정] 라이브러리 경로를 새로운 것으로 변경 ---
-const withPWA = require('@ducanh2912/next-pwa')({
+// --- [수정] require 대신 import 구문으로 변경 ---
+import nextPWA from '@ducanh2912/next-pwa';
+
+const withPWA = nextPWA({
   dest: 'public',
   register: true,
   skipWaiting: true,
@@ -20,4 +22,5 @@ const nextConfig = {
   },
 };
 
-module.exports = withPWA(nextConfig);
+// --- [수정] export 방식 변경 ---
+export default withPWA(nextConfig);
