@@ -30,8 +30,10 @@ export default function MainLayoutClient({ children }) {
     const isChatRoomPage = pathname.startsWith('/chatrooms/');
 
     useEffect(() => {
-        const setupPushNotifications = async (registration) => {
+        const setupPushNotifications = async () => {
+            // --- [수정] navigator.serviceWorker.ready를 사용해 서비스 워커가 'active' 상태일 때까지 기다립니다. ---
             try {
+                const registration = await navigator.serviceWorker.ready;
                 let subscription = await registration.pushManager.getSubscription();
                 
                 if (subscription === null) {
@@ -58,31 +60,20 @@ export default function MainLayoutClient({ children }) {
         };
 
         if ('serviceWorker' in navigator && 'PushManager' in window) {
-            navigator.serviceWorker.register('/sw.js')
-                .then(registration => {
-                    console.log('✅ Service Worker registered successfully:', registration);
-                    // 서비스 워커 등록 성공 후, 로그인 상태를 확인하고 구독 절차 진행
-                    supabase.auth.getSession().then(({ data: { session } }) => {
-                        if (session) {
-                            setupPushNotifications(registration);
-                        }
-                    });
-                })
-                .catch(error => {
-                    console.error('🚨 Service Worker registration failed:', error);
-                });
-        } else {
-            console.warn('Service Worker is not supported in this browser.');
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                if (session) {
+                    // 로그인 상태가 확인되면 푸시 알림 설정을 시작합니다.
+                    setupPushNotifications();
+                }
+            });
         }
 
         const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_OUT') {
                 router.push('/login');
-            } else if (event === 'SIGNED_IN') {
+            } else if (event === 'SIGNED_IN' && 'serviceWorker' in navigator) {
                  // 로그인 시에도 알림 구독 재확인
-                 if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-                    navigator.serviceWorker.ready.then(setupPushNotifications);
-                 }
+                 setupPushNotifications();
             }
         });
 
