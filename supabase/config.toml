@@ -12,12 +12,9 @@ verify_jwt = true
 import_map = "./functions/sync-tree-sales/deno.json"
 entrypoint = "./functions/sync-tree-sales/index.ts"
 
-# --- [수정] 이 섹션의 import_map 경로를 수정합니다. ---
 [functions.push-sender]
 enabled = true
-verify_jwt = true
-# deno.json 대신 import_map.json을 사용하도록 경로를 수정합니다.
+# --- [수정] 이 값을 false로 변경하여 인증을 잠시 건너뜁니다. ---
+verify_jwt = false 
 import_map = "./functions/push-sender/import_map.json" 
 entrypoint = "./functions/push-sender/index.ts"
-
-# 맨 아래에 중복으로 추가했던 부분은 삭제합니다.
