@@ -30,25 +30,25 @@ export default function MainLayoutClient({ children }) {
     const isChatRoomPage = pathname.startsWith('/chatrooms/');
 
     useEffect(() => {
+        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        // --- [중요 디버깅 코드] Vercel에서 환경 변수를 제대로 읽어오는지 확인합니다. ---
+        console.log('🔑 VAPID Public Key from env:', vapidPublicKey);
+
         const setupPushNotifications = async () => {
-            // --- [수정] navigator.serviceWorker.ready를 사용해 서비스 워커가 'active' 상태일 때까지 기다립니다. ---
             try {
                 const registration = await navigator.serviceWorker.ready;
                 let subscription = await registration.pushManager.getSubscription();
                 
                 if (subscription === null) {
                     console.log('Push Subscription not found, subscribing...');
-                    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
                     if (!vapidPublicKey) {
                         console.error('🚨 VAPID public key is not defined!');
                         return;
                     }
-
                     subscription = await registration.pushManager.subscribe({
                         userVisibleOnly: true,
                         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
                     });
-                    
                     console.log('✅ New Push Subscription created, saving to DB...');
                     await saveSubscription(subscription);
                 } else {
@@ -62,7 +62,6 @@ export default function MainLayoutClient({ children }) {
         if ('serviceWorker' in navigator && 'PushManager' in window) {
             supabase.auth.getSession().then(({ data: { session } }) => {
                 if (session) {
-                    // 로그인 상태가 확인되면 푸시 알림 설정을 시작합니다.
                     setupPushNotifications();
                 }
             });
@@ -72,14 +71,10 @@ export default function MainLayoutClient({ children }) {
             if (event === 'SIGNED_OUT') {
                 router.push('/login');
             } else if (event === 'SIGNED_IN' && 'serviceWorker' in navigator) {
-                 // 로그인 시에도 알림 구독 재확인
                  setupPushNotifications();
             }
         });
-
-        return () => {
-            authListener.subscription.unsubscribe();
-        };
+        return () => { authListener.subscription.unsubscribe(); };
     }, [router]);
 
     return (
@@ -90,9 +85,7 @@ export default function MainLayoutClient({ children }) {
                 <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
                 <div className="flex-1 flex flex-col overflow-hidden">
                     <header className="lg:hidden flex justify-between items-center bg-white p-4 border-b">
-                        <button onClick={() => setSidebarOpen(true)} className="text-gray-500 focus:outline-none" aria-label="Open sidebar">
-                            <MenuIcon />
-                        </button>
+                        <button onClick={() => setSidebarOpen(true)} className="text-gray-500 focus:outline-none" aria-label="Open sidebar"><MenuIcon /></button>
                         <h1 className="text-xl font-semibold">HANSUNG</h1>
                         <div className="w-6"></div>
                     </header>
