@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+// --- [추가] 푸시 알림 테스트 버튼 컴포넌트를 가져옵니다. ---
+import PushSubscriptionButton from '@/components/PushSubscriptionButton';
 
 // 아이콘 컴포넌트들
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
@@ -25,6 +27,17 @@ export default function ResourcesClient({ initialResources }) {
                 <p className="mt-2 text-sm text-gray-600">
                     업무에 필요한 각종 로고, 서식, 템플릿 파일을 다운로드할 수 있습니다.
                 </p>
+                
+                {/* --- [추가] 여기에 테스트 버튼을 추가합니다. --- */}
+                <div className="mt-6 p-4 border-2 border-dashed border-gray-300 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-700">푸시 알림 테스트</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                        모바일 기기에서 아래 버튼을 눌러 구독 정보를 확인하고, PC에서 curl 명령어로 테스트하세요.
+                    </p>
+                    <div className="mt-3">
+                        <PushSubscriptionButton />
+                    </div>
+                </div>
             </header>
 
             <div className="mb-6">
@@ -55,7 +68,6 @@ export default function ResourcesClient({ initialResources }) {
                                     </div>
                                 </div>
                                 <div className="bg-gray-50 p-4 border-t">
-                                    {/* [수정] href에 버킷 이름을 'resources'로 지정하여 전달합니다. */}
                                     <a
                                         href={`/api/files/download?path=${encodeURIComponent(resource.file_path)}&name=${encodeURIComponent(resource.name)}&bucket=resources`}
                                         className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition"
