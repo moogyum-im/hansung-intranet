@@ -1,12 +1,13 @@
 /** @type {import('next').NextConfig} */
 
-// --- [수정] require 대신 import 구문으로 변경 ---
 import nextPWA from '@ducanh2912/next-pwa';
 
 const withPWA = nextPWA({
   dest: 'public',
   register: true,
   skipWaiting: true,
+  // --- [추가] 런타임 캐싱 기능을 비활성화하여 데이터 로딩 충돌을 방지합니다. ---
+  runtimeCaching: [],
 });
 
 const nextConfig = {
@@ -22,5 +23,4 @@ const nextConfig = {
   },
 };
 
-// --- [수정] export 방식 변경 ---
 export default withPWA(nextConfig);
