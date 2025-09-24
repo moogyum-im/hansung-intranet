@@ -30,32 +30,36 @@ export default function MainLayoutClient({ children }) {
     const isChatRoomPage = pathname.startsWith('/chatrooms/');
 
     useEffect(() => {
-        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-        // --- [중요 디버깅 코드] Vercel에서 환경 변수를 제대로 읽어오는지 확인합니다. ---
-        console.log('🔑 VAPID Public Key from env:', vapidPublicKey);
-
         const setupPushNotifications = async () => {
             try {
                 const registration = await navigator.serviceWorker.ready;
-                let subscription = await registration.pushManager.getSubscription();
                 
-                if (subscription === null) {
-                    console.log('Push Subscription not found, subscribing...');
-                    if (!vapidPublicKey) {
-                        console.error('🚨 VAPID public key is not defined!');
-                        return;
-                    }
-                    subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-                    });
-                    console.log('✅ New Push Subscription created, saving to DB...');
-                    await saveSubscription(subscription);
-                } else {
-                    console.log('✅ Existing Push Subscription found.');
+                // --- [수정] 기존 구독을 먼저 찾아보고, 있다면 강제로 해지합니다. ---
+                const existingSubscription = await registration.pushManager.getSubscription();
+                if (existingSubscription) {
+                    await existingSubscription.unsubscribe();
+                    console.log('Unsubscribed existing subscription to ensure a fresh start.');
                 }
+
+                // 항상 새로운 구독을 생성합니다.
+                console.log('Subscribing for new push notification...');
+                const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+                if (!vapidPublicKey) {
+                    console.error('🚨 VAPID public key is not defined!');
+                    return;
+                }
+
+                const newSubscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+                });
+                
+                console.log('✅ New Push Subscription created, saving to DB...');
+                await saveSubscription(newSubscription);
+                console.log('✅ Subscription saved to DB.');
+
             } catch (error) {
-                console.error('🚨 Failed to subscribe to push notifications', error);
+                console.error('🚨 Failed to set up push notifications', error);
             }
         };
 
