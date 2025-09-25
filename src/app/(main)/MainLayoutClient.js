@@ -8,20 +8,16 @@ import GlobalChatListener from '@/components/GlobalChatListener';
 import { usePathname, useRouter } from 'next/navigation';
 import { Toaster } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
-import { saveSubscription } from '@/actions/pushActions';
+// -------------------------------------------------------------
+// [수정] 푸시 알림 관련 import 구문을 모두 삭제합니다.
+// import { saveSubscription } from '@/actions/pushActions';
+// -------------------------------------------------------------
 
 const MenuIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg> );
 
-function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-}
+// -------------------------------------------------------------
+// [수정] urlBase64ToUint8Array 헬퍼 함수를 삭제합니다.
+// -------------------------------------------------------------
 
 export default function MainLayoutClient({ children }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -30,54 +26,28 @@ export default function MainLayoutClient({ children }) {
     const isChatRoomPage = pathname.startsWith('/chatrooms/');
 
     useEffect(() => {
-        const setupPushNotifications = async () => {
-            try {
-                const registration = await navigator.serviceWorker.ready;
-                let subscription = await registration.pushManager.getSubscription();
-                
-                // --- [최종 수정] 기존 구독이 없으면 새로 만들고, 있으면 그대로 사용합니다. ---
-                if (subscription === null) {
-                    console.log('Push Subscription not found, subscribing...');
-                    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-                    if (!vapidPublicKey) {
-                        console.error('🚨 VAPID public key is not defined!');
-                        return;
-                    }
-
-                    subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-                    });
-                    
-                    console.log('✅ New Push Subscription created, saving to DB...');
-                    await saveSubscription(subscription);
-                } else {
-                    console.log('✅ Existing Push Subscription found.');
-                }
-            } catch (error) {
-                console.error('🚨 Failed to subscribe to push notifications', error);
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (!session) {
+                router.push('/login');
             }
         };
 
-        if ('serviceWorker' in navigator && 'PushManager' in window) {
-            supabase.auth.getSession().then(({ data: { session } }) => {
-                if (session) {
-                    setupPushNotifications();
-                }
-            });
-        }
+        checkSession();
 
         const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_OUT') {
                 router.push('/login');
-            } else if (event === 'SIGNED_IN' && 'serviceWorker' in navigator) {
-                 setupPushNotifications();
             }
         });
 
         return () => {
             authListener.subscription.unsubscribe();
         };
+        // -------------------------------------------------------------
+        // [수정] 푸시 알림 관련 코드를 useEffect 훅에서 모두 삭제했습니다.
+        // -------------------------------------------------------------
     }, [router]);
 
     return (

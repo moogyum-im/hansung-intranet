@@ -1,16 +1,16 @@
 // 파일 경로: src/app/(main)/dashboard/page.js
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardCalendar from './DashboardCalendar';
-// --- [추가] 푸시 알림 구독 훅을 가져옵니다. ---
-import { usePushNotifications } from '@/hooks/usePushNotifications';
+// --- [추가] 푸시 알림 버튼 컴포넌트를 가져옵니다. ---
+import PushSubscriptionButton from '@/components/PushSubscriptionButton'; 
 
-// --- 아이콘 컴포넌트 (기존과 동일) ---
+// --- 아이콘 컴포넌트들 (기존과 동일) ---
 const ApprovalIcon = () => (<svg className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>);
 const ChatIcon = () => (<svg className="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>);
 
@@ -100,31 +100,29 @@ function NotificationWidget() {
 export default function DashboardPage() {
     const { employee: currentUser, loading: employeeLoading } = useEmployee();
     const [notices, setNotices] = useState([]);
-    // --- [추가] 푸시 알림 훅을 사용합니다. ---
-    const { subscribeToPush } = usePushNotifications();
-
+    
+    // --- [수정] 자동 구독 로직을 삭제합니다. ---
     useEffect(() => {
         const fetchNotices = async () => {
             const { data } = await supabase.from('notices').select(`id, title, created_at`).order('created_at', { ascending: false }).limit(5);
             setNotices(data || []);
         };
         fetchNotices();
-        
-        // --- [추가] 페이지가 로드되고 사용자 정보가 있을 때 푸시 구독을 시도합니다. ---
-        if (currentUser) {
-            console.log('사용자 정보 확인됨, 푸시 구독 시도...');
-            subscribeToPush();
-        }
-
-    }, [currentUser, subscribeToPush]); // currentUser가 변경될 때도 실행되도록 의존성 배열에 추가
+    }, []);
     
     if (employeeLoading) return <div className="h-full flex items-center justify-center"><p>대시보드 정보를 불러오는 중...</p></div>;
 
     return (
         <div className="p-4 sm:p-6 space-y-6 bg-gray-50 min-h-full">
-            <header>
-                <h1 className="text-2xl font-bold text-gray-900">안녕하세요, {currentUser?.full_name || '사용자'}님! 👋</h1>
-                <p className="text-gray-500 text-sm mt-1">오늘도 힘찬 하루 보내세요.</p>
+            <header className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">안녕하세요, {currentUser?.full_name || '사용자'}님! 👋</h1>
+                    <p className="text-gray-500 text-sm mt-1">오늘도 힘찬 하루 보내세요.</p>
+                </div>
+                {/* --- [추가] 푸시 알림 버튼을 여기에 배치합니다. --- */}
+                <div className="w-40">
+                    <PushSubscriptionButton />
+                </div>
             </header>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
