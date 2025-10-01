@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
+import FileUploadDnd from '@/components/FileUploadDnd';
 
 export default function LeaveRequestPage() {
     const { employee, loading: employeeLoading } = useEmployee();
@@ -22,6 +23,8 @@ export default function LeaveRequestPage() {
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
     const [loading, setLoading] = useState(false);
+    // --- [수정] --- 여러 파일을 저장하기 위해 배열로 상태를 관리합니다.
+    const [attachments, setAttachments] = useState([]);
 
     useEffect(() => {
         const fetchEmployees = async () => {
@@ -58,6 +61,11 @@ export default function LeaveRequestPage() {
     };
     const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
 
+    // --- [수정] --- 파일 목록 전체를 상태에 저장합니다.
+    const handleUploadComplete = (files) => {
+        setAttachments(files);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -81,7 +89,6 @@ export default function LeaveRequestPage() {
 
         const submissionData = {
             title: `휴가신청서 (${employee?.full_name})`,
-            // [핵심 수정] content JSON에 기안자 정보를 포함시킵니다.
             content: JSON.stringify({
                 ...formData,
                 requesterName: employee.full_name,
@@ -91,11 +98,12 @@ export default function LeaveRequestPage() {
             document_type: 'leave_request',
             approver_ids: approver_ids_with_names,
             referrer_ids: referrer_ids_with_names,
-            // [핵심 수정] API가 사용할 수 있도록 기안자 정보를 별도로 전달합니다.
             requester_id: employee.id,
             requester_name: employee.full_name,
             requester_department: employee.department,
             requester_position: employee.position,
+            // --- [수정] --- 파일 배열을 API로 전송합니다.
+            attachments: attachments.length > 0 ? attachments : null,
         };
         
         try {
@@ -164,6 +172,9 @@ export default function LeaveRequestPage() {
                         <div>
                             <label className="block text-gray-700 font-bold mb-2 text-sm">휴가 사유</label>
                             <textarea name="reason" value={formData.reason} onChange={handleChange} className="w-full p-3 border rounded-md h-40 resize-none" required />
+                        </div>
+                        <div className="pt-2">
+                            <FileUploadDnd onUploadComplete={handleUploadComplete} />
                         </div>
                     </div>
                 </div>

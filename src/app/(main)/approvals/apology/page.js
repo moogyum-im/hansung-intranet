@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
+import FileUploadDnd from '@/components/FileUploadDnd';
 
-export default function ApologyPage() { // ResignationPage가 아닌 ApologyPage로 컴포넌트 이름 변경
+export default function ApologyPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
 
@@ -21,18 +22,10 @@ export default function ApologyPage() { // ResignationPage가 아닌 ApologyPage
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [documentNumber, setDocumentNumber] = useState(''); // 문서번호 추가
+    // --- [추가] --- 여러 파일을 저장하기 위해 배열 상태를 추가합니다.
+    const [attachments, setAttachments] = useState([]);
 
-    useEffect(() => {
-        // 문서번호 생성 로직
-        const date = new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const timestamp = date.getTime().toString().slice(-4);
-        const documentPrefix = '시말'; // 시말서 문서의 경우 '시말' 접두사 사용
-        setDocumentNumber(`${documentPrefix}-${year}${month}${day}-${timestamp}`);
-    }, []);
+    // --- [삭제] --- 문서번호 관련 state와 useEffect를 모두 제거합니다.
 
     useEffect(() => {
         const fetchEmployees = async () => {
@@ -51,6 +44,11 @@ export default function ApologyPage() { // ResignationPage가 아닌 ApologyPage
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    // --- [추가] --- 파일 업로드 완료 시 호출될 콜백 함수입니다.
+    const handleUploadComplete = (files) => {
+        setAttachments(files);
     };
 
     const addApprover = () => setApprovers([...approvers, { id: '' }]);
@@ -84,7 +82,6 @@ export default function ApologyPage() { // ResignationPage가 아닌 ApologyPage
             return;
         }
 
-        // [핵심 수정] approver_ids와 referrer_ids를 full_name, position 포함한 객체 배열로 변경
         const approver_ids_with_details = approvers.map(app => {
             const emp = allEmployees.find(e => e.id === app.id);
             return {
@@ -103,21 +100,18 @@ export default function ApologyPage() { // ResignationPage가 아닌 ApologyPage
         });
 
         const submissionData = {
-            title: `시말서 (${employee?.full_name})`, // 실제 문서 제목
-            // [핵심 수정] content JSON에 기안자 정보를 포함
+            title: `시말서 (${employee?.full_name})`,
             content: JSON.stringify({
                 ...formData,
                 requesterName: employee.full_name,
                 requesterDepartment: employee.department,
                 requesterPosition: employee.position,
-                submitterName: employee.full_name, // 시말서 제출자 본인 정보
-                submitterDepartment: employee.department,
-                submitterPosition: employee.position,
             }),
             document_type: 'apology',
-            approver_ids: approver_ids_with_details, // 수정된 객체 배열 사용
-            referrer_ids: referrer_ids_with_details,   // 수정된 객체 배열 사용
-            // [핵심 수정] API가 사용할 수 있도록 기안자 정보 별도 전달 (기존 approval schema 호환)
+            approver_ids: approver_ids_with_details,
+            referrer_ids: referrer_ids_with_details,
+            // --- [추가] --- 파일 배열을 API로 전송합니다.
+            attachments: attachments.length > 0 ? attachments : null,
             requester_id: employee.id,
             requester_name: employee.full_name,
             requester_department: employee.department,
@@ -135,7 +129,7 @@ export default function ApologyPage() { // ResignationPage가 아닌 ApologyPage
                 throw new Error(errorData.error || '상신 실패');
             }
             toast.success("시말서가 성공적으로 상신되었습니다.");
-            router.push('/mypage'); // 마이페이지 또는 결재함으로 이동
+            router.push('/mypage');
         } catch (error) {
             toast.error(`시말서 상신 실패: ${error.message}`);
         } finally {
@@ -151,8 +145,8 @@ export default function ApologyPage() { // ResignationPage가 아닌 ApologyPage
             <div className="flex-1">
                 <div className="bg-white p-10 rounded-xl shadow-lg border">
                     <h1 className="text-2xl font-bold text-center mb-8">시 말 서</h1>
+                    {/* --- [수정] --- 문서번호 표시를 삭제하고 작성일만 남깁니다. --- */}
                     <div className="text-right text-sm text-gray-500 mb-4">
-                        <p>문서번호: {documentNumber}</p>
                         <p>작성일: {new Date().toLocaleDateString('ko-KR')}</p>
                     </div>
                     <div className="mb-8 border border-gray-300">
@@ -206,26 +200,14 @@ export default function ApologyPage() { // ResignationPage가 아닌 ApologyPage
             <div className="w-96 p-8">
                 <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
                     <div className="border-b pb-4">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold">결재선</h2>
-                            <button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button>
-                        </div>
+                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">결재선</h2><button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
                         <div className="space-y-3">
                             {approvers.map((approver, index) => (
                                 <div key={index} className="flex items-center space-x-2">
                                     <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
-                                    <select
-                                        value={approver.id}
-                                        onChange={(e) => handleApproverChange(index, e.target.value)}
-                                        className="w-full p-2 border rounded-md text-sm"
-                                        required
-                                    >
+                                    <select value={approver.id} onChange={(e) => handleApproverChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm" required >
                                         <option value="">결재자 선택</option>
-                                        {allEmployees.map(emp => (
-                                            <option key={emp.id} value={emp.id}>
-                                                {emp.full_name} ({emp.position})
-                                            </option>
-                                        ))}
+                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
                                     <button type="button" onClick={() => removeApprover(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
                                 </div>
@@ -233,29 +215,23 @@ export default function ApologyPage() { // ResignationPage가 아닌 ApologyPage
                         </div>
                     </div>
                     <div className="border-b pb-4">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold">참조인</h2>
-                            <button type="button" onClick={addReferrer} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button>
-                        </div>
+                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">참조인</h2><button type="button" onClick={addReferrer} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
                         <div className="space-y-3">
                             {referrers.map((referrer, index) => (
                                 <div key={index} className="flex items-center space-x-2">
-                                    <select
-                                        value={referrer.id}
-                                        onChange={(e) => handleReferrerChange(index, e.target.value)}
-                                        className="w-full p-2 border rounded-md text-sm"
-                                    >
+                                    <select value={referrer.id} onChange={(e) => handleReferrerChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm">
                                         <option value="">참조인 선택</option>
-                                        {allEmployees.map(emp => (
-                                            <option key={emp.id} value={emp.id}>
-                                                {emp.full_name} ({emp.position})
-                                            </option>
-                                        ))}
+                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
                                     <button type="button" onClick={() => removeReferrer(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
                                 </div>
                             ))}
                         </div>
+                    </div>
+                    {/* --- [추가] --- 파일 업로드 컴포넌트를 여기에 삽입합니다. --- */}
+                    <div className="border-b pb-4">
+                        <h2 className="text-lg font-bold mb-2">증빙 자료 (선택)</h2>
+                        <FileUploadDnd onUploadComplete={handleUploadComplete} />
                     </div>
                     <button type="submit" disabled={loading} className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold">
                         {loading ? '상신 중...' : '시말서 상신'}

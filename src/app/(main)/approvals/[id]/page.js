@@ -36,10 +36,10 @@ export default function ApprovalDetailPage() {
             setError(null);
             try {
                 // 1. 메인 문서 정보 (approval_documents) 가져오기
-                // ★★★ 여기는 기존처럼 '*'만 select 합니다. ★★★
+                // --- [수정] --- select('*') 대신 필요한 모든 컬럼을 명시적으로 지정합니다.
                 const { data: docDataOriginal, error: docError } = await supabase
                     .from('approval_documents')
-                    .select('*') // 다른 문서 타입과의 호환성을 위해 '*' 유지
+                    .select('*, document_number') // document_number를 명시적으로 포함
                     .eq('id', documentId)
                     .single();
 
@@ -54,7 +54,7 @@ export default function ApprovalDetailPage() {
                     console.warn(`Document with ID ${documentId} not found in approval_documents.`);
                     notFound();
                 }
-
+                
                 // ★★★ 2. 상신자 (requester) 정보 별도로 가져와서 docData에 추가합니다. ★★★
                 let finalDocData = { ...docDataOriginal }; // 원본 docData 복사
                 if (docDataOriginal.requester_id) {
@@ -80,7 +80,7 @@ export default function ApprovalDetailPage() {
                     .from('approval_document_approvers')
                     .select('*, approver:profiles!approver_id(id, full_name, department, position)') 
                     .eq('document_id', documentId)
-                    .order('order', { ascending: true });
+                    .order('sequence', { ascending: true }); // [수정] order -> sequence
 
                 if (approversError) {
                     console.error("Supabase approvers query error:", approversError);

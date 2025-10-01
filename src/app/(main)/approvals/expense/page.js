@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
+// --- [추가] --- 저희가 만든 파일 업로드 컴포넌트를 가져옵니다.
+import FileUploadDnd from '@/components/FileUploadDnd';
 
 export default function ExpenseReportPage() {
     const { employee, loading: employeeLoading } = useEmployee();
@@ -26,7 +27,8 @@ export default function ExpenseReportPage() {
 
     const [loading, setLoading] = useState(false);
     const [documentNumber, setDocumentNumber] = useState('');
-    const [attachmentFile, setAttachmentFile] = useState(null);
+    // --- [수정] --- 여러 파일을 저장하기 위해 배열 상태로 변경합니다.
+    const [attachments, setAttachments] = useState([]);
 
     useEffect(() => {
         const date = new Date();
@@ -59,12 +61,12 @@ export default function ExpenseReportPage() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleFileChange = (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-            setAttachmentFile(e.target.files[0]);
-        } else {
-            setAttachmentFile(null);
-        }
+    // --- [삭제] --- 기존 단일 파일 핸들러는 제거합니다.
+    // const handleFileChange = (e) => { ... };
+
+    // --- [추가] --- 여러 파일 업로드 완료 시 호출될 콜백 함수입니다.
+    const handleUploadComplete = (files) => {
+        setAttachments(files);
     };
 
     const addApprover = () => setApprovers([...approvers, { id: '' }]);
@@ -103,19 +105,7 @@ export default function ExpenseReportPage() {
             return;
         }
 
-        let fileUrl = null, originalFileName = null;
-        if (attachmentFile) {
-            const fileExt = attachmentFile.name.split('.').pop();
-            const safeFileName = `${uuidv4()}.${fileExt}`;
-            const { data: uploadData, error: uploadError } = await supabase.storage.from('approval-documents').upload(safeFileName, attachmentFile);
-            if (uploadError) {
-                toast.error(`파일 업로드 실패: ${uploadError.message}`);
-                setLoading(false); return;
-            }
-            const { data: urlData } = supabase.storage.from('approval-documents').getPublicUrl(uploadData.path);
-            fileUrl = urlData.publicUrl;
-            originalFileName = attachmentFile.name;
-        }
+        // --- [삭제] --- handleSubmit 함수 내의 기존 파일 업로드 로직을 모두 제거합니다.
 
         const approver_ids_with_names = approvers.map(app => ({
             id: app.id,
@@ -129,10 +119,9 @@ export default function ExpenseReportPage() {
         }));
 
         const submissionData = {
-            title: formData.title,
+            title: `지출결의서 (${employee?.full_name})`, // 제목에 작성자 이름 추가
             content: JSON.stringify({
                 ...formData,
-                // [수정] requesterName, Department, Position은 여기서 바로 formData에 추가
                 requesterName: employee.full_name,
                 requesterDepartment: employee.department,
                 requesterPosition: employee.position,
@@ -140,17 +129,14 @@ export default function ExpenseReportPage() {
             document_type: 'expense_report',
             approver_ids: approver_ids_with_names,
             referrer_ids: referrer_ids_with_names,
-            attachment_url: fileUrl,
-            attachment_filename: originalFileName,
-            // [추가] API Route에서 직접 사용할 requester 정보들을 추가
+            // --- [수정] --- 새로운 attachments 배열을 API로 전송합니다.
+            attachments: attachments.length > 0 ? attachments : null,
             requester_id: employee.id,
             requester_name: employee.full_name,
             requester_department: employee.department,
             requester_position: employee.position,
         };
         
-        console.log("Submitting:", submissionData);
-
         try {
             const response = await fetch('/api/submit-approval', {
                 method: 'POST',
@@ -171,7 +157,6 @@ export default function ExpenseReportPage() {
     };
 
     if (employeeLoading) return <div className="flex justify-center items-center h-screen">로딩 중...</div>;
-    // employee가 없으면 (로그인 안 된 경우 등) 로그인 페이지로 리다이렉트 또는 에러 메시지
     if (!employee) return <div className="flex justify-center items-center h-screen text-red-500">직원 정보를 불러올 수 없습니다. 다시 로그인 해주세요.</div>;
 
     return (
@@ -233,7 +218,7 @@ export default function ExpenseReportPage() {
                         <div className="space-y-3">
                             {referrers.map((referrer, index) => (
                                 <div key={index} className="flex items-center space-x-2">
-                                    <select value={referrer.id} onChange={(e) => handleReferrerChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm" required>
+                                    <select value={referrer.id} onChange={(e) => handleReferrerChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm">
                                         <option value="">참조인 선택</option>
                                         {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
@@ -242,7 +227,10 @@ export default function ExpenseReportPage() {
                             ))}
                         </div>
                     </div>
-                    <div className="border-b pb-4"><h2 className="text-lg font-bold mb-2">증빙 영수증 첨부</h2><input type="file" onChange={handleFileChange} className="w-full text-sm"/></div>
+                    {/* --- [수정] --- 기존 input을 FileUploadDnd 컴포넌트로 교체합니다. --- */}
+                    <div className="border-b pb-4">
+                        <FileUploadDnd onUploadComplete={handleUploadComplete} />
+                    </div>
                     <div className="border-b pb-4"><h2 className="text-lg font-bold mb-2">기안 의견</h2><textarea placeholder="의견을 입력하세요" className="w-full p-2 border rounded-md h-20 resize-none"></textarea></div>
                     <button type="submit" disabled={loading} className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold">{loading ? '상신 중...' : '결재 상신'}</button>
                 </form>

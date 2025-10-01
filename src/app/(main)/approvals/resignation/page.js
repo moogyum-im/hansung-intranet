@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
+import FileUploadDnd from '@/components/FileUploadDnd';
 
 export default function ResignationPage() {
     const { employee, loading: employeeLoading } = useEmployee();
@@ -14,25 +14,14 @@ export default function ResignationPage() {
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
     const [formData, setFormData] = useState({
-        title: '사직서', // 기본 타이틀은 유지하되, 나중에 기안자 이름으로 바뀔 것
+        title: '사직서',
         resignationDate: '',
-        residentId: '', // 주민등록번호 (생년월일-뒷자리 첫째)
+        residentId: '',
         resignationReason: '',
     });
     const [loading, setLoading] = useState(false);
-    const [documentNumber, setDocumentNumber] = useState(''); // 사용되지 않는 것 같지만, 남겨둠
-    const [attachmentFile, setAttachmentFile] = useState(null);
-
-    useEffect(() => {
-        // 문서번호 생성 로직 (사용되지 않는 것 같지만, 남겨둠)
-        const date = new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const timestamp = date.getTime().toString().slice(-4);
-        const documentPrefix = '인사'; // 인사 문서의 경우 '인사' 접두사 사용
-        setDocumentNumber(`${documentPrefix}-${year}${month}${day}-${timestamp}`);
-    }, []);
+    // --- [수정] --- 여러 파일을 저장하기 위해 배열 상태로 변경합니다.
+    const [attachments, setAttachments] = useState([]);
 
     useEffect(() => {
         const fetchEmployees = async () => {
@@ -42,7 +31,6 @@ export default function ResignationPage() {
         };
         if (!employeeLoading && employee) {
             fetchEmployees();
-            // 팀장 있으면 기본 결재자로 설정
             if (employee?.team_leader_id && employee.id !== employee.team_leader_id) {
                 setApprovers([{ id: employee.team_leader_id }]);
             }
@@ -54,12 +42,9 @@ export default function ResignationPage() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleFileChange = (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-            setAttachmentFile(e.target.files[0]);
-        } else {
-            setAttachmentFile(null);
-        }
+    // --- [추가] --- 여러 파일 업로드 완료 시 호출될 콜백 함수입니다.
+    const handleUploadComplete = (files) => {
+        setAttachments(files);
     };
 
     const addApprover = () => setApprovers([...approvers, { id: '' }]);
@@ -93,57 +78,30 @@ export default function ResignationPage() {
             return;
         }
 
-        let fileUrl = null, originalFileName = null;
-        if (attachmentFile) {
-            const fileExt = attachmentFile.name.split('.').pop();
-            const safeFileName = `${uuidv4()}.${fileExt}`;
-            const { data: uploadData, error: uploadError } = await supabase.storage.from('approval-documents').upload(safeFileName, attachmentFile);
-            if (uploadError) {
-                toast.error(`파일 업로드 실패: ${uploadError.message}`);
-                setLoading(false);
-                return;
-            }
-            const { data: urlData } = supabase.storage.from('approval-documents').getPublicUrl(uploadData.path);
-            fileUrl = urlData.publicUrl;
-            originalFileName = attachmentFile.name;
-        }
-        
-        // [핵심 수정] approver_ids와 referrer_ids를 full_name, position 포함한 객체 배열로 변경
+        // --- [삭제] --- 기존 단일 파일 업로드 로직 제거
+
         const approver_ids_with_details = approvers.map(app => {
             const emp = allEmployees.find(e => e.id === app.id);
-            return {
-                id: app.id,
-                full_name: emp?.full_name || '알 수 없음',
-                position: emp?.position || '알 수 없음',
-            };
+            return { id: app.id, full_name: emp?.full_name || '알 수 없음', position: emp?.position || '알 수 없음' };
         });
         const referrer_ids_with_details = referrers.map(ref => {
             const emp = allEmployees.find(e => e.id === ref.id);
-            return {
-                id: ref.id,
-                full_name: emp?.full_name || '알 수 없음',
-                position: emp?.position || '알 수 없음',
-            };
+            return { id: ref.id, full_name: emp?.full_name || '알 수 없음', position: emp?.position || '알 수 없음' };
         });
 
         const submissionData = {
-            title: `사직서 (${employee?.full_name})`, // 실제 문서 제목
-            // [핵심 수정] content JSON에 기안자 정보를 포함
+            title: `사직서 (${employee?.full_name})`,
             content: JSON.stringify({
                 ...formData,
                 requesterName: employee.full_name,
                 requesterDepartment: employee.department,
                 requesterPosition: employee.position,
-                submitterName: employee.full_name, // 사직서 제출자 본인 정보
-                submitterDepartment: employee.department,
-                submitterPosition: employee.position,
             }),
             document_type: 'resignation',
-            approver_ids: approver_ids_with_details, // 수정된 객체 배열 사용
-            referrer_ids: referrer_ids_with_details,   // 수정된 객체 배열 사용
-            attachment_url: fileUrl,
-            attachment_filename: originalFileName,
-            // [핵심 수정] API가 사용할 수 있도록 기안자 정보 별도 전달 (기존 approval schema 호환)
+            approver_ids: approver_ids_with_details,
+            referrer_ids: referrer_ids_with_details,
+            // --- [수정] --- 새로운 attachments 배열을 API로 전송합니다.
+            attachments: attachments.length > 0 ? attachments : null,
             requester_id: employee.id,
             requester_name: employee.full_name,
             requester_department: employee.department,
@@ -161,7 +119,7 @@ export default function ResignationPage() {
                 throw new Error(errorData.error || '상신 실패');
             }
             toast.success("사직서가 성공적으로 제출되었습니다.");
-            router.push('/mypage'); // 마이페이지 또는 결재함으로 이동
+            router.push('/mypage');
         } catch (error) {
             toast.error(`사직서 제출 실패: ${error.message}`);
         } finally {
@@ -171,7 +129,6 @@ export default function ResignationPage() {
 
     if (employeeLoading) return <div className="flex justify-center items-center h-screen">로딩 중...</div>;
     if (!employee) return <div className="flex justify-center items-center h-screen text-red-500">직원 정보를 불러올 수 없습니다.</div>;
-
 
     return (
         <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
@@ -250,26 +207,14 @@ export default function ResignationPage() {
             <div className="w-96 p-8">
                 <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
                     <div className="border-b pb-4">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold">결재선</h2>
-                            <button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button>
-                        </div>
+                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">결재선</h2><button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
                         <div className="space-y-3">
                             {approvers.map((approver, index) => (
                                 <div key={index} className="flex items-center space-x-2">
                                     <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
-                                    <select
-                                        value={approver.id}
-                                        onChange={(e) => handleApproverChange(index, e.target.value)}
-                                        className="w-full p-2 border rounded-md text-sm"
-                                        required
-                                    >
+                                    <select value={approver.id} onChange={(e) => handleApproverChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm" required >
                                         <option value="">결재자 선택</option>
-                                        {allEmployees.map(emp => (
-                                            <option key={emp.id} value={emp.id}>
-                                                {emp.full_name} ({emp.position})
-                                            </option>
-                                        ))}
+                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
                                     <button type="button" onClick={() => removeApprover(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
                                 </div>
@@ -277,33 +222,23 @@ export default function ResignationPage() {
                         </div>
                     </div>
                     <div className="border-b pb-4">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold">참조인</h2>
-                            <button type="button" onClick={addReferrer} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button>
-                        </div>
+                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">참조인</h2><button type="button" onClick={addReferrer} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
                         <div className="space-y-3">
                             {referrers.map((referrer, index) => (
                                 <div key={index} className="flex items-center space-x-2">
-                                    <select
-                                        value={referrer.id}
-                                        onChange={(e) => handleReferrerChange(index, e.target.value)}
-                                        className="w-full p-2 border rounded-md text-sm"
-                                    >
+                                    <select value={referrer.id} onChange={(e) => handleReferrerChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm">
                                         <option value="">참조인 선택</option>
-                                        {allEmployees.map(emp => (
-                                            <option key={emp.id} value={emp.id}>
-                                                {emp.full_name} ({emp.position})
-                                            </option>
-                                        ))}
+                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
                                     <button type="button" onClick={() => removeReferrer(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
                                 </div>
                             ))}
                         </div>
                     </div>
+                    {/* --- [수정] --- 기존 input을 FileUploadDnd 컴포넌트로 교체합니다. --- */}
                     <div className="border-b pb-4">
                         <h2 className="text-lg font-bold mb-2">문서 첨부 (선택)</h2>
-                        <input type="file" onChange={handleFileChange} className="w-full text-sm" />
+                        <FileUploadDnd onUploadComplete={handleUploadComplete} />
                     </div>
                     <div className="border-b pb-4">
                         <h2 className="text-lg font-bold mb-2">기안 의견</h2>

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
+// --- [추가] --- 저희가 만든 파일 업로드 컴포넌트를 가져옵니다.
+import FileUploadDnd from '@/components/FileUploadDnd';
 
 export default function InternalApprovalPage() {
     const { employee, loading: employeeLoading } = useEmployee();
@@ -18,6 +20,8 @@ export default function InternalApprovalPage() {
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
     const [loading, setLoading] = useState(false);
+    // --- [추가] --- 여러 파일을 저장하기 위해 배열 상태를 추가합니다.
+    const [attachments, setAttachments] = useState([]);
 
     useEffect(() => {
         const fetchEmployees = async () => {
@@ -27,7 +31,6 @@ export default function InternalApprovalPage() {
         };
         if (!employeeLoading && employee) {
             fetchEmployees();
-            // 팀장이 있으면 기본 결재자로 설정 (옵션)
             if (employee.team_leader_id && employee.id !== employee.team_leader_id) {
                 setApprovers([{ id: employee.team_leader_id }]);
             }
@@ -37,6 +40,11 @@ export default function InternalApprovalPage() {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    // --- [추가] --- 파일 업로드 완료 시 호출될 콜백 함수입니다.
+    const handleUploadComplete = (files) => {
+        setAttachments(files);
     };
 
     const addApprover = () => setApprovers([...approvers, { id: '' }]);
@@ -78,17 +86,17 @@ export default function InternalApprovalPage() {
 
         const submissionData = {
             title: formData.title,
-            // [핵심 수정] content JSON에 기안자 정보를 포함시킵니다.
             content: JSON.stringify({
                 ...formData,
                 requesterName: employee.full_name,
                 requesterDepartment: employee.department,
                 requesterPosition: employee.position,
             }),
-            document_type: 'internal_approval', // 문서 타입
+            document_type: 'internal_approval',
             approver_ids: approver_ids_with_names,
             referrer_ids: referrer_ids_with_names,
-            // [핵심 수정] API가 사용할 수 있도록 기안자 정보를 별도로 전달합니다.
+            // --- [추가] --- 파일 배열을 API로 전송합니다.
+            attachments: attachments.length > 0 ? attachments : null,
             requester_id: employee.id,
             requester_name: employee.full_name,
             requester_department: employee.department,
@@ -149,6 +157,10 @@ export default function InternalApprovalPage() {
                         <div>
                             <label className="block text-gray-700 font-bold mb-2 text-sm">내용</label>
                             <textarea name="content" value={formData.content} onChange={handleChange} className="w-full p-3 border rounded-md h-40 resize-none" required />
+                        </div>
+                        {/* --- [추가] --- 파일 업로드 컴포넌트를 여기에 삽입합니다. --- */}
+                        <div className="pt-2">
+                            <FileUploadDnd onUploadComplete={handleUploadComplete} />
                         </div>
                     </div>
                 </div>

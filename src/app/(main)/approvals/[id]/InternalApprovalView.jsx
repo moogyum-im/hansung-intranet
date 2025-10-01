@@ -1,10 +1,10 @@
-// src/app/(main)/approvals/[id]/InternalApprovalView.jsx
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { usePdfExport } from '@/hooks/usePdfExport';
 import dynamic from 'next/dynamic';
 import 'react-quill/dist/quill.snow.css';
 
@@ -17,181 +17,125 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
         requesterPosition: '',
         requesterName: '',
         approvalTitle: '',
-        approvalContent: ''
+        approvalContent: '',
+        documentNumber: '미지정',
     });
     const [currentStep, setCurrentStep] = useState(null);
     const [loading, setLoading] = useState(true);
     const [approvalComment, setApprovalComment] = useState('');
+    const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
+    const [manualDocNumber, setManualDocNumber] = useState('');
+
+    // --- [PDF 추가] ---
+    const printRef = useRef(null);
+    const { exportToPdf, isExporting } = usePdfExport(printRef);
 
     const isMyTurnToApprove = employee && currentStep && currentStep.approver?.id === employee.id && currentStep.status === '대기';
-    const isDocumentPending = doc?.status === '대기' || doc?.status === '진행중'; 
+    const isFinalApprover = currentStep ? approvalHistory.findIndex(step => step.id === currentStep.id) === approvalHistory.length - 1 : false;
 
     useEffect(() => {
-        if (doc) {
-            try {
-                console.log("InternalApprovalView - Original doc.content:", doc.content);
-
-                let parsedContent = {};
-                if (doc.content) {
-                    try {
-                        parsedContent = JSON.parse(doc.content);
-                    } catch (jsonParseError) {
-                        console.error("InternalApprovalView - JSON parsing failed:", jsonParseError);
-                        toast.error("문서 내용 형식이 올바르지 않습니다.");
+        const setupPage = async () => {
+            if (doc) {
+                try {
+                    let parsedContent = doc.content ? JSON.parse(doc.content) : {};
+                    
+                    setFormData({
+                        requesterDepartment: parsedContent.requesterDepartment || '정보 없음', 
+                        requesterPosition: parsedContent.requesterPosition || '정보 없음',     
+                        requesterName: parsedContent.requesterName || '정보 없음',           
+                        approvalTitle: parsedContent.title || '',
+                        approvalContent: parsedContent.content || '',
+                        documentNumber: doc.document_number || '미지정',
+                    });
+                    
+                    const activeStep = approvalHistory?.find(step => step.status === '대기');
+                    setCurrentStep(activeStep || null);
+                    
+                    if (doc.attachments && doc.attachments.length > 0) {
+                        const signedUrlPromises = doc.attachments.map(file => 
+                            supabase.storage
+                                .from('approval_attachments')
+                                .createSignedUrl(file.path, 60)
+                        );
+                        const signedUrlResults = await Promise.all(signedUrlPromises);
+                        const urls = signedUrlResults.map((result, index) => {
+                            if (result.error) {
+                                console.error('Signed URL 생성 실패:', result.error);
+                                return null;
+                            }
+                            return {
+                                url: result.data.signedUrl,
+                                name: doc.attachments[index].name,
+                            };
+                        }).filter(Boolean);
+                        setAttachmentSignedUrls(urls);
                     }
+                } catch (e) {
+                    console.error("내부 결재 문서 처리 중 오류:", e);
+                    toast.error("문서 정보를 처리하는 중 오류가 발생했습니다.");
+                } finally {
+                    setLoading(false);
                 }
-                
-                console.log("InternalApprovalView - Parsed Content for formData:", parsedContent);
-
-                setFormData(prev => ({
-                    ...prev, 
-                    // 콘솔 로그를 통해 확인된 실제 doc.content의 키 이름으로 매핑합니다.
-                    requesterDepartment: parsedContent.requesterDepartment || prev.requesterDepartment, 
-                    requesterPosition: parsedContent.requesterPosition || prev.requesterPosition,     
-                    requesterName: parsedContent.requesterName || prev.requesterName,           
-                    approvalTitle: parsedContent.title || prev.approvalTitle,          // 'title' 키 사용
-                    approvalContent: parsedContent.content || prev.approvalContent      // 'content' 키 사용
-                }));
-
-                const activeStep = approvalHistory?.find(step => step.status === '대기');
-                setCurrentStep(activeStep || null);
-
-                // --- 디버깅용: isMyTurnToApprove 관련 값 출력 ---
-                console.log("Approval Status Check:");
-                console.log("  employee:", employee);
-                console.log("  currentStep:", currentStep);
-                console.log("  currentStep.approver?.id:", currentStep?.approver?.id);
-                console.log("  employee.id:", employee?.id);
-                console.log("  currentStep.status:", currentStep?.status);
-                console.log("  isMyTurnToApprove (after currentStep set):", 
-                    employee && activeStep && activeStep.approver?.id === employee.id && activeStep.status === '대기'
-                );
-                // --- 디버깅 끝 ---
-
-
-                setLoading(false);
-            } catch (e) {
-                console.error("InternalApprovalView - Error in useEffect:", e);
-                toast.error("문서 정보를 불러오는 중 오류가 발생했습니다.");
-                setLoading(false);
-            }
-        } else {
-            setLoading(false); 
-        }
-    }, [doc, approvalHistory, employee]); // 의존성 배열에 employee를 추가
-
-    const quillModules = useMemo(() => ({
-        toolbar: false,
-    }), []);
-
-    const handleApprove = async () => {
-        console.log("handleApprove called."); // 함수 시작 로그
-        if (!currentStep || !employee) {
-            toast.error("유효한 결재 단계가 없거나 사용자 정보가 없습니다.");
-            console.error("handleApprove: Missing currentStep or employee."); // 에러 로그
-            return;
-        }
-        setLoading(true);
-        console.log("handleApprove: Loading set to true.");
-
-        try {
-            console.log("handleApprove: Attempting to update approver status to '승인'. currentStep.id:", currentStep.id);
-            const { error: updateApproverError } = await supabase
-                .from('approval_document_approvers')
-                .update({ 
-                    status: '승인', 
-                    comment: approvalComment, 
-                    approved_at: new Date().toISOString() 
-                })
-                .eq('id', currentStep.id);
-
-            if (updateApproverError) throw new Error(updateApproverError.message);
-            console.log("handleApprove: Approver status updated successfully.");
-
-            const currentStepIndex = approvalHistory.findIndex(step => step.id === currentStep.id);
-            const nextStep = approvalHistory[currentStepIndex + 1];
-            console.log("handleApprove: nextStep:", nextStep);
-
-
-            if (nextStep) {
-                console.log("handleApprove: Next step found, updating status to '대기'. nextStep.id:", nextStep.id);
-                const { error: nextStepError } = await supabase
-                    .from('approval_document_approvers')
-                    .update({ status: '대기' })
-                    .eq('id', nextStep.id);
-                if (nextStepError) throw new Error(nextStepError.message);
-
-                console.log("handleApprove: Updating document status to '진행중'. doc.id:", doc.id);
-                const { error: docStatusError } = await supabase
-                    .from('approval_documents')
-                    .update({ status: '진행중' })
-                    .eq('id', doc.id);
-                if (docStatusError) throw new Error(docStatusError.message);
-
             } else {
-                console.log("handleApprove: No next step, updating document status to '완료'. doc.id:", doc.id);
-                const { error: docStatusError } = await supabase
-                    .from('approval_documents')
-                    .update({ status: '완료', completed_at: new Date().toISOString() })
-                    .eq('id', doc.id);
-                if (docStatusError) throw new Error(docStatusError.message);
+                setLoading(false); 
             }
+        };
+        setupPage();
+    }, [doc, approvalHistory]);
 
-            toast.success("문서가 승인되었습니다.");
-            router.refresh();
-            console.log("handleApprove: Router refreshed, approval process completed.");
-        } catch (error) {
-            toast.error(`승인 실패: ${error.message}`);
-            console.error("handleApprove - Error during approval:", error); // 에러 발생 시 로그
-        } finally {
-            setLoading(false);
-            console.log("handleApprove: Loading set to false (finally block).");
+    const handleApprovalAction = async (newStatus) => {
+        if (!currentStep) return toast.error("결재를 진행할 수 없습니다.");
+        if (newStatus === '반려' && !approvalComment.trim()) return toast.error("반려 시에는 의견을 입력해야 합니다.");
+        if (newStatus === '승인' && isFinalApprover && !manualDocNumber.trim()) {
+            return toast.error("최종 승인 시에는 문서 번호를 반드시 입력해야 합니다.");
         }
-    };
 
-    const handleReject = async () => {
-        console.log("handleReject called."); // 함수 시작 로그
-        if (!currentStep || !employee) {
-            toast.error("유효한 결재 단계가 없거나 사용자 정보가 없습니다.");
-            console.error("handleReject: Missing currentStep or employee."); // 에러 로그
-            return;
-        }
         setLoading(true);
-        console.log("handleReject: Loading set to true.");
-
         try {
-            console.log("handleReject: Attempting to update approver status to '반려'. currentStep.id:", currentStep.id);
-            const { error: updateApproverError } = await supabase
+            await supabase
                 .from('approval_document_approvers')
-                .update({ 
-                    status: '반려', 
-                    comment: approvalComment, 
-                    approved_at: new Date().toISOString() 
-                })
-                .eq('id', currentStep.id);
+                .update({ status: newStatus, comment: approvalComment, approved_at: new Date().toISOString() })
+                .eq('id', currentStep.id)
+                .throwOnError();
 
-            if (updateApproverError) throw new Error(updateApproverError.message);
-            console.log("handleReject: Approver status updated successfully.");
+            const nextStep = approvalHistory.find(step => step.sequence === currentStep.sequence + 1);
 
-            console.log("handleReject: Updating document status to '반려'. doc.id:", doc.id);
-            const { error: docStatusError } = await supabase
-                .from('approval_documents')
-                .update({ status: '반려', completed_at: new Date().toISOString() })
-                .eq('id', doc.id);
-            if (docStatusError) throw new Error(docStatusError.message);
-
-            toast.success("문서가 반려되었습니다.");
+            if (newStatus === '반려' || !nextStep) {
+                const finalStatus = newStatus === '반려' ? '반려' : '완료';
+                await supabase
+                    .from('approval_documents')
+                    .update({ 
+                        status: finalStatus, 
+                        completed_at: new Date().toISOString(),
+                        document_number: finalStatus === '완료' ? manualDocNumber : doc.document_number 
+                    })
+                    .eq('id', doc.id)
+                    .throwOnError();
+                
+                if (finalStatus === '완료') {
+                    setFormData(prev => ({ ...prev, documentNumber: manualDocNumber }));
+                }
+            } else {
+                await supabase.from('approval_document_approvers').update({ status: '대기' }).eq('id', nextStep.id).throwOnError();
+                await supabase.from('approval_documents').update({ status: '진행중' }).eq('id', doc.id).throwOnError();
+            }
+            toast.success(`문서가 ${newStatus}되었습니다.`);
             router.refresh();
-            console.log("handleReject: Router refreshed, rejection process completed.");
         } catch (error) {
-            toast.error(`반려 실패: ${error.message}`);
-            console.error("handleReject - Error during rejection:", error); // 에러 발생 시 로그
+            toast.error(`${newStatus} 처리 실패: ${error.message}`);
         } finally {
             setLoading(false);
-            console.log("handleReject: Loading set to false (finally block).");
         }
     };
 
+    // --- [PDF 추가] ---
+    const handlePdfExport = () => {
+        const fileName = `${formData.requesterName}_내부결재서_${new Date().toISOString().split('T')[0]}.pdf`;
+        exportToPdf(fileName);
+    };
+
+    const quillModules = useMemo(() => ({ toolbar: false }), []);
+    
     if (loading) return <div className="flex justify-center items-center h-screen">문서 내용을 불러오는 중...</div>;
     if (!doc) return <div className="flex justify-center items-center h-screen text-red-500">문서 정보를 찾을 수 없습니다.</div>;
 
@@ -206,28 +150,24 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
 
     return (
         <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
-            <div className="flex-1">
+            <div className="flex-1" ref={printRef}>
                 <div className="bg-white p-10 rounded-xl shadow-lg border">
-                    <h1 className="text-2xl font-bold text-center mb-8">내 부 결 재 서</h1>
-                    {/* 문서번호 및 작성일 */}
+                    <h1 className="text-2xl font-bold text-center mb-4">내 부 결 재 서</h1>
                     <div className="text-right text-sm text-gray-500 mb-4">
-                        <p>문서번호: {doc.document_id || 'N/A'}</p> 
-                        <p>작성일: {new Date(doc.created_at).toLocaleDateString('ko-KR')}</p>
+                        <p>문서번호: {formData.documentNumber}</p> 
                     </div>
-
-                    {/* 기안자 정보 테이블 */}
                     <div className="mb-8 border border-gray-300">
                         <table className="w-full text-sm border-collapse">
                             <tbody>
                                 <tr>
                                     <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">기안부서</th>
-                                    <td className="p-2 w-2/5 border-b border-r">{formData.requesterDepartment || '정보 없음'}</td>
+                                    <td className="p-2 w-2/5 border-b border-r">{formData.requesterDepartment}</td>
                                     <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직 위</th>
-                                    <td className="p-2 w-1/5 border-b">{formData.requesterPosition || '정보 없음'}</td>
+                                    <td className="p-2 w-1/5 border-b">{formData.requesterPosition}</td>
                                 </tr>
                                 <tr>
                                     <th className="p-2 bg-gray-100 font-bold text-left border-r">기안자</th>
-                                    <td className="p-2 border-r">{formData.requesterName || '정보 없음'}</td>
+                                    <td className="p-2 border-r">{formData.requesterName}</td>
                                     <th className="p-2 bg-gray-100 font-bold text-left border-r">기안일자</th>
                                     <td className="p-2">{new Date(doc.created_at).toLocaleDateString('ko-KR')}</td>
                                 </tr>
@@ -236,77 +176,68 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                     </div>
 
                     <div className="space-y-6 text-sm">
-                        {/* 결재 제목 */}
                         <div className="mb-6">
                             <label className="block text-gray-700 font-bold mb-2">제목</label>
-                            <input
-                                type="text"
-                                value={formData.approvalTitle || ''}
-                                className="w-full p-2 border rounded-md bg-gray-100"
-                                readOnly
-                            />
+                            <p className="w-full p-3 border rounded-md bg-gray-100">{formData.approvalTitle}</p>
                         </div>
-
-                        {/* 결재 내용 */}
                         <div className="mb-6">
                             <label className="block text-gray-700 font-bold mb-2">내용</label>
                             <div className="border rounded-md bg-gray-100 p-2 min-h-[200px] quill-readonly-container">
-                                {formData.approvalContent !== undefined ? (
-                                    <ReactQuill
-                                        value={formData.approvalContent} 
-                                        readOnly={true}
-                                        theme="snow"
-                                        modules={quillModules}
-                                    />
-                                ) : (
-                                    <p className="text-gray-500">내용을 불러오는 중...</p>
-                                )}
+                                <ReactQuill
+                                    value={formData.approvalContent} 
+                                    readOnly={true}
+                                    theme="snow"
+                                    modules={quillModules}
+                                />
                             </div>
                         </div>
-
-                        {/* 첨부 파일 (doc 객체에 attachment_url과 attachment_filename이 있다고 가정) */}
-                        {doc.attachment_url && (
+                        {attachmentSignedUrls.length > 0 && (
                             <div className="mt-6">
                                 <h3 className="text-lg font-bold mb-2">첨부 파일</h3>
-                                <a
-                                    href={doc.attachment_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline flex items-center"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
-                                    </svg>
-                                    {doc.attachment_filename || '첨부파일'}
-                                </a>
+                                <ul className="space-y-2">
+                                    {attachmentSignedUrls.map((file, index) => (
+                                        <li key={index}>
+                                            <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name || true} className="text-blue-600 hover:underline flex items-center">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" /></svg>
+                                                {file.name || '첨부파일 보기'}
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
-            {/* 우측 결재 정보 패널 */}
-            <div className="w-96 p-8">
+            <div className="w-96 p-8 no-print">
                 <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
-                    {/* 결재선 */}
+                    {doc?.status === '완료' && (
+                        <div className="border-b pb-4">
+                            <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-semibold">
+                                {isExporting ? 'PDF 저장 중...' : 'PDF로 저장'}
+                            </button>
+                        </div>
+                    )}
                     <div className="border-b pb-4">
                         <h2 className="text-lg font-bold mb-4">결재선</h2>
                         <div className="space-y-3">
                             {approvalHistory && approvalHistory.map((step, index) => (
-                                <div key={step.id} className={`flex items-center space-x-2 p-2 rounded-md ${step.status === '대기' ? 'bg-yellow-50' : step.status === '승인' ? 'bg-green-50' : step.status === '반려' ? 'bg-red-50' : ''}`}>
-                                    <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
-                                    <span className="text-sm font-medium">{step.approver?.full_name} ({step.approver?.position})</span>
-                                    <span className="ml-auto text-sm">{getStatusIcon(step.status)} {step.approved_at ? new Date(step.approved_at).toLocaleDateString('ko-KR') : ''}</span>
+                                <div key={step.id} className={`flex flex-col p-2 rounded-md ${step.status === '대기' ? 'bg-yellow-50' : step.status === '승인' ? 'bg-green-50' : step.status === '반려' ? 'bg-red-50' : ''}`}>
+                                   <div className="flex items-center space-x-2">
+                                        <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
+                                        <span className="text-sm font-medium">{step.approver?.full_name} ({step.approver?.position})</span>
+                                        <span className="ml-auto text-sm">{getStatusIcon(step.status)} {step.approved_at ? new Date(step.approved_at).toLocaleDateString('ko-KR') : ''}</span>
+                                    </div>
                                     {step.comment && <p className="text-xs text-gray-500 mt-1">의견: {step.comment}</p>}
                                 </div>
                             ))}
                         </div>
                     </div>
-                    {/* 참조인 */}
                     {referrerHistory && referrerHistory.length > 0 && (
                         <div className="border-b pb-4">
                             <h2 className="text-lg font-bold mb-4">참조인</h2>
                             <div className="space-y-2">
-                                {referrerHistory.map((ref, index) => (
+                                {referrerHistory.map((ref) => (
                                     <div key={ref.id} className="flex items-center space-x-2">
                                         <span className="text-sm font-medium">{ref.referrer?.full_name} ({ref.referrer?.position})</span>
                                     </div>
@@ -314,35 +245,26 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                             </div>
                         </div>
                     )}
-                    {/* 결재/반려 버튼 및 의견 입력 필드 */}
                     {isMyTurnToApprove && (
                         <div className="border-t pt-4 mt-4">
+                            {isFinalApprover && (
+                                <div className="mb-4">
+                                    <label className="block text-lg font-bold mb-2 text-blue-600">문서 번호 입력</label>
+                                    <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} placeholder="예: 내부-2025-001" className="w-full p-2 border border-blue-300 rounded-md" />
+                                </div>
+                            )}
                             <h2 className="text-lg font-bold mb-2">결재 의견</h2>
-                            <textarea
-                                value={approvalComment}
-                                onChange={(e) => setApprovalComment(e.target.value)}
-                                placeholder="결재 의견을 입력하세요."
-                                className="w-full p-2 border rounded-md h-24 resize-none mb-4"
-                            />
+                            <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} placeholder="결재 의견을 입력하세요." className="w-full p-2 border rounded-md h-24 resize-none mb-4" />
                             <div className="flex space-x-4">
-                                <button
-                                    onClick={handleApprove}
-                                    disabled={loading}
-                                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 font-semibold"
-                                >
-                                    {loading ? '승인 중...' : '승인'}
+                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 font-semibold">
+                                    {loading ? '처리 중...' : '승인'}
                                 </button>
-                                <button
-                                    onClick={handleReject}
-                                    disabled={loading}
-                                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 font-semibold"
-                                >
-                                    {loading ? '반려 중...' : '반려'}
+                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 font-semibold">
+                                    {loading ? '처리 중...' : '반려'}
                                 </button>
                             </div>
                         </div>
                     )}
-                    {/* 문서 최종 상태 표시 */}
                     {doc?.status === '완료' && <p className="text-center text-green-600 font-bold mt-4">✅ 최종 승인 완료된 문서입니다.</p>}
                     {doc?.status === '반려' && <p className="text-center text-red-600 font-bold mt-4">❌ 문서가 반려되었습니다.</p>}
                 </div>
