@@ -1,35 +1,36 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useEmployee } from '@/contexts/EmployeeContext';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { usePdfExport } from '@/hooks/usePdfExport';
 
-export default function LeaveRequestView({ doc, employee, approvalHistory, referrerHistory }) {
+export default function ExpenseReportView({ doc, employee, approvalHistory, referrerHistory }) {
     const router = useRouter();
     const [formData, setFormData] = useState({
         requesterDepartment: '',
         requesterPosition: '',
         requesterName: '',
-        leaveType: '',      
-        startDate: '',      
-        endDate: '',        
-        duration: '',       
-        reason: '',
+        expenseDate: '',
+        amount: '',
+        accountType: '',
+        paymentMethod: '',
+        cardNumberLastFour: '',
+        description: '',
         documentNumber: '미지정',
     });
-    const [currentStep, setCurrentStep] = useState(null);
     const [loading, setLoading] = useState(true);
     const [approvalComment, setApprovalComment] = useState('');
+    const [currentStep, setCurrentStep] = useState(null);
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
     const [manualDocNumber, setManualDocNumber] = useState('');
 
-    // --- [PDF 추가] --- PDF 저장을 위한 useRef와 커스텀 훅
     const printRef = useRef(null);
     const { exportToPdf, isExporting } = usePdfExport(printRef);
 
-    const isMyTurnToApprove = employee && currentStep && currentStep.approver?.id === employee.id && currentStep.status === '대기';
+    const isMyTurnToApprove = employee && currentStep && currentStep.approver?.id === employee.id && (currentStep.status === 'pending' || currentStep.status === '대기');
     const isFinalApprover = currentStep ? approvalHistory.findIndex(step => step.id === currentStep.id) === approvalHistory.length - 1 : false;
 
     useEffect(() => {
@@ -37,36 +38,25 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
             if (doc) {
                 try {
                     let parsedContent = doc.content ? JSON.parse(doc.content) : {};
-                    
-                    const requesterDept = doc.requester_department || parsedContent.requesterDepartment || '정보 없음';
-                    const requesterPos = doc.requester_position || parsedContent.requesterPosition || '정보 없음';
-                    const requesterName = doc.requester_name || parsedContent.requesterName || '정보 없음';
-
-                    let calculatedDuration = '';
-                    if (parsedContent.leaveType === '반차') { 
-                        calculatedDuration = '0.5일'; 
-                    } else if (parsedContent.startDate && parsedContent.endDate) {
-                        const startDateObj = new Date(parsedContent.startDate);
-                        const endDateObj = new Date(parsedContent.endDate);
-                        const diffTime = Math.abs(endDateObj - startDateObj);
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
-                        calculatedDuration = `${diffDays}일`; 
-                    }
+                    const requesterDept = doc.requester_department || '정보 없음';
+                    const requesterPos = doc.requester_position || '정보 없음';
+                    const requesterName = doc.requester_name || '정보 없음';
 
                     setFormData({
                         requesterDepartment: requesterDept,
                         requesterPosition: requesterPos,
                         requesterName: requesterName,
-                        leaveType: parsedContent.leaveType || '',
-                        startDate: parsedContent.startDate || '',
-                        endDate: parsedContent.endDate || '',
-                        duration: calculatedDuration,
-                        reason: parsedContent.reason || '',
+                        expenseDate: parsedContent.expenseDate || '',
+                        amount: parsedContent.amount || '',
+                        accountType: parsedContent.accountType || '',
+                        paymentMethod: parsedContent.paymentMethod || '',
+                        cardNumberLastFour: parsedContent.cardNumberLastFour || '',
+                        description: parsedContent.description || '',
                         documentNumber: doc.document_number || '미지정',
                     });
-                    
-                    const activeStep = approvalHistory?.find(step => step.status === '대기');
-                    setCurrentStep(activeStep || null);
+
+                    const activeStep = approvalHistory?.find(step => step.status === 'pending' || step.status === '대기');
+                    setCurrentStep(activeStep);
                     
                     if (doc.attachments && doc.attachments.length > 0) {
                         const signedUrlPromises = doc.attachments.map(file => 
@@ -83,7 +73,7 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                         setAttachmentSignedUrls(urls);
                     }
                 } catch (e) {
-                    console.error("휴가 신청서 처리 중 오류:", e);
+                    console.error("지출결의서 처리 중 오류:", e);
                     toast.error("문서 정보를 처리하는 중 오류가 발생했습니다.");
                 } finally {
                     setLoading(false);
@@ -97,7 +87,9 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
 
     const handleApprovalAction = async (newStatus) => {
         if (!currentStep) return toast.error("결재를 진행할 수 없습니다.");
-        if (newStatus === '반려' && !approvalComment.trim()) return toast.error("반려 시에는 의견을 입력해야 합니다.");
+        if (newStatus === '반려' && !approvalComment.trim()) {
+            return toast.error("반려 시에는 의견을 입력해야 합니다.");
+        }
         if (newStatus === '승인' && isFinalApprover && !manualDocNumber.trim()) {
             return toast.error("최종 승인 시에는 문서 번호를 반드시 입력해야 합니다.");
         }
@@ -129,10 +121,10 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                 }
             } else {
                 await supabase.from('approval_document_approvers').update({ status: '대기' }).eq('id', nextStep.id).throwOnError();
-                await supabase.from('approval_documents').update({ status: '진행중' }).eq('id', doc.id).throwOnError();
+                await supabase.from('approval_documents').update({ status: '진행중', current_approver_id: nextStep.approver_id }).eq('id', doc.id).throwOnError();
             }
             toast.success(`문서가 ${newStatus}되었습니다.`);
-            router.refresh();
+            window.location.reload();
         } catch (error) {
             toast.error(`${newStatus} 처리 실패: ${error.message}`);
         } finally {
@@ -141,87 +133,105 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
     };
 
     const handlePdfExport = () => {
-        const fileName = `${formData.requesterName}_휴가신청서_${new Date().toISOString().split('T')[0]}.pdf`;
+        const fileName = `${formData.requesterName}_지출결의서_${new Date().toISOString().split('T')[0]}.pdf`;
         exportToPdf(fileName);
     };
-
-    if (loading) return <div className="flex justify-center items-center h-screen">문서 내용을 불러오는 중...</div>;
-    if (!doc) return <div className="flex justify-center items-center h-screen text-red-500">문서 정보를 찾을 수 없습니다.</div>;
-
+    
     const getStatusIcon = (status) => {
         switch (status) {
-            case '대기': return '⌛';
-            case '승인': return '✅';
+            case 'pending': case '대기': return '⌛';
+            case '승인': case '완료': return '✅';
             case '반려': return '❌';
+            case '진행중': return '➡️';
             default: return '';
         }
     };
+    
+    if (loading) {
+        return <div className="flex justify-center items-center h-screen">지출결의서 내용을 불러오는 중...</div>;
+    }
+
+    if (!doc || !employee) {
+        return <div className="p-8 text-center text-red-500">문서 또는 사용자 정보를 불러올 수 없습니다.</div>;
+    }
 
     return (
         <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
             <div className="flex-1" ref={printRef}>
                 <div className="bg-white p-10 rounded-xl shadow-lg border">
-                    <h1 className="text-2xl font-bold text-center mb-4">휴 가 신 청 서</h1>
+                    <h1 className="text-2xl font-bold text-center mb-8">{doc.title || '지출 결의서'}</h1>
                     <div className="text-right text-sm text-gray-500 mb-4">
                         <p>문서번호: {formData.documentNumber}</p>
+                        <p>작성일: {new Date(doc.created_at).toLocaleDateString('ko-KR')}</p>
                     </div>
                     <div className="mb-8 border border-gray-300">
                         <table className="w-full text-sm border-collapse">
                             <tbody>
                                 <tr>
-                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">소속</th>
+                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">기안부서</th>
                                     <td className="p-2 w-2/5 border-b border-r">{formData.requesterDepartment}</td>
-                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직위</th>
+                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직 위</th>
                                     <td className="p-2 w-1/5 border-b">{formData.requesterPosition}</td>
                                 </tr>
                                 <tr>
-                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">성명</th>
+                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">기안자</th>
                                     <td className="p-2 border-r">{formData.requesterName}</td>
-                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">작성일</th>
+                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">기안일자</th>
                                     <td className="p-2">{new Date(doc.created_at).toLocaleDateString('ko-KR')}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <div className="space-y-6 text-sm">
-                        <div className="mb-6">
-                            <label className="block text-gray-700 font-bold mb-2">휴가 종류</label>
-                            <p className="w-full p-3 border rounded-md bg-gray-100">{formData.leaveType}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-gray-700 font-bold mb-2">시작일</label>
-                                <p className="w-full p-3 border rounded-md bg-gray-100">{formData.startDate}</p>
+                    <div className="mb-8 border border-gray-300">
+                        <h2 className="p-2 bg-gray-100 font-bold border-b">지출 정보</h2>
+                        <div className="p-4 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-gray-700 font-bold mb-2 text-sm">지출일자</label>
+                                    <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.expenseDate}</p>
+                                </div>
+                                <div><label className="block text-gray-700 font-bold mb-2 text-sm">금액</label>
+                                    <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.amount ? `${Number(formData.amount).toLocaleString()}원` : ''}</p>
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-gray-700 font-bold mb-2">종료일</label>
-                                <p className="w-full p-3 border rounded-md bg-gray-100">{formData.endDate}</p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-gray-700 font-bold mb-2 text-sm">계정 과목</label>
+                                    <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.accountType}</p>
+                                </div>
+                                <div><label className="block text-gray-700 font-bold mb-2 text-sm">결제 수단</label>
+                                    <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.paymentMethod}</p>
+                                </div>
                             </div>
+                            {formData.paymentMethod === '법인카드' && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className="block text-gray-700 font-bold mb-2 text-sm">카드번호 뒷 4자리</label>
+                                        <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.cardNumberLastFour}</p>
+                                    </div>
+                                    <div></div>
+                                </div>
+                            )}
                         </div>
-                        <div className="mb-6">
-                            <label className="block text-gray-700 font-bold mb-2">기간</label>
-                            <p className="w-full p-3 border rounded-md bg-gray-100">{formData.duration}</p>
-                        </div>
-                        <div className="mb-6">
-                            <label className="block text-gray-700 font-bold mb-2">휴가 사유</label>
-                             <p className="w-full p-3 border rounded-md bg-gray-100 min-h-[100px] whitespace-pre-wrap">{formData.reason}</p>
-                        </div>
-                        {attachmentSignedUrls.length > 0 && (
-                            <div className="mt-6">
-                                <h3 className="text-lg font-bold mb-2">첨부 파일</h3>
-                                <ul className="space-y-2">
-                                    {attachmentSignedUrls.map((file, index) => (
-                                        <li key={index}>
-                                            <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name || true} className="text-blue-600 hover:underline flex items-center" >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" /></svg>
-                                                {file.name || '첨부파일 보기'}
-                                            </a>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
                     </div>
+                    <div className="border border-gray-300">
+                        <h2 className="p-2 bg-gray-100 font-bold border-b">상세 내역 (적요)</h2>
+                        <div className="p-4">
+                            <p className="w-full p-3 border rounded-md bg-gray-50 h-40 overflow-auto text-sm">{formData.description}</p>
+                        </div>
+                    </div>
+                    {attachmentSignedUrls.length > 0 && (
+                        <div className="mt-6">
+                            <h3 className="text-lg font-bold mb-2">첨부 파일</h3>
+                            <ul className="space-y-2">
+                                {attachmentSignedUrls.map((file, index) => (
+                                    <li key={index}>
+                                        <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name || true} className="text-blue-600 hover:underline flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" /></svg>
+                                            {file.name || '첨부파일 보기'}
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
             </div>
             <div className="w-96 p-8 no-print">
@@ -235,26 +245,28 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                     )}
                     <div className="border-b pb-4">
                         <h2 className="text-lg font-bold mb-4">결재선</h2>
-                        <div className="space-y-3">
-                            {approvalHistory && approvalHistory.map((step, index) => (
-                                <div key={step.id} className={`flex flex-col p-2 rounded-md ${step.status === '대기' ? 'bg-yellow-50' : step.status === '승인' ? 'bg-green-50' : step.status === '반려' ? 'bg-red-50' : ''}`}>
-                                    <div className="flex items-center space-x-2">
-                                        <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
-                                        <span className="text-sm font-medium">{step.approver?.full_name} ({step.approver?.position})</span>
-                                        <span className="ml-auto text-sm">{getStatusIcon(step.status)} {step.approved_at ? new Date(step.approved_at).toLocaleDateString('ko-KR') : ''}</span>
+                        <div className="space-y-2">
+                            {approvalHistory.length > 0 ? (
+                                approvalHistory.map((step, index) => (
+                                    <div key={step.id} className={`flex flex-col p-2 rounded-md ${step.status === 'pending' || step.status === '대기' ? 'bg-yellow-50' : step.status === '승인' || step.status === '완료' ? 'bg-green-50' : step.status === '반려' ? 'bg-red-50' : ''}`}>
+                                        <div className="flex items-center space-x-2">
+                                            <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
+                                            <span className="text-sm font-medium">{step.approver?.full_name || '이름 없음'} ({step.approver?.position || '직위 없음'})</span>
+                                            <span className="ml-auto text-sm">{getStatusIcon(step.status)} {step.approved_at ? new Date(step.approved_at).toLocaleDateString('ko-KR') : ''}</span>
+                                        </div>
+                                        {step.comment && <p className="text-xs text-gray-500 mt-1 pl-6">의견: {step.comment}</p>}
                                     </div>
-                                    {step.comment && <p className="text-xs text-gray-500 mt-1">의견: {step.comment}</p>}
-                                </div>
-                            ))}
+                                ))
+                            ) : <p className="text-sm text-gray-500">결재선 정보가 없습니다.</p>}
                         </div>
                     </div>
-                    {referrerHistory && referrerHistory.length > 0 && (
-                        <div className="border-b pb-4">
-                            <h2 className="text-lg font-bold mb-4">참조인</h2>
+                    {referrerHistory.length > 0 && (
+                        <div>
+                            <h2 className="text-lg font-bold mb-4 border-b pb-2">참조인</h2>
                             <div className="space-y-2">
                                 {referrerHistory.map((ref) => (
-                                    <div key={ref.id} className="flex items-center space-x-2">
-                                        <span className="text-sm font-medium">{ref.referrer?.full_name} ({ref.referrer?.position})</span>
+                                    <div key={ref.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-md">
+                                        <span className="text-sm font-medium">{ref.referrer?.full_name || '이름 없음'} ({ref.referrer?.position || '직위 없음'})</span>
                                     </div>
                                 ))}
                             </div>
@@ -265,11 +277,16 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                             {isFinalApprover && (
                                 <div className="mb-4">
                                     <label className="block text-lg font-bold mb-2 text-blue-600">문서 번호 입력</label>
-                                    <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} placeholder="예: 휴가-2025-001" className="w-full p-2 border border-blue-300 rounded-md" />
+                                    <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} placeholder="예: 지출-2025-001" className="w-full p-2 border border-blue-300 rounded-md" />
                                 </div>
                             )}
                             <h2 className="text-lg font-bold mb-2">결재 의견</h2>
-                            <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} placeholder="결재 의견을 입력하세요." className="w-full p-2 border rounded-md h-24 resize-none mb-4" />
+                            <textarea
+                                value={approvalComment}
+                                onChange={(e) => setApprovalComment(e.target.value)}
+                                placeholder="결재 의견을 입력하세요."
+                                className="w-full p-2 border rounded-md h-24 resize-none mb-4"
+                            />
                             <div className="flex space-x-4">
                                 <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 font-semibold">
                                     {loading ? '처리 중...' : '승인'}
@@ -280,8 +297,8 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                             </div>
                         </div>
                     )}
-                    {doc?.status === '완료' && <p className="text-center text-green-600 font-bold mt-4">✅ 최종 승인 완료된 문서입니다.</p>}
-                    {doc?.status === '반려' && <p className="text-center text-red-600 font-bold mt-4">❌ 문서가 반려되었습니다.</p>}
+                     {doc.status === '완료' && <p className="text-center text-green-600 font-bold mt-4">✅ 최종 승인 완료된 문서입니다.</p>}
+                     {doc.status === '반려' && <p className="text-center text-red-600 font-bold mt-4">❌ 문서가 반려되었습니다.</p>}
                 </div>
             </div>
         </div>
