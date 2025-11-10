@@ -1,4 +1,3 @@
-// 파일 경로: src/app/(main)/mypage/LeaveCalendar.jsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -25,23 +24,58 @@ export default function LeaveCalendar({ currentUser, isWidget = false }) {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // --- [수정] --- 날짜를 'YYYY-MM-DD' 형식의 문자열로 변환하는 헬퍼 함수
+  const toLocalDateString = (dateObj) => {
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const fetchData = useCallback(async () => {
     if (!currentUser?.id) return;
     setLoading(true);
-    const firstDay = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10);
-    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10);
+    const firstDay = toLocalDateString(new Date(date.getFullYear(), date.getMonth(), 1));
+    const lastDay = toLocalDateString(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+    
     const [leavesRes, schedulesRes] = await Promise.all([
-      supabase.from('approvals').select('id, title, status, start_date, end_date, type').eq('requested_by', currentUser.id).in('status', ['승인', '대기']).in('type', ['휴가', '연차', '반차', '경조사', '공가', '휴가 신청서']).not('start_date', 'is', null).not('end_date', 'is', null).lte('start_date', lastDay).gte('end_date', firstDay),
+      supabase.from('approval_documents').select('id, title, status, content').eq('requester_id', currentUser.id).in('status', ['완료', '진행중', '대기']).eq('document_type', 'leave_request'),
       isWidget ? Promise.resolve({ data: [], error: null }) : supabase.from('personal_schedules').select('*').eq('user_id', currentUser.id).gte('schedule_date', firstDay).lte('schedule_date', lastDay)
     ]);
-    if (leavesRes.error) console.error('휴가 데이터 로딩 실패:', leavesRes.error.message); else setLeaves(leavesRes.data || []);
-    if (schedulesRes.error) console.error('개인 일정 로딩 실패:', schedulesRes.error.message); else setPersonalSchedules(schedulesRes.data || []);
+    
+    if (leavesRes.error) console.error('휴가 데이터 로딩 실패:', leavesRes.error.message); 
+    else {
+        const parsedLeaves = leavesRes.data.map(l => {
+            try {
+                const content = JSON.parse(l.content);
+                return { ...l, start_date: content.startDate, end_date: content.endDate };
+            } catch { return { ...l, start_date: null, end_date: null }; }
+        }).filter(l => l.start_date && l.end_date);
+        setLeaves(parsedLeaves || []);
+    }
+
+    if (schedulesRes.error) console.error('개인 일정 로딩 실패:', schedulesRes.error.message); 
+    else setPersonalSchedules(schedulesRes.data || []);
+
     setLoading(false);
   }, [date, currentUser?.id, isWidget]);
   
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleSaveSchedule = async (title) => { if (!selectedDateInfo?.date) return; const { data, error } = await supabase.from('personal_schedules').insert({ user_id: currentUser.id, title, schedule_date: selectedDateInfo.date.toISOString().slice(0,10) }).select(); if(error) { toast.error('일정 저장 실패'); } else if (data) { toast.success('일정 추가됨'); setPersonalSchedules(prev => [...prev, ...data]); setSelectedDateInfo(prev => ({ ...prev, schedules: [...prev.schedules, ...data] })); } setIsModalOpen(false); };
+  const handleSaveSchedule = async (title) => { 
+      if (!selectedDateInfo?.date) return;
+      // --- [수정] --- toISOString() 대신 헬퍼 함수를 사용해 시간대 변환을 방지합니다.
+      const localDateString = toLocalDateString(selectedDateInfo.date);
+      const { data, error } = await supabase.from('personal_schedules').insert({ user_id: currentUser.id, title, schedule_date: localDateString }).select(); 
+      if(error) { toast.error('일정 저장 실패'); } 
+      else if (data) { 
+          toast.success('일정 추가됨'); 
+          setPersonalSchedules(prev => [...prev, ...data]); 
+          setSelectedDateInfo(prev => ({ ...prev, schedules: [...prev.schedules, ...data] })); 
+      } 
+      setIsModalOpen(false); 
+  };
+  
   const handleDeleteSchedule = async (scheduleId) => { if(confirm('이 일정을 삭제하시겠습니까?')) { const { error } = await supabase.from('personal_schedules').delete().eq('id', scheduleId); if(error) { toast.error('일정 삭제 실패'); } else { toast.success('일정 삭제됨'); setPersonalSchedules(prev => prev.filter(s => s.id !== scheduleId)); setSelectedDateInfo(prev => ({ ...prev, schedules: prev.schedules.filter(s => s.id !== scheduleId) })); } } };
   const changeMonth = (offset) => { setDate(new Date(date.getFullYear(), date.getMonth() + offset, 1)); setSelectedDateInfo(null); };
   
@@ -55,24 +89,22 @@ export default function LeaveCalendar({ currentUser, isWidget = false }) {
     for (let i = 0; i < rowCount; i++) {
       const days = [];
       for (let j = 0; j < 7; j++) {
-        const cloneDay = new Date(day); cloneDay.setHours(0,0,0,0);
-        const isCurrentMonth = day.getMonth() === date.getMonth();
-        const isToday = new Date().toDateString() === day.toDateString();
-        const isSelected = selectedDateInfo && selectedDateInfo.date.toDateString() === cloneDay.toDateString();
+        const cloneDay = new Date(day);
+        // --- [수정] --- 비교를 위해 현재 날짜도 'YYYY-MM-DD' 문자열로 만듭니다.
+        const dayString = toLocalDateString(cloneDay);
         
-        // ★★★ 타임존 문제 해결을 위한 로직 수정 ★★★
+        const isCurrentMonth = day.getMonth() === date.getMonth();
+        const isToday = toLocalDateString(new Date()) === dayString;
+        const isSelected = selectedDateInfo && toLocalDateString(selectedDateInfo.date) === dayString;
+        
         const dayLeaves = leaves.filter(l => {
             if (!l.start_date || !l.end_date) return false;
-            const start = new Date(l.start_date.replace(/-/g, "/"));
-            const end = new Date(l.end_date.replace(/-/g, "/"));
-            start.setHours(0,0,0,0); end.setHours(0,0,0,0);
-            return cloneDay >= start && cloneDay <= end;
+            return dayString >= l.start_date && dayString <= l.end_date;
         });
-        const daySchedules = personalSchedules.filter(s =>
-            new Date(s.schedule_date.replace(/-/g, "/")).toDateString() === cloneDay.toDateString()
-        );
+        // --- [수정] --- new Date() 변환 없이 문자열로 직접 비교합니다.
+        const daySchedules = personalSchedules.filter(s => s.schedule_date === dayString);
         
-        days.push( <div key={day.toISOString()} className={`flex justify-center items-center ${isWidget ? 'h-8' : 'h-10'}`}><button onClick={() => { if (isCurrentMonth) setSelectedDateInfo({ date: cloneDay, leaves: dayLeaves, schedules: daySchedules }); }} disabled={!isCurrentMonth} className={`flex items-center justify-center rounded-full text-sm transition-all relative ${isWidget ? 'w-7 h-7' : 'w-8 h-8'} ${!isCurrentMonth ? 'text-gray-300 cursor-not-allowed' : 'text-gray-700'} ${isToday ? 'bg-blue-600 text-white font-bold' : ''} ${isSelected && !isWidget ? 'ring-2 ring-blue-500' : ''} ${dayLeaves.length > 0 ? 'bg-green-100' : ''} ${isCurrentMonth && !isToday && 'hover:bg-gray-100'}`}>{day.getDate()}{!isWidget && daySchedules.length > 0 && <span className="absolute bottom-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></span>}</button></div> );
+        days.push( <div key={dayString} className={`flex justify-center items-center ${isWidget ? 'h-8' : 'h-10'}`}><button onClick={() => { if (isCurrentMonth) setSelectedDateInfo({ date: cloneDay, leaves: dayLeaves, schedules: daySchedules }); }} disabled={!isCurrentMonth} className={`flex items-center justify-center rounded-full text-sm transition-all relative ${isWidget ? 'w-7 h-7' : 'w-8 h-8'} ${!isCurrentMonth ? 'text-gray-300 cursor-not-allowed' : 'text-gray-700'} ${isToday ? 'bg-blue-600 text-white font-bold' : ''} ${isSelected && !isWidget ? 'ring-2 ring-blue-500' : ''} ${dayLeaves.length > 0 ? 'bg-green-100' : ''} ${isCurrentMonth && !isToday && 'hover:bg-gray-100'}`}>{day.getDate()}{!isWidget && daySchedules.length > 0 && <span className="absolute bottom-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></span>}</button></div> );
         day.setDate(day.getDate() + 1);
       }
       rows.push(<div className="grid grid-cols-7" key={i}>{days}</div>);
