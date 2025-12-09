@@ -25,7 +25,12 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
     const [approvalComment, setApprovalComment] = useState('');
     const [currentStep, setCurrentStep] = useState(null);
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
+    
     const [manualDocNumber, setManualDocNumber] = useState('');
+
+    // --- [추가] --- 문서 번호 수정을 위한 상태변수
+    const [isEditingDocNum, setIsEditingDocNum] = useState(false);
+    const [tempDocNum, setTempDocNum] = useState('');
 
     const printRef = useRef(null);
     const { exportToPdf, isExporting } = usePdfExport(printRef);
@@ -52,8 +57,11 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                         paymentMethod: parsedContent.paymentMethod || '',
                         cardNumberLastFour: parsedContent.cardNumberLastFour || '',
                         description: parsedContent.description || '',
-                        documentNumber: doc.document_number || '미지정',
+                        documentNumber: doc.document_number || '미지정', 
                     });
+
+                    // 수정 모드 초기값 설정
+                    setTempDocNum(doc.document_number || '');
 
                     const activeStep = approvalHistory?.find(step => step.status === 'pending' || step.status === '대기');
                     setCurrentStep(activeStep);
@@ -85,11 +93,33 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
         setupPage();
     }, [doc, approvalHistory]);
 
+    // --- [추가] --- 문서 번호 수정 핸들러
+    const handleUpdateDocNumber = async () => {
+        if (!tempDocNum.trim()) return toast.error("문서 번호를 입력해주세요.");
+
+        try {
+            const { error } = await supabase
+                .from('approval_documents')
+                .update({ document_number: tempDocNum })
+                .eq('id', doc.id);
+
+            if (error) throw error;
+
+            setFormData(prev => ({ ...prev, documentNumber: tempDocNum }));
+            setIsEditingDocNum(false);
+            toast.success("문서 번호가 수정되었습니다.");
+        } catch (error) {
+            console.error("문서 번호 수정 실패:", error);
+            toast.error("문서 번호 수정에 실패했습니다.");
+        }
+    };
+
     const handleApprovalAction = async (newStatus) => {
         if (!currentStep) return toast.error("결재를 진행할 수 없습니다.");
         if (newStatus === '반려' && !approvalComment.trim()) {
             return toast.error("반려 시에는 의견을 입력해야 합니다.");
         }
+        
         if (newStatus === '승인' && isFinalApprover && !manualDocNumber.trim()) {
             return toast.error("최종 승인 시에는 문서 번호를 반드시 입력해야 합니다.");
         }
@@ -106,25 +136,30 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
 
             if (newStatus === '반려' || !nextStep) {
                 const finalStatus = newStatus === '반려' ? '반려' : '완료';
+                
+                const docNumToSave = (finalStatus === '완료') ? manualDocNumber : doc.document_number;
+
                 await supabase
                     .from('approval_documents')
                     .update({ 
                         status: finalStatus, 
                         completed_at: new Date().toISOString(),
-                        document_number: finalStatus === '완료' ? manualDocNumber : doc.document_number 
+                        document_number: docNumToSave
                     })
                     .eq('id', doc.id)
                     .throwOnError();
                 
                 if (finalStatus === '완료') {
-                    setFormData(prev => ({ ...prev, documentNumber: manualDocNumber }));
+                    setFormData(prev => ({ ...prev, documentNumber: manualDocNumber || '미지정' }));
+                    setTempDocNum(manualDocNumber); // 수정 모드 값도 업데이트
                 }
+
             } else {
                 await supabase.from('approval_document_approvers').update({ status: '대기' }).eq('id', nextStep.id).throwOnError();
                 await supabase.from('approval_documents').update({ status: '진행중', current_approver_id: nextStep.approver_id }).eq('id', doc.id).throwOnError();
             }
             toast.success(`문서가 ${newStatus}되었습니다.`);
-            window.location.reload();
+            router.refresh();
         } catch (error) {
             toast.error(`${newStatus} 처리 실패: ${error.message}`);
         } finally {
@@ -133,7 +168,7 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
     };
 
     const handlePdfExport = () => {
-        const fileName = `${formData.requesterName}_지출결의서_${new Date().toISOString().split('T')[0]}.pdf`;
+        const fileName = `${formData.requesterName}_지출결의서_${formData.documentNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
         exportToPdf(fileName);
     };
     
@@ -160,8 +195,37 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
             <div className="flex-1" ref={printRef}>
                 <div className="bg-white p-10 rounded-xl shadow-lg border">
                     <h1 className="text-2xl font-bold text-center mb-8">{doc.title || '지출 결의서'}</h1>
-                    <div className="text-right text-sm text-gray-500 mb-4">
-                        <p>문서번호: {formData.documentNumber}</p>
+                    <div className="text-right text-sm text-gray-500 mb-4 flex flex-col items-end">
+                        {/* --- [수정] --- 문서 번호 수정 UI 적용 --- */}
+                        <div className="flex items-center space-x-2">
+                            <span className="font-bold text-gray-600">문서번호:</span>
+                            {isEditingDocNum ? (
+                                <div className="flex items-center space-x-1">
+                                    <input 
+                                        type="text" 
+                                        value={tempDocNum} 
+                                        onChange={(e) => setTempDocNum(e.target.value)}
+                                        className="border rounded px-1 py-0.5 text-sm w-32"
+                                    />
+                                    <button onClick={handleUpdateDocNumber} className="text-xs bg-blue-500 text-white px-2 py-1 rounded">저장</button>
+                                    <button onClick={() => setIsEditingDocNum(false)} className="text-xs bg-gray-300 text-black px-2 py-1 rounded">취소</button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center space-x-2 group">
+                                    <span>{formData.documentNumber}</span>
+                                    {/* 완료된 문서일 때만 수정 버튼 노출 (프린트 시에는 숨김) */}
+                                    {doc?.status === '완료' && (
+                                        <button 
+                                            onClick={() => setIsEditingDocNum(true)} 
+                                            className="text-gray-400 hover:text-blue-500 no-print"
+                                            title="문서번호 수정"
+                                        >
+                                            ✏️
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                         <p>작성일: {new Date(doc.created_at).toLocaleDateString('ko-KR')}</p>
                     </div>
                     <div className="mb-8 border border-gray-300">
@@ -214,7 +278,7 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                     <div className="border border-gray-300">
                         <h2 className="p-2 bg-gray-100 font-bold border-b">상세 내역 (적요)</h2>
                         <div className="p-4">
-                            <p className="w-full p-3 border rounded-md bg-gray-50 h-40 overflow-auto text-sm">{formData.description}</p>
+                            <p className="w-full p-3 border rounded-md bg-gray-50 h-40 overflow-auto text-sm whitespace-pre-wrap break-all">{formData.description}</p>
                         </div>
                     </div>
                     {attachmentSignedUrls.length > 0 && (
@@ -264,7 +328,7 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                         <div>
                             <h2 className="text-lg font-bold mb-4 border-b pb-2">참조인</h2>
                             <div className="space-y-2">
-                                {referrerHistory.map((ref) => (
+                                {referrerHistory.map((ref, index) => (
                                     <div key={ref.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-md">
                                         <span className="text-sm font-medium">{ref.referrer?.full_name || '이름 없음'} ({ref.referrer?.position || '직위 없음'})</span>
                                     </div>
@@ -277,7 +341,13 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                             {isFinalApprover && (
                                 <div className="mb-4">
                                     <label className="block text-lg font-bold mb-2 text-blue-600">문서 번호 입력</label>
-                                    <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} placeholder="예: 지출-2025-001" className="w-full p-2 border border-blue-300 rounded-md" />
+                                    <input
+                                        type="text"
+                                        value={manualDocNumber}
+                                        onChange={(e) => setManualDocNumber(e.target.value)}
+                                        placeholder="예: 지출-2025-001 (미입력 시 공란)"
+                                        className="w-full p-2 border border-blue-300 rounded-md"
+                                    />
                                 </div>
                             )}
                             <h2 className="text-lg font-bold mb-2">결재 의견</h2>
