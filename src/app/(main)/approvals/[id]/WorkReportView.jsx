@@ -21,6 +21,15 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
         todayPlan: '',
         issues: '',
         nextPlan: '',
+        hourlyTasks: {},
+        // --- [추가] --- 항목 노출 여부 상태
+        visibleSections: {
+            hourlyTasks: true,
+            todayPlan: true,
+            achievements: true,
+            issues: true,
+            nextPlan: true
+        }
     });
     const [currentStep, setCurrentStep] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -57,6 +66,15 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                         todayPlan: parsedContent.todayPlan || '',
                         issues: parsedContent.issues || '',
                         nextPlan: parsedContent.nextPlan || '',
+                        hourlyTasks: parsedContent.hourlyTasks || {},
+                        // --- [수정] --- 저장된 노출 설정을 가져오되, 없으면 기본값(전체노출) 사용
+                        visibleSections: parsedContent.visibleSections || {
+                            hourlyTasks: true,
+                            todayPlan: true,
+                            achievements: true,
+                            issues: true,
+                            nextPlan: true
+                        }
                     });
 
                     const activeStep = approvalHistory?.find(step => step.status === '대기');
@@ -199,42 +217,77 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                         </table>
                     </div>
 
+                    {/* --- [수정] --- 시간별 내역 (Visible 체크 반영) */}
+                    {formData.visibleSections.hourlyTasks && (
+                        <div className="mb-8 border border-gray-300 animate-in fade-in duration-500">
+                            <h2 className="p-2 bg-blue-50 font-bold border-b text-sm text-center text-blue-900">시간별 주요 업무 내역</h2>
+                            <table className="w-full text-sm border-collapse">
+                                <tbody>
+                                    {Object.keys(formData.hourlyTasks).length > 0 ? (
+                                        Object.entries(formData.hourlyTasks).map(([time, task]) => (
+                                            <tr key={time} className="border-b last:border-0">
+                                                <th className="p-2 bg-gray-50 font-medium w-32 text-center border-r text-gray-500">{time}</th>
+                                                <td className="p-2">{task || '-'}</td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td className="p-4 text-center text-gray-400">등록된 시간별 업무 내역이 없습니다.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
                     <div className="space-y-6 text-sm">
-                        {/* --- [수정] --- 입력창 자체의 높이를 p-2에서 p-3로 늘립니다. --- */}
-                        <div className="mb-8">
-                            <label className="block text-gray-700 font-bold mb-2">보고서 유형</label>
-                            <input type="text" value={formData.reportType || ''} className="w-full p-3 border rounded-md bg-gray-100" readOnly />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="mb-2">
+                                <label className="block text-gray-700 font-bold mb-2">보고서 유형</label>
+                                <input type="text" value={formData.reportType || ''} className="w-full p-3 border rounded-md bg-gray-100" readOnly />
+                            </div>
+                            <div className="mb-2">
+                                <label className="block text-gray-700 font-bold mb-2">보고일자</label>
+                                <input type="text" value={formData.reportDate || ''} className="w-full p-3 border rounded-md bg-gray-100" readOnly />
+                            </div>
                         </div>
 
-                        <div className="mb-8">
-                            <label className="block text-gray-700 font-bold mb-2">보고일자</label>
-                            <input type="date" value={formData.reportDate || ''} className="w-full p-3 border rounded-md bg-gray-100" readOnly />
-                        </div>
+                        {/* --- [수정] --- 금일 업무 계획 (Visible 체크 반영) */}
+                        {formData.visibleSections.todayPlan && (
+                            <div className="mb-8 animate-in fade-in duration-500">
+                                <label className="block text-gray-700 font-bold mb-2">업무 계획</label>
+                                <textarea value={formData.todayPlan || ''} className="w-full p-3 border rounded-md bg-gray-100 min-h-[120px]" readOnly />
+                            </div>
+                        )}
 
-                        <div className="mb-8">
-                            <label className="block text-gray-700 font-bold mb-2">금일 업무 계획</label>
-                            <textarea value={formData.todayPlan || ''} className="w-full p-3 border rounded-md bg-gray-100 min-h-[120px]" readOnly />
-                        </div>
+                        {/* --- [수정] --- 업무 진행 및 실적 (Visible 체크 반영) */}
+                        {formData.visibleSections.achievements && (
+                            <div className="mb-8 animate-in fade-in duration-500">
+                                <label className="block text-gray-700 font-bold mb-2">상세 업무 진행 및 실적</label>
+                                <div className="w-full p-3 border rounded-md bg-gray-100 min-h-[150px] overflow-auto prose prose-sm max-w-none"
+                                    dangerouslySetInnerHTML={{ __html: formData.achievements || '<p>내용 없음</p>' }}
+                                ></div>
+                            </div>
+                        )}
 
-                        <div className="mb-8">
-                            <label className="block text-gray-700 font-bold mb-2">업무 진행 및 실적</label>
-                            <div className="w-full p-3 border rounded-md bg-gray-100 min-h-[150px] overflow-auto prose prose-sm max-w-none"
-                                dangerouslySetInnerHTML={{ __html: formData.achievements || '<p>내용 없음</p>' }}
-                            ></div>
-                        </div>
+                        {/* --- [수정] --- 특이사항 및 문제점 (Visible 체크 반영) */}
+                        {formData.visibleSections.issues && (
+                            <div className="mb-8 animate-in fade-in duration-500">
+                                <label className="block text-gray-700 font-bold mb-2 text-red-600">특이사항 및 문제점</label>
+                                <textarea value={formData.issues || ''} className="w-full p-3 border rounded-md bg-gray-100 min-h-[120px]" readOnly />
+                            </div>
+                        )}
 
-                        <div className="mb-8">
-                            <label className="block text-gray-700 font-bold mb-2">특이사항 및 문제점</label>
-                            <textarea value={formData.issues || ''} className="w-full p-3 border rounded-md bg-gray-100 min-h-[120px]" readOnly />
-                        </div>
-
-                        <div className="mb-8">
-                            <label className="block text-gray-700 font-bold mb-2">익일 업무 계획</label>
-                            <textarea value={formData.nextPlan || ''} className="w-full p-3 border rounded-md bg-gray-100 min-h-[120px]" readOnly />
-                        </div>
+                        {/* --- [수정] --- 익일 업무 계획 (Visible 체크 반영) */}
+                        {formData.visibleSections.nextPlan && (
+                            <div className="mb-8 animate-in fade-in duration-500">
+                                <label className="block text-gray-700 font-bold mb-2">향후 업무 계획</label>
+                                <textarea value={formData.nextPlan || ''} className="w-full p-3 border rounded-md bg-gray-100 min-h-[120px]" readOnly />
+                            </div>
+                        )}
                         
                         {attachmentSignedUrls.length > 0 && (
-                            <div className="mt-6">
+                            <div className="mt-6 no-print">
                                 <h3 className="text-lg font-bold mb-2">첨부 파일</h3>
                                 <ul className="space-y-2">
                                     {attachmentSignedUrls.map((file, index) => (
@@ -259,6 +312,8 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                     </div>
                 </div>
             </div>
+
+            {/* 우측 사이드바 (결재선 등) */}
             <div className="w-96 p-8 no-print">
                 <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
                     {doc?.status === '완료' && (

@@ -18,6 +18,22 @@ export default function WorkReportPage() {
     const [allEmployees, setAllEmployees] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
+
+    // 시간대 정의
+    const timeSlots = [
+        '08:30 - 09:30', '09:30 - 10:30', '10:30 - 11:30', '11:30 - 12:00', 
+        '13:00 - 14:00', '14:00 - 15:00', '15:00 - 16:00', '16:00 - 17:30'
+    ];
+
+    // --- [추가] --- 각 항목의 노출 여부를 제어하는 상태
+    const [visibleSections, setVisibleSections] = useState({
+        hourlyTasks: true,
+        todayPlan: true,
+        achievements: true,
+        issues: true,
+        nextPlan: true
+    });
+
     const [formData, setFormData] = useState({
         title: '업무 보고서',
         reportType: '일일보고',
@@ -26,11 +42,10 @@ export default function WorkReportPage() {
         todayPlan: '',
         issues: '',
         nextPlan: '',
+        hourlyTasks: timeSlots.reduce((acc, time) => ({ ...acc, [time]: '' }), {}),
     });
     const [loading, setLoading] = useState(false);
     const [attachments, setAttachments] = useState([]);
-
-    // --- [삭제] --- 문서번호 관련 state와 useEffect를 모두 제거합니다.
 
     useEffect(() => {
         const fetchEmployees = async () => {
@@ -46,9 +61,21 @@ export default function WorkReportPage() {
         }
     }, [employee, employeeLoading]);
 
+    // 체크박스 핸들러
+    const handleVisibilityChange = (section) => {
+        setVisibleSections(prev => ({ ...prev, [section]: !prev[section] }));
+    };
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleHourlyChange = (time, value) => {
+        setFormData(prev => ({
+            ...prev,
+            hourlyTasks: { ...prev.hourlyTasks, [time]: value }
+        }));
     };
 
     const handleQuillChange = (value) => {
@@ -106,9 +133,10 @@ export default function WorkReportPage() {
         });
 
         const submissionData = {
-            title: `업무 보고서 (${employee.full_name})`, // 제목에 이름 추가
+            title: `${formData.reportType} (${employee.full_name})`,
             content: JSON.stringify({
                 ...formData,
+                visibleSections, // 어떤 섹션이 포함되었는지 정보도 함께 저장
                 requesterName: employee.full_name,
                 requesterDepartment: employee.department,
                 requesterPosition: employee.position,
@@ -155,18 +183,40 @@ export default function WorkReportPage() {
     }), []);
 
     if (employeeLoading) return <div className="flex justify-center items-center h-screen">로딩 중...</div>;
-    if (!employee) return <div className="flex justify-center items-center h-screen text-red-500">직원 정보를 불러올 수 없습니다.</div>;
 
     return (
         <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
             <div className="flex-1">
                 <div className="bg-white p-10 rounded-xl shadow-lg border">
-                    <h1 className="text-2xl font-bold text-center mb-8">업무 보고서</h1>
-                    {/* --- [수정] --- 문서번호 표시 부분을 삭제하고 작성일만 남깁니다. --- */}
-                    <div className="text-right text-sm text-gray-500 mb-4">
-                        <p>작성일: {new Date().toLocaleDateString('ko-KR')}</p>
-                    </div>
+                    <h1 className="text-2xl font-bold text-center mb-8">업무 보고서 작성</h1>
 
+                    {/* --- [추가] --- 항목 설정 체크박스 영역 */}
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">보고서 항목 구성 설정</p>
+                        <div className="flex flex-wrap gap-4">
+                            <label className="flex items-center space-x-2 cursor-pointer group">
+                                <input type="checkbox" checked={visibleSections.hourlyTasks} onChange={() => handleVisibilityChange('hourlyTasks')} className="w-4 h-4 text-blue-600 rounded" />
+                                <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">시간별 내역</span>
+                            </label>
+                            <label className="flex items-center space-x-2 cursor-pointer group">
+                                <input type="checkbox" checked={visibleSections.todayPlan} onChange={() => handleVisibilityChange('todayPlan')} className="w-4 h-4 text-blue-600 rounded" />
+                                <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">금일 계획</span>
+                            </label>
+                            <label className="flex items-center space-x-2 cursor-pointer group">
+                                <input type="checkbox" checked={visibleSections.achievements} onChange={() => handleVisibilityChange('achievements')} className="w-4 h-4 text-blue-600 rounded" />
+                                <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">진행/실적</span>
+                            </label>
+                            <label className="flex items-center space-x-2 cursor-pointer group">
+                                <input type="checkbox" checked={visibleSections.issues} onChange={() => handleVisibilityChange('issues')} className="w-4 h-4 text-blue-600 rounded" />
+                                <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">특이사항</span>
+                            </label>
+                            <label className="flex items-center space-x-2 cursor-pointer group">
+                                <input type="checkbox" checked={visibleSections.nextPlan} onChange={() => handleVisibilityChange('nextPlan')} className="w-4 h-4 text-blue-600 rounded" />
+                                <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">향후 계획</span>
+                            </label>
+                        </div>
+                    </div>
+                    
                     <div className="mb-8 border border-gray-300">
                         <table className="w-full text-sm border-collapse">
                             <tbody>
@@ -186,43 +236,86 @@ export default function WorkReportPage() {
                         </table>
                     </div>
 
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">보고서 유형</label>
-                            <select name="reportType" value={formData.reportType} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required>
-                                <option value="일일보고">일일보고</option>
-                                <option value="주간보고">주간보고</option>
-                                <option value="월간보고">월간보고</option>
-                                <option value="기타">기타</option>
-                            </select>
+                    <div className="space-y-8">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-gray-700 font-bold mb-2 text-sm">보고서 유형</label>
+                                <select name="reportType" value={formData.reportType} onChange={handleChange} className="w-full p-2 border rounded-md text-sm">
+                                    <option value="일일보고">일일보고</option>
+                                    <option value="주간보고">주간보고</option>
+                                    <option value="월간보고">월간보고</option>
+                                    <option value="기타">기타</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 font-bold mb-2 text-sm">보고일자</label>
+                                <input type="date" name="reportDate" value={formData.reportDate} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" />
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">보고일자</label>
-                            <input type="date" name="reportDate" value={formData.reportDate} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required />
-                        </div>
-                        <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">금일 업무 계획</label>
-                            <textarea name="todayPlan" value={formData.todayPlan} onChange={handleChange} className="w-full p-3 border rounded-md h-24 resize-none" placeholder="금일 업무 계획을 입력하세요." required />
-                        </div>
-                        <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">업무 진행 및 실적</label>
-                            <ReactQuill theme="snow" value={formData.achievements} onChange={handleQuillChange} modules={quillModules} className="h-48 mb-12" />
-                        </div>
-                        <div className="mt-12">
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">특이사항 및 문제점</label>
-                            <textarea name="issues" value={formData.issues} onChange={handleChange} className="w-full p-3 border rounded-md h-24 resize-none" placeholder="특이사항이나 문제점을 입력하세요." />
-                        </div>
-                        <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">익일 업무 계획</label>
-                            <textarea name="nextPlan" value={formData.nextPlan} onChange={handleChange} className="w-full p-3 border rounded-md h-24 resize-none" placeholder="익일 업무 계획을 입력하세요." required />
-                        </div>
+
+                        {/* 시간별 주요 업무 내역 (체크 시 노출) */}
+                        {visibleSections.hourlyTasks && (
+                            <div className="p-6 bg-blue-50 rounded-lg border border-blue-100 animate-in fade-in duration-300">
+                                <h2 className="text-sm font-bold text-blue-800 mb-4 flex items-center">🕒 시간별 주요 업무 내역</h2>
+                                <div className="grid grid-cols-1 gap-3">
+                                    {timeSlots.map(time => (
+                                        <div key={time} className="flex items-center space-x-3">
+                                            <span className="w-32 text-xs font-semibold text-gray-500">{time}</span>
+                                            <input 
+                                                type="text" 
+                                                value={formData.hourlyTasks[time]} 
+                                                onChange={(e) => handleHourlyChange(time, e.target.value)}
+                                                className="flex-1 p-2 border-b border-gray-300 bg-transparent outline-none focus:border-blue-500 text-sm transition-colors"
+                                                placeholder="수행 내용을 입력하세요"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 금일 업무 계획 (체크 시 노출) */}
+                        {visibleSections.todayPlan && (
+                            <div className="animate-in fade-in duration-300">
+                                <label className="block text-gray-700 font-bold mb-2 text-sm">금일 업무 계획 (또는 이번 주 계획)</label>
+                                <textarea name="todayPlan" value={formData.todayPlan} onChange={handleChange} className="w-full p-3 border rounded-md h-24 resize-none text-sm" placeholder="업무 계획을 입력하세요." />
+                            </div>
+                        )}
+
+                        {/* 상세 업무 진행 및 실적 (체크 시 노출) */}
+                        {visibleSections.achievements && (
+                            <div className="animate-in fade-in duration-300">
+                                <label className="block text-gray-700 font-bold mb-2 text-sm">상세 업무 진행 및 실적</label>
+                                <ReactQuill theme="snow" value={formData.achievements} onChange={handleQuillChange} modules={quillModules} className="h-48 mb-12" />
+                            </div>
+                        )}
+
+                        {/* 특이사항 및 문제점 (체크 시 노출) */}
+                        {visibleSections.issues && (
+                            <div className="mt-12 animate-in fade-in duration-300">
+                                <label className="block text-gray-700 font-bold mb-2 text-sm">특이사항 및 문제점</label>
+                                <textarea name="issues" value={formData.issues} onChange={handleChange} className="w-full p-3 border rounded-md h-24 resize-none text-sm" placeholder="특이사항이나 문제점을 입력하세요." />
+                            </div>
+                        )}
+
+                        {/* 향후 업무 계획 (체크 시 노출) */}
+                        {visibleSections.nextPlan && (
+                            <div className="animate-in fade-in duration-300">
+                                <label className="block text-gray-700 font-bold mb-2 text-sm">향후 업무 계획</label>
+                                <textarea name="nextPlan" value={formData.nextPlan} onChange={handleChange} className="w-full p-3 border rounded-md h-24 resize-none text-sm" placeholder="다음 업무 계획을 입력하세요." />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
+            
             <div className="w-96 p-8">
                 <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
                     <div className="border-b pb-4">
-                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">결재선</h2><button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-bold">결재선</h2>
+                            <button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button>
+                        </div>
                         <div className="space-y-3">
                             {approvers.map((approver, index) => (
                                 <div key={index} className="flex items-center space-x-2">
@@ -236,28 +329,16 @@ export default function WorkReportPage() {
                             ))}
                         </div>
                     </div>
-                    <div className="border-b pb-4">
-                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">참조인</h2><button type="button" onClick={addReferrer} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
-                        <div className="space-y-3">
-                            {referrers.map((referrer, index) => (
-                                <div key={index} className="flex items-center space-x-2">
-                                    <select value={referrer.id} onChange={(e) => handleReferrerChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm" >
-                                        <option value="">참조인 선택</option>
-                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
-                                    </select>
-                                    <button type="button" onClick={() => removeReferrer(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="border-b pb-4">
-                        <FileUploadDnd onUploadComplete={handleUploadComplete} />
-                    </div>
-                    <div className="border-b pb-4">
-                        <h2 className="text-lg font-bold mb-2">기안 의견</h2>
-                        <textarea placeholder="의견을 입력하세요" className="w-full p-2 border rounded-md h-20 resize-none"></textarea>
-                    </div>
-                    <button type="submit" disabled={loading} className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold">{loading ? '상신 중...' : '업무 보고서 상신'}</button>
+                    
+                    <FileUploadDnd onUploadComplete={handleUploadComplete} />
+                    
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full py-3 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-gray-400 transition-colors uppercase tracking-wider"
+                    >
+                        {loading ? '상신 중...' : '결재 상신'}
+                    </button>
                 </form>
             </div>
         </div>
