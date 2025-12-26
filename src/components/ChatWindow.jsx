@@ -1,14 +1,14 @@
-// src/components/GroupChatWindow.jsx
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { supabase } from '../lib/supabase/client';
-import styles from './ChatWindow.module.css'; // ★★★ 새로 만든 CSS 파일을 import 합니다 ★★★
-import { useEmployee } from '../contexts/EmployeeContext';
+import styles from './ChatWindow.module.css'; // CSS 모듈 임포트 확인
+import { EmployeeContext } from '../contexts/EmployeeContext';
 import InvitationModal from './ManageParticipantsModal';
+import { Send, UserPlus, Paperclip } from 'lucide-react';
 
 export default function GroupChatWindow({ chatRoom }) {
-    const { currentEmployee } = useContext(EmployeeContext);
+    const { employee: currentEmployee } = useContext(EmployeeContext);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [participants, setParticipants] = useState([]);
@@ -47,9 +47,6 @@ export default function GroupChatWindow({ chatRoom }) {
                 }
                 setMessages(prev => [...prev, { ...payload.new, sender }]);
             })
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_participants', filter: `room_id=eq.${currentRoomId}`}, (payload) => {
-                fetchChatData();
-            })
             .subscribe();
         channelRef.current = channel;
 
@@ -61,7 +58,7 @@ export default function GroupChatWindow({ chatRoom }) {
         };
     }, [currentRoomId, currentUserId, fetchChatData, participants]);
 
-    useEffect(() => { scrollToBottom(); }, [messages]);
+    useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
@@ -70,46 +67,90 @@ export default function GroupChatWindow({ chatRoom }) {
         setNewMessage('');
         
         const tempId = `temp_${Date.now()}`;
-        const optimisticMessage = { id: tempId, room_id: currentRoomId, sender_id: currentUserId, content: contentToSave, created_at: new Date().toISOString(), isOptimistic: true, sender: { name: currentEmployee.name } };
+        const optimisticMessage = { 
+            id: tempId, 
+            room_id: currentRoomId, 
+            sender_id: currentUserId, 
+            content: contentToSave, 
+            created_at: new Date().toISOString(), 
+            isOptimistic: true, 
+            sender: { name: currentEmployee.full_name } 
+        };
         setMessages(prev => [...prev, optimisticMessage]);
 
-        const { data, error } = await supabase.from('chat_messages').insert({ room_id: currentRoomId, sender_id: currentUserId, content: contentToSave }).select(`*, sender:profiles(id, name: full_name)`).single();
+        const { error } = await supabase.from('chat_messages').insert({ 
+            room_id: currentRoomId, 
+            sender_id: currentUserId, 
+            content: contentToSave 
+        });
+
         if (error) {
             setMessages(prev => prev.filter(msg => msg.id !== tempId));
             setNewMessage(contentToSave);
-            alert("메시지 전송 실패: " + error.message);
+            alert("전송 실패: " + error.message);
         } else {
-            setMessages(prev => prev.map(msg => (msg.id === tempId ? { ...data, isOptimistic: false } : msg)));
+            fetchChatData(); // 성공 시 데이터 갱신
         }
     };
     
-    if (!currentEmployee || !chatRoom) return <div className={styles.loading}>채팅방 정보를 불러오는 중입니다...</div>;
+    if (!currentEmployee || !chatRoom) return <div className={styles.loading}>연결 중...</div>;
 
     return (
-        // ★★★ 이제 모든 className이 새로운 스타일을 가리킵니다! ★★★
         <div className={styles.chatWindow}>
-             <header className={styles.chatHeader}>
-                <div className="flex-1">
-                    <h3 className="font-bold">{chatRoom.name}</h3>
-                    <p className="text-xs text-gray-500 truncate">{participants.map(p => p?.name).filter(Boolean).join(', ')}</p>
+            <header className={styles.chatHeader}>
+                <div>
+                    <h3>{chatRoom.name}</h3>
+                    <p style={{fontSize: '0.7rem', opacity: 0.6}}>
+                        {participants.length}명 참여 중
+                    </p>
                 </div>
-                <button onClick={() => setInviteModalOpen(true)} className="ml-4 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700">초대하기</button>
+                <button onClick={() => setInviteModalOpen(true)} className="invite-btn">
+                    <UserPlus size={18} />
+                </button>
             </header>
+
             <div className={styles.messagesContainer}>
-                {messages.map((msg) => (
-                    <div key={msg.id} className={`${styles.messageBubble} ${String(msg.sender_id) === String(currentUserId) ? styles.sent : styles.received}`}>
-                        {String(msg.sender_id) !== String(currentUserId) && (<div className={styles.senderName}>{msg.sender?.name || '상대방'}</div>)}
-                        <p className={styles.messageContent}>{msg.content}</p>
-                        <span className={styles.messageTimestamp}>{new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                ))}
-                <div ref={messagesEndRef} />
+                <div className={styles.messagesList}>
+                    {messages.map((msg) => {
+                        const isMine = String(msg.sender_id) === String(currentUserId);
+                        return (
+                            <div key={msg.id} className={`${styles.messageWrapper} ${isMine ? styles.sentWrapper : styles.receivedWrapper}`}>
+                                {!isMine && <div className={styles.senderName}>{msg.sender?.name}</div>}
+                                <div className={`${styles.messageBubble} ${isMine ? styles.sentBubble : styles.receivedBubble}`}>
+                                    {msg.content}
+                                </div>
+                                <span className={styles.messageTimestamp}>
+                                    {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            </div>
+                        );
+                    })}
+                    <div ref={messagesEndRef} />
+                </div>
             </div>
+
             <form onSubmit={handleSendMessage} className={styles.messageForm}>
-                <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="메시지를 입력하세요..." className={styles.messageInput} autoFocus />
-                <button type="submit" className={styles.sendButton} disabled={!newMessage.trim()}>전송</button>
+                <button type="button" className="attach-btn"><Paperclip size={20} /></button>
+                <input 
+                    type="text" 
+                    value={newMessage} 
+                    onChange={(e) => setNewMessage(e.target.value)} 
+                    placeholder="메시지를 입력하세요..." 
+                    className={styles.messageInput}
+                />
+                <button type="submit" className={styles.sendButton} disabled={!newMessage.trim()}>
+                    <Send size={18} />
+                </button>
             </form>
-            {isInviteModalOpen && (<InvitationModal isOpen={isInviteModalOpen} onClose={() => setInviteModalOpen(false)} chatRoomId={currentRoomId} currentParticipants={participants} />)}
+
+            {isInviteModalOpen && (
+                <InvitationModal 
+                    isOpen={isInviteModalOpen} 
+                    onClose={() => setInviteModalOpen(false)} 
+                    chatRoomId={currentRoomId} 
+                    currentParticipants={participants} 
+                />
+            )}
         </div>
     );
 }

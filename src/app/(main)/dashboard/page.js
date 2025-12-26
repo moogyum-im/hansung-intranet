@@ -1,24 +1,43 @@
-// 파일 경로: src/app/(main)/dashboard/page.js
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardCalendar from './DashboardCalendar';
-// --- [추가] 푸시 알림 버튼 컴포넌트를 가져옵니다. ---
 import PushSubscriptionButton from '@/components/PushSubscriptionButton'; 
+import { 
+  Bell, 
+  FileCheck, 
+  Megaphone, 
+  Layers, 
+  Trophy, 
+  ShieldCheck,
+  MessageSquare,
+  ArrowUpRight,
+  Calendar,
+  ClipboardList,
+  CheckCircle2
+} from 'lucide-react';
 
-// --- 아이콘 컴포넌트들 (기존과 동일) ---
-const ApprovalIcon = () => (<svg className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>);
-const ChatIcon = () => (<svg className="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>);
-
-// --- 위젯 컴포넌트들 (기존과 동일) ---
-const Widget = ({ title, children, className }) => (
-    <div className={`bg-white rounded-xl shadow-sm border flex flex-col ${className}`}>
-        <h3 className="font-bold text-gray-800 text-base px-5 py-3 border-b">{title}</h3>
-        <div className="p-4 flex-1 overflow-y-auto" style={{ maxHeight: '250px' }}>
+// --- 현장 관리 스타일 위젯 프레임 ---
+const PremiumWidget = ({ title, icon: Icon, children, className, badge }) => (
+    <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden ${className}`}>
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-2.5">
+                <div className="text-slate-500">
+                    <Icon size={18} />
+                </div>
+                <h3 className="font-bold text-slate-700 text-[14px] tracking-tight">{title}</h3>
+            </div>
+            {badge > 0 && (
+                <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                    {badge}
+                </span>
+            )}
+        </div>
+        <div className="p-4 flex-1 overflow-y-auto custom-scrollbar bg-white">
             {children}
         </div>
     </div>
@@ -27,38 +46,68 @@ const Widget = ({ title, children, className }) => (
 function MyApprovalsWidget({ employee }) {
     const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [] });
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('toReview');
+
     useEffect(() => {
         if (employee) {
             const fetchData = async () => {
                 setLoading(true);
                 const { data, error } = await supabase.rpc('get_my_approvals', { p_user_id: employee.id });
                 if (error) console.error("결재 현황 로딩 실패:", error);
-                else setApprovalsData({ toReview: data.filter(doc => doc.category === 'to_review'), submitted: data.filter(doc => doc.category === 'submitted') });
+                else setApprovalsData({ 
+                    toReview: data.filter(doc => doc.category === 'to_review'), 
+                    submitted: data.filter(doc => doc.category === 'submitted') 
+                });
                 setLoading(false);
             };
             fetchData();
         }
     }, [employee]);
-    const [activeTab, setActiveTab] = useState('toReview');
+
     const renderList = (list) => {
-        if (!list || list.length === 0) return <p className="text-center text-gray-500 py-4 text-sm">해당 문서가 없습니다.</p>;
-        return <ul className="space-y-2">{list.map(doc => (<Link key={doc.id} href={`/approvals/${doc.id}`} className="block p-2 rounded-lg hover:bg-gray-50"><div className="flex justify-between items-center"><p className="text-sm font-medium text-gray-800 truncate">{doc.title}</p></div><p className="text-xs text-gray-500 mt-0.5">상신자: {doc.creator_name || '정보 없음'}</p></Link>))}</ul>;
+        if (!list || list.length === 0) return (
+            <div className="flex flex-col items-center justify-center py-10 text-slate-300">
+                <CheckCircle2 size={32} strokeWidth={1.5} />
+                <p className="text-[11px] font-medium mt-2">대기 중인 문서가 없습니다.</p>
+            </div>
+        );
+        return (
+            <div className="space-y-1">
+                {list.map(doc => (
+                    <Link key={doc.id} href={`/approvals/${doc.id}`} className="group flex items-center justify-between p-3 rounded-lg hover:bg-blue-50/50 transition-all border border-transparent hover:border-blue-100">
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-bold text-slate-700 truncate group-hover:text-blue-600">{doc.title}</p>
+                            <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
+                                <span className="text-slate-500 font-semibold">{doc.creator_name}</span>
+                                <span>|</span>
+                                <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                            </p>
+                        </div>
+                        <ArrowUpRight size={14} className="text-slate-300 group-hover:text-blue-500 transition-transform" />
+                    </Link>
+                ))}
+            </div>
+        );
     };
+
     return (
-        <Widget title="내 결재 현황" className="h-full">
-            {loading ? <p className="text-sm text-gray-500">로딩 중...</p> : (
-                <>
-                    <div className="border-b border-gray-200 mb-3"><nav className="-mb-px flex space-x-4 text-sm">
-                        <button onClick={() => setActiveTab('toReview')} className={`py-2 px-1 border-b-2 ${activeTab === 'toReview' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>받은 결재 ({approvalsData.toReview.length})</button>
-                        <button onClick={() => setActiveTab('submitted')} className={`py-2 px-1 border-b-2 ${activeTab === 'submitted' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>상신한 결재 ({approvalsData.submitted.length})</button>
-                    </nav></div>
-                    <div>
-                        {activeTab === 'toReview' && renderList(approvalsData.toReview)}
-                        {activeTab === 'submitted' && renderList(approvalsData.submitted)}
-                    </div>
-                </>
-            )}
-        </Widget>
+        <PremiumWidget title="내 결재 현황" icon={FileCheck} badge={approvalsData[activeTab].length} className="h-[320px]">
+            <div className="flex bg-slate-100 p-1 rounded-lg mb-3">
+                <button 
+                    onClick={() => setActiveTab('toReview')} 
+                    className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-all ${activeTab === 'toReview' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    미결재 문서
+                </button>
+                <button 
+                    onClick={() => setActiveTab('submitted')} 
+                    className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-all ${activeTab === 'submitted' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    기안한 문서
+                </button>
+            </div>
+            {loading ? <div className="text-[11px] text-slate-400 py-10 text-center animate-pulse italic">조회 중...</div> : renderList(approvalsData[activeTab])}
+        </PremiumWidget>
     );
 }
 
@@ -66,6 +115,7 @@ function NotificationWidget() {
     const { employee } = useEmployee();
     const router = useRouter();
     const [notifications, setNotifications] = useState([]);
+
     useEffect(() => {
         if (employee) {
             const fetchNotifications = async () => {
@@ -75,25 +125,35 @@ function NotificationWidget() {
             fetchNotifications();
         }
     }, [employee]);
-    const handleNotificationClick = async (notification) => {
-        await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
-        if (notification.link) router.push(notification.link);
-    };
+
     return (
-        <Widget title={`확인할 내용 (${notifications.length})`}>
+        <PremiumWidget title="알림 센터" icon={Bell} badge={notifications.length} className="h-[320px]">
             {notifications.length > 0 ? (
-                <div className="space-y-2">{notifications.map(noti => (
-                    <div key={noti.id} onClick={() => handleNotificationClick(noti)} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
-                        <div className="flex items-start gap-2.5">
-                            {noti.type === 'new_message' ? <ChatIcon /> : <ApprovalIcon />}
-                            <div className="flex-grow"><p className="text-sm text-gray-700">{noti.content}</p></div>
+                <div className="space-y-1">
+                    {notifications.map(noti => (
+                        <div key={noti.id} onClick={async () => {
+                            await supabase.from('notifications').update({ is_read: true }).eq('id', noti.id);
+                            if (noti.link) router.push(noti.link);
+                        }} className="p-3 rounded-lg hover:bg-slate-50 cursor-pointer group transition-all border border-transparent hover:border-slate-200">
+                            <div className="flex items-start gap-3">
+                                <div className="mt-1">
+                                    {noti.type === 'new_message' ? <MessageSquare size={14} className="text-blue-500" /> : <FileCheck size={14} className="text-amber-500" />}
+                                </div>
+                                <div className="flex-grow">
+                                    <p className="text-[13px] text-slate-600 leading-snug font-medium group-hover:text-slate-900">{noti.content}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1.5">방금 전</p>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                ))}</div>
+                    ))}
+                </div>
             ) : (
-                <div className="text-center text-gray-400 text-sm flex-1 flex flex-col justify-center items-center h-full"><svg className="h-10 w-10 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><p>확인할 내용이 없습니다.</p></div>
+                <div className="flex flex-col items-center justify-center py-10 text-slate-300 h-full">
+                    <ShieldCheck size={32} strokeWidth={1.5} />
+                    <p className="text-[11px] font-medium mt-2">새로운 알림이 없습니다.</p>
+                </div>
             )}
-        </Widget>
+        </PremiumWidget>
     );
 }
 
@@ -101,7 +161,6 @@ export default function DashboardPage() {
     const { employee: currentUser, loading: employeeLoading } = useEmployee();
     const [notices, setNotices] = useState([]);
     
-    // --- [수정] 자동 구독 로직을 삭제합니다. ---
     useEffect(() => {
         const fetchNotices = async () => {
             const { data } = await supabase.from('notices').select(`id, title, created_at`).order('created_at', { ascending: false }).limit(5);
@@ -110,44 +169,92 @@ export default function DashboardPage() {
         fetchNotices();
     }, []);
     
-    if (employeeLoading) return <div className="h-full flex items-center justify-center"><p>대시보드 정보를 불러오는 중...</p></div>;
+    if (employeeLoading) return (
+        <div className="h-full flex items-center justify-center bg-slate-50">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+    );
 
     return (
-        <div className="p-4 sm:p-6 space-y-6 bg-gray-50 min-h-full">
-            <header className="flex justify-between items-start">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">안녕하세요, {currentUser?.full_name || '사용자'}님! 👋</h1>
-                    <p className="text-gray-500 text-sm mt-1">오늘도 힘찬 하루 보내세요.</p>
-                </div>
-                {/* --- [추가] 푸시 알림 버튼을 여기에 배치합니다. --- */}
-                <div className="w-40">
-                    <PushSubscriptionButton />
+        <div className="bg-[#f1f5f9] min-h-screen pb-12">
+            {/* 상단 헤더 - 현장 관리 탭 스타일 (네이비 톤) */}
+            <header className="bg-[#1e293b] pt-10 pb-24 px-6 sm:px-12 border-b border-white/5">
+                <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/40">
+                            <Trophy size={28} className="text-white" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2 text-blue-400 mb-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest bg-blue-400/10 px-2 py-0.5 rounded">Management System</span>
+                            </div>
+                            <h1 className="text-2xl font-black text-white tracking-tight sm:text-3xl">
+                                {currentUser?.full_name} {currentUser?.position}님, 반갑습니다.
+                            </h1>
+                            <p className="text-slate-400 text-sm mt-1 font-medium">
+                                한성 인트라넷 통합 관제 시스템입니다.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <PushSubscriptionButton />
+                    </div>
                 </div>
             </header>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="space-y-6">
-                    <NotificationWidget />
-                    <MyApprovalsWidget employee={currentUser} />
-                </div>
-                <div className="space-y-6">
-                    <Widget title="최신 공지사항">
-                        {notices.length > 0 ? (
-                            <ul className="space-y-1">{notices.map(notice => (
-                                <li key={notice.id}><Link href={`/notices/${notice.id}`} className="p-2 -m-2 rounded-lg flex justify-between items-center hover:bg-gray-50"><p className="font-medium text-sm text-gray-700 truncate flex-1">{notice.title}</p><p className="text-xs text-gray-400 shrink-0 ml-2">{new Date(notice.created_at).toLocaleDateString()}</p></Link></li>
-                            ))}</ul>
-                        ) : <p className="text-center text-gray-400 text-sm py-8">등록된 공지가 없습니다.</p>}
-                    </Widget>
-                    <Widget title="최근 프로젝트">
-                         <div className="text-center text-gray-400 text-sm flex-1 flex flex-col justify-center items-center h-full">
-                            <p>참여중인 프로젝트가 없습니다.</p>
+            <main className="max-w-7xl mx-auto px-6 sm:px-12 -mt-12 relative z-20">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                    {/* 왼쪽 컬럼 */}
+                    <div className="space-y-6">
+                        <NotificationWidget />
+                        <MyApprovalsWidget employee={currentUser} />
+                    </div>
+
+                    {/* 중앙 컬럼 */}
+                    <div className="space-y-6">
+                        <PremiumWidget title="전사 공지사항" icon={Megaphone} className="h-[320px]">
+                            {notices.length > 0 ? (
+                                <ul className="divide-y divide-slate-50">
+                                    {notices.map(notice => (
+                                        <li key={notice.id}>
+                                            <Link href={`/notices/${notice.id}`} className="group p-3 block hover:bg-slate-50 transition-all rounded-lg">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <p className="font-bold text-[13px] text-slate-700 truncate flex-1 group-hover:text-blue-600">{notice.title}</p>
+                                                    <span className="text-[10px] text-slate-400 font-medium ml-4">{new Date(notice.created_at).toLocaleDateString()}</span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-400 truncate">관리자로부터 발송된 전사 공지사항입니다.</p>
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : <div className="text-center py-20 text-slate-300 text-[11px] font-bold">등록된 공지가 없습니다.</div>}
+                        </PremiumWidget>
+
+                        <PremiumWidget title="진행 중인 업무" icon={ClipboardList} className="h-[320px]">
+                             <div className="h-full flex flex-col items-center justify-center text-slate-300">
+                                <Layers size={32} strokeWidth={1.5} />
+                                <p className="text-[11px] font-medium mt-2">할당된 업무가 없습니다.</p>
+                            </div>
+                        </PremiumWidget>
+                    </div>
+
+                    {/* 오른쪽 컬럼: 전사 캘린더 */}
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 min-h-[664px] flex flex-col">
+                        <div className="flex items-center justify-between mb-6 border-b border-slate-50 pb-4">
+                            <div className="flex items-center gap-2.5">
+                                <div className="text-slate-500">
+                                    <Calendar size={18} />
+                                </div>
+                                <h3 className="font-bold text-slate-700 text-[14px]">전사 일정 및 공정표</h3>
+                            </div>
+                            <button className="text-[11px] font-bold text-blue-600 hover:underline">상세보기</button>
                         </div>
-                    </Widget>
+                        <div className="flex-1 overflow-hidden">
+                            <DashboardCalendar />
+                        </div>
+                    </div>
                 </div>
-                <div className="space-y-6">
-                    <DashboardCalendar />
-                </div>
-            </div>
+            </main>
         </div>
     );
 }

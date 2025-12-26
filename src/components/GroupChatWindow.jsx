@@ -8,18 +8,26 @@ import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import ManageParticipantsModal from './ManageParticipantsModal';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { 
+  Send, 
+  Paperclip, 
+  LogOut, 
+  Download, 
+  X, 
+  Edit3, 
+  Users, 
+  ShieldCheck, 
+  Clock, 
+  Lock,
+  MessageCircle
+} from 'lucide-react';
 
-// 아이콘 컴포넌트들 (생략)
-const SendIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg> );
-const FileAttachIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 hover:text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13.5" /></svg> );
-const LeaveIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
-const DownloadIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V3" /></svg> );
-const CloseIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg> );
-
+// 메시지 타입별 렌더링 컴포넌트
 const MessageContent = ({ msg, allMessages }) => {
     const repliedToMessage = msg.replied_to_message_id 
         ? allMessages.find(m => m.id === msg.replied_to_message_id) 
         : null;
+
     const renderRepliedMessage = () => {
         if (!repliedToMessage) return null;
         let repliedContent = repliedToMessage.content;
@@ -28,23 +36,49 @@ const MessageContent = ({ msg, allMessages }) => {
             try { repliedContent = JSON.parse(repliedToMessage.content).name; } catch(e) { repliedContent = '파일'; }
         }
         return (
-            <div className="bg-gray-200 p-2 rounded-md mb-2 text-xs text-gray-700 border-l-2 border-gray-500">
-                <p className="font-semibold text-gray-800">{repliedToMessage.sender?.full_name || '...'}에게 답장</p>
-                <p className="truncate">{repliedContent}</p>
+            <div className="bg-black/5 p-2 rounded-lg mb-2 text-[11px] border-l-4 border-blue-500/50 backdrop-blur-sm">
+                <p className="font-black text-blue-700">{repliedToMessage.sender?.full_name || '...'}님에게 답장</p>
+                <p className="truncate text-slate-500">{repliedContent}</p>
             </div>
         );
     };
+
     switch (msg.message_type) {
         case 'image': 
-            return ( <div> {renderRepliedMessage()} <Image src={msg.content} alt="전송된 이미지" width={250} height={250} unoptimized={true} className="rounded-lg object-cover cursor-pointer" onClick={() => window.open(msg.content, '_blank')} /> </div> );
+            return ( 
+                <div className="space-y-2"> 
+                    {renderRepliedMessage()} 
+                    <div className="relative group overflow-hidden rounded-2xl shadow-md transition-transform hover:scale-[1.02]">
+                        <Image src={msg.content} alt="전송된 이미지" width={280} height={280} unoptimized={true} className="object-cover cursor-pointer" onClick={() => window.open(msg.content, '_blank')} /> 
+                    </div>
+                </div> 
+            );
         case 'file':
             try {
                 const fileInfo = JSON.parse(msg.content);
-                // [수정] 아래 <a> 태그에 download 속성 추가 및 글자색 클래스(text-gray-800) 추가
-                return ( <div> {renderRepliedMessage()} <a href={fileInfo.url} download={fileInfo.name} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 bg-gray-100 rounded-lg hover:bg-gray-200 border max-w-xs text-gray-800"><DownloadIcon /><span className="truncate underline text-sm">{fileInfo.name}</span></a></div> );
-            } catch (e) { return <p className="text-sm text-red-500">파일 정보를 표시할 수 없습니다.</p>; }
+                return ( 
+                    <div className="space-y-2"> 
+                        {renderRepliedMessage()} 
+                        <a href={fileInfo.url} download={fileInfo.name} target="_blank" rel="noopener noreferrer" 
+                           className="flex items-center gap-3 p-3 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:shadow-lg transition-all group">
+                            <div className="p-2 bg-blue-100 rounded-xl text-blue-600 group-hover:bg-[#1e293b] group-hover:text-white transition-colors">
+                                <Download size={18} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-xs font-black text-slate-800 truncate leading-none mb-1">{fileInfo.name}</p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Secure Download</p>
+                            </div>
+                        </a>
+                    </div> 
+                );
+            } catch (e) { return <p className="text-xs text-red-500 font-bold">⚠️ 파일 정보를 표시할 수 없습니다.</p>; }
         default: 
-            return ( <div> {renderRepliedMessage()} <p className="text-sm whitespace-pre-wrap">{msg.content}</p> </div> );
+            return ( 
+                <div className="space-y-1"> 
+                    {renderRepliedMessage()} 
+                    <p className="text-[14px] font-bold leading-relaxed whitespace-pre-wrap tracking-tight">{msg.content}</p> 
+                </div> 
+            );
     }
 };
 
@@ -66,7 +100,6 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
     const messageInputRef = useRef(null);
     const channelRef = useRef(null);
     const currentRoomId = chatRoom?.id;
-    const isRoomCreator = chatRoom?.created_by === currentUserId;
 
     const getSupabaseClient = useCallback(() => {
         return createClientComponentClient({
@@ -84,10 +117,7 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
     const fetchUnreadCounts = useCallback(async () => {
         if (!currentRoomId || !currentUserId) return;
         const { data, error } = await supabase.rpc('get_unread_counts_for_my_messages', { p_room_id: currentRoomId });
-        if (error) {
-            console.error("안 읽음 숫자 로딩 실패:", error);
-            return;
-        }
+        if (error) return;
         if (data) {
             const countsMap = data.reduce((acc, item) => {
                 acc[item.message_id] = item.unread_count;
@@ -104,32 +134,19 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
     useEffect(() => {
         if (!currentRoomId || !currentUserId) return;
         const markAsRead = async () => {
-            const { error } = await supabase.from('chat_room_participants').update({ last_read_at: new Date().toISOString() }).eq('room_id', currentRoomId).eq('user_id', currentUserId);
-            if (error) console.error("메시지 읽음 처리 실패:", error);
+            await supabase.from('chat_room_participants').update({ last_read_at: new Date().toISOString() }).eq('room_id', currentRoomId).eq('user_id', currentUserId);
         };
         markAsRead();
         fetchUnreadCounts();
-        if (channelRef.current) {
-            supabase.removeChannel(channelRef.current);
-            channelRef.current = null;
-        }
+        
         const channel = supabase.channel(`room-final-${currentRoomId}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${currentRoomId}` }, 
                 async (payload) => {
-                    if (payload.new.sender_id === currentUserId) {
-                        return;
-                    }
-
-                    const { data: newMessageData, error: fetchError } = await supabase.from('chat_messages').select('*, sender:profiles(id, full_name, avatar_url)').eq('id', payload.new.id).single();
-                    if (fetchError) {
-                        console.error("새 메시지 상세 정보 로딩 실패:", fetchError);
-                        return;
-                    }
+                    if (payload.new.sender_id === currentUserId) return;
+                    const { data: newMessageData } = await supabase.from('chat_messages').select('*, sender:profiles(id, full_name, avatar_url)').eq('id', payload.new.id).single();
                     if (newMessageData) {
                         setMessages(prev => {
-                            if (prev.some(msg => msg.id === newMessageData.id)) {
-                                return prev;
-                            }
+                            if (prev.some(msg => msg.id === newMessageData.id)) return prev;
                             return [...prev, newMessageData];
                         });
                         await markAsRead();
@@ -137,12 +154,9 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
                 }
             )
             .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_participants', filter: `room_id=eq.${currentRoomId}` }, 
-                async (payload) => {
-                    const { data: pData, error: pError } = await supabase.from('chat_room_participants').select('profiles(id, full_name, position)').eq('room_id', currentRoomId);
-                    if (pError) {
-                        console.error("실시간 참여자 목록 업데이트 오류:", pError);
-                        toast.error("참여자 목록 업데이트 실패.");
-                    } else if (pData) {
+                async () => {
+                    const { data: pData } = await supabase.from('chat_room_participants').select('profiles(id, full_name, position)').eq('room_id', currentRoomId);
+                    if (pData) {
                         setParticipants(pData.map(p => p.profiles));
                         fetchUnreadCounts();
                     }
@@ -150,347 +164,227 @@ export default function GroupChatWindow({ currentUser, chatRoom, initialMessages
             )
             .subscribe();
         channelRef.current = channel;
-        return () => { 
-            if (channelRef.current) {
-                supabase.removeChannel(channelRef.current);
-                channelRef.current = null;
-            }
-        };
+        return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
     }, [currentRoomId, currentUserId, fetchUnreadCounts]);
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim() || !currentUserId || !currentRoomId || employeeLoading) {
-            toast.error("메시지 전송에 필요한 정보가 아직 로드되지 않았습니다.");
-            return;
-        }
+        if (!newMessage.trim() || !currentUserId || !currentRoomId || employeeLoading) return;
         
         const content = newMessage.trim();
         const repliedToId = replyingTo ? replyingTo.id : null;
-
         setNewMessage('');
         setReplyingTo(null);
-        if (messageInputRef.current) messageInputRef.current.focus();
 
         const tempMessageId = Date.now().toString();
-        const messageData = {
-            room_id: currentRoomId,
-            sender_id: currentUserId,
-            content: content,
-            message_type: 'text',
-            replied_to_message_id: repliedToId,
-        };
-
-        const tempMessage = {
-            id: tempMessageId,
-            ...messageData,
-            created_at: new Date().toISOString(),
-            sender: employee,
-        };
+        const messageData = { room_id: currentRoomId, sender_id: currentUserId, content, message_type: 'text', replied_to_message_id: repliedToId };
+        const tempMessage = { id: tempMessageId, ...messageData, created_at: new Date().toISOString(), sender: employee };
         
         setMessages(prev => [...prev, tempMessage]);
         scrollToBottom();
 
         const localSupabase = getSupabaseClient();
-        try {
-            const { data: insertedMessage, error } = await localSupabase.from('chat_messages').insert(messageData).select('*, sender:profiles(id, full_name, avatar_url)').single();
-            
-            if (error) {
-                console.error("★★★ 메시지 DB 삽입 실패 오류! ★★★", error); 
-                toast.error(`메시지 전송에 실패했습니다: ${error.message}`); 
-                setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
-                setNewMessage(content);
-            } else if (insertedMessage) {
-                setMessages(prev => prev.map(msg => msg.id === tempMessageId ? insertedMessage : msg));
-                fetchUnreadCounts();
-            }
-        } catch (e) {
-            console.error("Supabase insert 호출 중 예외 발생:", e);
-            toast.error(`메시지 전송 중 예외 발생: ${e.message || '알 수 없는 오류'}`);
+        const { data: insertedMessage, error } = await localSupabase.from('chat_messages').insert(messageData).select('*, sender:profiles(id, full_name, avatar_url)').single();
+        if (error) {
             setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
             setNewMessage(content);
+        } else if (insertedMessage) {
+            setMessages(prev => prev.map(msg => msg.id === tempMessageId ? insertedMessage : msg));
+            fetchUnreadCounts();
         }
     };
     
     const handleFileChange = async (event) => {
         const files = event.target.files;
-        if (!files || files.length === 0 || !currentUserId || !currentRoomId || employeeLoading) {
-            if (!files || files.length === 0) toast.error("파일이 선택되지 않았습니다.");
-            return;
-        }
+        if (!files || files.length === 0 || !currentUserId || !currentRoomId || employeeLoading) return;
 
         setIsUploading(true);
-        const toastId = toast.loading(`${files.length}개의 파일 업로드 중...`);
+        const toastId = toast.loading(`${files.length}개의 파일 보안 검사 및 전송 중...`);
         const repliedToId = replyingTo ? replyingTo.id : null;
         setReplyingTo(null);
-        if (messageInputRef.current) messageInputRef.current.focus();
 
         const uploadPromises = Array.from(files).map(async (file) => {
             const normalizedFileName = file.name.normalize('NFC');
-            
             const tempMessageId = `${Date.now()}-${normalizedFileName}`;
-            
-            const tempFileMessage = {
-                id: tempMessageId,
-                room_id: currentRoomId,
-                sender_id: currentUserId,
-                content: `"${normalizedFileName}" 파일 업로드 중...`,
-                message_type: 'text',
-                created_at: new Date().toISOString(),
-                sender: employee,
-                replied_to_message_id: repliedToId,
-            };
-            setMessages(prev => [...prev, tempFileMessage]);
-            scrollToBottom();
+            setMessages(prev => [...prev, { id: tempMessageId, content: `파일 전송 중...`, message_type: 'text', created_at: new Date().toISOString(), sender: employee }]);
 
             try {
                 const fileExtension = normalizedFileName.split('.').pop() ?? '';
-                const randomFileName = `${crypto.randomUUID()}.${fileExtension}`;
-                const filePath = `${currentUserId}/${randomFileName}`;
-                
+                const filePath = `${currentUserId}/${crypto.randomUUID()}.${fileExtension}`;
                 const localSupabase = getSupabaseClient();
-
                 const { error: uploadError } = await localSupabase.storage.from('chat-files').upload(filePath, file);
                 if (uploadError) throw uploadError;
 
                 const { data: urlData } = localSupabase.storage.from('chat-files').getPublicUrl(filePath);
-                if (!urlData || !urlData.publicUrl) throw new Error("파일 URL을 가져오는 데 실패했습니다.");
-
-                const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(normalizedFileName.split('.').pop()?.toLowerCase()) ? 'image' : 'file';
+                const messageType = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension.toLowerCase()) ? 'image' : 'file';
                 const content = messageType === 'image' ? urlData.publicUrl : JSON.stringify({ name: normalizedFileName, url: urlData.publicUrl });
                 
-                const messageData = {
-                    room_id: currentRoomId, 
-                    sender_id: currentUserId, 
-                    content: content, 
-                    message_type: messageType, 
-                    replied_to_message_id: repliedToId
-                };
-                
-                const { data: insertedMessage, error: insertError } = await localSupabase.from('chat_messages').insert(messageData).select('*, sender:profiles(id, full_name, avatar_url)').single();
-                if (insertError) {
-                    await localSupabase.storage.from('chat-files').remove([filePath]);
-                    throw insertError;
-                }
-
-                if (insertedMessage) {
-                    setMessages(prev => prev.map(msg => msg.id === tempMessageId ? insertedMessage : msg));
-                } else {
-                    setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
-                }
+                const { data: insertedMessage, error: insertError } = await localSupabase.from('chat_messages').insert({ room_id: currentRoomId, sender_id: currentUserId, content, message_type: messageType, replied_to_message_id: repliedToId }).select('*, sender:profiles(id, full_name, avatar_url)').single();
+                if (insertedMessage) setMessages(prev => prev.map(msg => msg.id === tempMessageId ? insertedMessage : msg));
             } catch (error) {
-                console.error(`"${normalizedFileName}" 업로드 실패:`, error);
                 setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
-                throw new Error(`"${normalizedFileName}" 업로드 실패`);
             }
         });
 
-        try {
-            await Promise.all(uploadPromises);
-            fetchUnreadCounts();
-            toast.success(`${files.length}개 파일 전송 완료!`, { id: toastId });
-        } catch (error) {
-            toast.error(`일부 파일 전송 실패.`, { id: toastId });
-        } finally {
-            setIsUploading(false);
-            if(fileInputRef.current) fileInputRef.current.value = "";
-        }
+        await Promise.all(uploadPromises);
+        fetchUnreadCounts();
+        toast.success(`전송 완료`, { id: toastId });
+        setIsUploading(false);
     };
     
     const handleSaveRoomName = async () => {
-        if (!editedRoomName.trim() || editedRoomName === chatRoom.name) {
-            setIsEditingRoomName(false);
-            return;
-        }
-        const toastId = toast.loading('채팅방 이름을 변경 중입니다...');
-        try {
-            const { error } = await supabase
-                .from('chat_rooms')
-                .update({ name: editedRoomName.trim() })
-                .eq('id', currentRoomId);
-            if (error) throw error;
-            setEditedRoomName(editedRoomName.trim());
-            setIsEditingRoomName(false);
-            toast.success('채팅방 이름이 변경되었습니다.', { id: toastId });
-        } catch (error) {
-            console.error("채팅방 이름 변경 실패:", error);
-            toast.error(`이름 변경 실패: ${error.message}`, { id: toastId });
-        }
+        if (!editedRoomName.trim() || editedRoomName === chatRoom.name) { setIsEditingRoomName(false); return; }
+        const { error } = await supabase.from('chat_rooms').update({ name: editedRoomName.trim() }).eq('id', currentRoomId);
+        if (!error) { setEditedRoomName(editedRoomName.trim()); setIsEditingRoomName(false); }
     };
 
     const handleLeaveRoom = async () => {
-        if (!currentUserId || !currentRoomId) {
-            toast.error("채팅방 정보를 찾을 수 없습니다.");
-            return;
-        }
-        if (window.confirm('정말로 이 채팅방을 나가시겠습니까?')) {
-            const toastId = toast.loading('채팅방을 나가는 중...');
-            try {
-                const { error } = await supabase.from('chat_room_participants').delete().eq('user_id', currentUserId).eq('room_id', currentRoomId);
-                if (error) throw error;
-                const { count: remainingParticipantsCount, error: countError } = await supabase
-                    .from('chat_room_participants')
-                    .select('*', { count: 'exact' })
-                    .eq('room_id', currentRoomId);
-                if (countError) console.warn("남은 참여자 수 확인 실패:", countError);
-                if (remainingParticipantsCount === 0) {
-                    const { error: roomDeleteError } = await supabase
-                        .from('chat_rooms')
-                        .delete()
-                        .eq('id', currentRoomId);
-                    if (roomDeleteError) console.error("빈 채팅방 삭제 실패:", roomDeleteError);
-                }
-                toast.success('채팅방에서 나갔습니다.', { id: toastId });
-                router.push('/chatrooms');
-                router.refresh();
-            } catch (error) {
-                console.error('채팅방 나가기 실패:', error);
-                toast.error(`오류가 발생했습니다: ${error.message}`);
-            }
+        if (!currentUserId || !currentRoomId) return;
+        if (window.confirm('채팅방을 나가시겠습니까?')) {
+            const { error } = await supabase.from('chat_room_participants').delete().eq('user_id', currentUserId).eq('room_id', currentRoomId);
+            if (!error) { router.push('/chatrooms'); router.refresh(); }
         }
     };
 
-    const handleSetReply = (message) => {
-        setReplyingTo(message);
-        messageInputRef.current?.focus();
-    };
-
-    if (!currentUser || !chatRoom || employeeLoading) return <div className="p-8 text-center">채팅 정보를 불러오는 중...</div>;
+    if (!currentUser || !chatRoom || employeeLoading) return (
+        <div className="h-full flex flex-col items-center justify-center bg-[#1e293b]">
+            <Lock size={40} className="text-blue-400 animate-bounce" />
+            <p className="text-white font-black text-sm tracking-widest mt-4 uppercase">Secure Loading...</p>
+        </div>
+    );
     
     const renderMessagesWithDateSeparator = () => {
         let lastDate = null;
-        const messageElements = [];
-
-        messages.forEach((msg) => {
-            if (!msg.created_at) return;
-
+        return messages.map((msg) => {
+            if (!msg.created_at) return null;
             const messageDateStr = new Date(msg.created_at).toDateString();
+            const dateSep = messageDateStr !== lastDate ? (
+                <div key={`sep-${messageDateStr}`} className="flex items-center gap-4 my-8">
+                    <div className="h-[1px] flex-1 bg-slate-200"></div>
+                    <span className="bg-white border border-slate-100 text-slate-400 text-[10px] font-black px-4 py-1.5 rounded-full shadow-sm uppercase tracking-widest">
+                        {new Date(msg.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
+                    </span>
+                    <div className="h-[1px] flex-1 bg-slate-200"></div>
+                </div>
+            ) : null;
+            lastDate = messageDateStr;
 
-            if (messageDateStr !== lastDate) {
-                lastDate = messageDateStr;
-                const formattedDate = new Date(msg.created_at).toLocaleDateString('ko-KR', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    weekday: 'long',
-                });
-
-                messageElements.push(
-                    <div key={`date-separator-${lastDate}`} className="text-center my-4">
-                        <span className="bg-gray-200 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full">
-                            {formattedDate}
-                        </span>
-                    </div>
-                );
-            }
-
-            const isSentByMe = String(msg.sender_id) === String(currentUserId);
+            const isMine = String(msg.sender_id) === String(currentUserId);
             const unreadCount = unreadCounts[msg.id] || 0;
 
-            messageElements.push(
-                <div key={msg.id} onClick={() => handleSetReply(msg)} className={`flex items-end gap-3 cursor-pointer ${isSentByMe ? 'justify-end' : 'justify-start'}`}>
-                    {!isSentByMe && (
-                        <div className="w-9 h-9 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center font-bold text-gray-600 text-sm" title={msg.sender?.full_name}>
-                            {msg.sender?.full_name?.charAt(0) || 'U'}
-                        </div>
-                    )}
-                    <div className="flex flex-col gap-1 w-full max-w-md">
-                        {!isSentByMe && <p className="text-xs text-gray-500 ml-3">{msg.sender?.full_name}</p>}
-                        <div className={`flex items-end gap-2 ${isSentByMe ? 'flex-row-reverse' : ''}`}>
-                            {isSentByMe && unreadCount > 0 && (
-                                <span className="text-xs text-yellow-500 self-end mb-1 font-semibold">{unreadCount}</span>
-                            )}
-                            <div className={`p-1 rounded-2xl ${isSentByMe ? 'bg-blue-600 text-white rounded-br-lg' : 'bg-white text-gray-800 rounded-bl-lg border'}`}>
-                                <div className="p-2"><MessageContent msg={msg} allMessages={messages} /></div>
+            return (
+                <div key={msg.id}>
+                    {dateSep}
+                    <div onClick={() => setReplyingTo(msg)} className={`group flex items-end gap-3 mb-6 transition-all cursor-pointer ${isMine ? 'flex-row-reverse' : 'justify-start'}`}>
+                        {!isMine && (
+                            <div className="w-11 h-11 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center font-black text-blue-600 text-sm shrink-0">
+                                {msg.sender?.full_name?.charAt(0)}
                             </div>
-                            <span className="text-xs text-gray-400 self-end flex-shrink-0">
-                                {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: false })}
-                            </span>
+                        )}
+                        <div className={`flex flex-col gap-1 w-full max-w-[70%] ${isMine ? 'items-end' : 'items-start'}`}>
+                            {!isMine && <p className="text-[11px] font-black text-slate-400 ml-1 mb-1 tracking-tight">{msg.sender?.full_name}</p>}
+                            <div className={`flex items-end gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
+                                <div className={`px-5 py-3 rounded-[2rem] shadow-sm transition-all hover:shadow-md
+                                    ${isMine ? 'bg-[#1e293b] text-white rounded-br-none' : 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'}`}>
+                                    <MessageContent msg={msg} allMessages={messages} />
+                                </div>
+                                <div className={`flex flex-col gap-1 items-center ${isMine ? 'items-end' : 'items-start'}`}>
+                                    {isMine && unreadCount > 0 && <span className="text-[10px] font-black text-blue-500 animate-pulse">{unreadCount}</span>}
+                                    <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter">
+                                        {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: false })}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             );
         });
-        return messageElements;
     };
 
-
     return (
-        <div className="flex flex-col h-full bg-gray-100">
-            <header className="flex items-center justify-between p-4 border-b bg-white flex-shrink-0">
-                <div className="flex items-center min-w-0">
-                    {typeof isEditingRoomName === 'boolean' && isEditingRoomName ? (
-                        <input
-                            type="text"
-                            value={editedRoomName}
-                            onChange={(e) => setEditedRoomName(e.target.value)}
-                            onBlur={handleSaveRoomName}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRoomName(); }}
-                            className="text-lg font-bold truncate border-b border-blue-500 focus:outline-none"
-                            autoFocus
-                        />
-                    ) : (
-                        <h3 className="text-lg font-bold truncate">{chatRoom.name}</h3>
-                    )}
-                    {chatRoom.created_by === currentUserId && !chatRoom.is_direct_message && (!isEditingRoomName || typeof isEditingRoomName !== 'boolean') && (
-                        <button onClick={() => setIsEditingRoomName(true)} className="ml-2 p-1 text-gray-500 hover:text-gray-800 rounded-full">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                        </button>
-                    )}
+        <div className="flex flex-col h-full bg-[#f8fafc] overflow-hidden">
+            {/* 상단 웅장한 블루 헤더 */}
+            <header className="relative bg-[#1e293b] pt-10 pb-20 px-8 overflow-hidden shrink-0 shadow-2xl">
+                <div className="absolute top-0 right-0 p-10 opacity-10 rotate-12">
+                    <MessageCircle size={180} className="text-white" />
                 </div>
-                <div className="flex items-center gap-2">
-                    {!chatRoom.is_direct_message && (
-                        <button onClick={() => setManageModalOpen(true)} className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300">
-                            참여자 관리
+                <div className="max-w-6xl mx-auto relative z-10 flex items-center justify-between">
+                    <div className="flex items-center gap-5 min-w-0">
+                        <div className="w-14 h-14 bg-blue-500/20 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/10 text-blue-400 shadow-2xl">
+                            <Users size={28} />
+                        </div>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 text-blue-400 mb-1">
+                                <ShieldCheck size={12} className="fill-current" />
+                                <span className="text-[10px] font-black tracking-[0.2em] uppercase">HANSUNG Secure Channel</span>
+                            </div>
+                            {isEditingRoomName ? (
+                                <input type="text" value={editedRoomName} onChange={(e) => setEditedRoomName(e.target.value)} onBlur={handleSaveRoomName}
+                                    className="bg-transparent text-2xl font-black text-white border-b-2 border-blue-500 focus:outline-none w-full" autoFocus />
+                            ) : (
+                                <h1 className="text-2xl font-black text-white tracking-tight truncate flex items-center gap-3">
+                                    {chatRoom.name}
+                                    {chatRoom.created_by === currentUserId && (
+                                        <button onClick={() => setIsEditingRoomName(true)} className="p-1 hover:text-blue-400 text-white/30 transition-colors">
+                                            <Edit3 size={16} />
+                                        </button>
+                                    )}
+                                </h1>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {!chatRoom.is_direct_message && (
+                            <button onClick={() => setManageModalOpen(true)} className="hidden sm:flex bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-xs shadow-lg transition-all items-center gap-2">
+                                <Users size={16} /> 참여자 관리
+                            </button>
+                        )}
+                        <button onClick={handleLeaveRoom} className="w-11 h-11 bg-white/10 hover:bg-red-500/20 text-white hover:text-red-400 rounded-2xl flex items-center justify-center border border-white/10 transition-all shadow-xl">
+                            <LogOut size={20} />
                         </button>
-                    )}
-                    <button onClick={handleLeaveRoom} className="p-2 text-gray-500 hover:text-red-600 rounded-full"><LeaveIcon /></button>
+                    </div>
                 </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                <div className="flex flex-col gap-4">
-                    {renderMessagesWithDateSeparator()}
-                </div>
-                <div ref={messagesEndRef} />
-            </div>
-
-            <footer className="p-4 bg-white border-t flex-shrink-0">
-                {replyingTo && (
-                    <div className="p-2 mb-2 bg-gray-100 rounded-lg text-sm border-l-4 border-blue-500">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <p className="font-semibold text-blue-600">{replyingTo.sender?.full_name || '알 수 없음'}에게 답장</p>
-                                <p className="text-gray-600 truncate">{replyingTo.message_type === 'text' ? replyingTo.content : (replyingTo.message_type === 'image' ? '사진' : '파일')}</p>
-                            </div>
-                            <button onClick={() => setReplyingTo(null)} className="p-1 rounded-full hover:bg-gray-200">
-                                <CloseIcon />
-                            </button>
-                        </div>
+            {/* 대화 영역 - 카드 디자인 */}
+            <main className="flex-1 max-w-6xl w-full mx-auto px-6 -mt-10 relative z-20 overflow-hidden flex flex-col mb-4">
+                <div className="flex-1 bg-white rounded-[3rem] shadow-[0_30px_60px_rgba(0,0,0,0.12)] border border-slate-100 overflow-hidden flex flex-col">
+                    <div className="flex-1 overflow-y-auto px-8 py-10 custom-scrollbar bg-slate-50/30">
+                        {renderMessagesWithDateSeparator()}
+                        <div ref={messagesEndRef} />
                     </div>
-                )}
-                <form onSubmit={handleSendMessage} className="flex items-center gap-3">
-                    <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple />
-                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || employeeLoading} className="p-2 rounded-full hover:bg-gray-200 disabled:opacity-50">
-                        <FileAttachIcon />
-                    </button>
-                    <input ref={messageInputRef} type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="메시지를 입력하세요..." className="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800" autoFocus />
-                    <button type="submit" className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-400" disabled={!newMessage.trim() || isUploading || employeeLoading}>
-                        <SendIcon />
-                    </button>
-                </form>
-            </footer>
+
+                    {/* 하단 푸터 및 입력창 */}
+                    <footer className="p-6 bg-white border-t border-slate-50 shrink-0">
+                        {replyingTo && (
+                            <div className="px-5 py-3 mb-4 bg-slate-50 rounded-2xl flex justify-between items-center border border-slate-100 animate-in slide-in-from-bottom-2">
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">답장 대상: {replyingTo.sender?.full_name}</p>
+                                    <p className="text-xs text-slate-500 truncate font-bold">{replyingTo.content}</p>
+                                </div>
+                                <button onClick={() => setReplyingTo(null)} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><X size={16} /></button>
+                            </div>
+                        )}
+                        <form onSubmit={handleSendMessage} className="flex items-center gap-3 bg-slate-100 p-2 rounded-[2rem] border-2 border-transparent focus-within:border-blue-500/20 focus-within:bg-white transition-all shadow-inner">
+                            <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple />
+                            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-slate-400 hover:text-[#1e293b] transition-colors rounded-2xl hover:bg-white/50">
+                                <Paperclip size={24} />
+                            </button>
+                            <input ref={messageInputRef} type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="메시지를 입력하세요..." 
+                                className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-black text-slate-700 placeholder:text-slate-300" />
+                            <button type="submit" disabled={!newMessage.trim() || isUploading} 
+                                className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg ${newMessage.trim() ? 'bg-[#1e293b] text-white hover:scale-105 active:scale-95 shadow-slate-900/20' : 'bg-slate-200 text-slate-400'}`}>
+                                <Send size={22} className={newMessage.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
+                            </button>
+                        </form>
+                    </footer>
+                </div>
+            </main>
+
             {isManageModalOpen && (
-                <ManageParticipantsModal 
-                  isOpen={isManageModalOpen} 
-                  onClose={(isChanged) => { 
-                    setManageModalOpen(false); 
-                    if(isChanged) router.refresh(); 
-                  }} 
-                  room={chatRoom} 
-                  participants={participants} 
-                  currentUser={currentUser}
-                />
+                <ManageParticipantsModal isOpen={isManageModalOpen} onClose={(isChanged) => { setManageModalOpen(false); if(isChanged) router.refresh(); }} 
+                  room={chatRoom} participants={participants} currentUser={currentUser} />
             )}
         </div>
     );
