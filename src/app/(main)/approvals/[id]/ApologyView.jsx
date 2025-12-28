@@ -25,7 +25,6 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
     const [manualDocNumber, setManualDocNumber] = useState('');
 
-    // --- [추가] --- PDF 저장을 위한 useRef와 커스텀 훅
     const printRef = useRef(null);
     const { exportToPdf, isExporting } = usePdfExport(printRef);
 
@@ -130,7 +129,6 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
         }
     };
 
-    // --- [추가] --- PDF 내보내기 버튼 클릭 핸들러
     const handlePdfExport = () => {
         const fileName = `${formData.requesterName}_시말서_${new Date().toISOString().split('T')[0]}.pdf`;
         exportToPdf(fileName);
@@ -149,16 +147,15 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
     };
 
     return (
-        <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
-            {/* --- [수정] --- PDF로 저장할 영역에 ref={printRef}를 추가합니다. */}
-            <div className="flex-1" ref={printRef}>
-                <div className="bg-white p-10 rounded-xl shadow-lg border">
+        <div className="flex flex-col lg:flex-row bg-gray-50 min-h-screen p-4 sm:p-8 lg:space-x-8 space-y-6 lg:space-y-0">
+            <div className="flex-1 w-full" ref={printRef}>
+                <div className="bg-white p-6 sm:p-10 rounded-xl shadow-lg border">
                     <h1 className="text-2xl font-bold text-center mb-4">시 말 서</h1>
                     <div className="text-right text-sm text-gray-500 mb-4">
                         <p>문서번호: {formData.documentNumber}</p>
                     </div>
-                    <div className="mb-8 border border-gray-300">
-                        <table className="w-full text-sm border-collapse">
+                    <div className="mb-8 border border-gray-300 overflow-x-auto">
+                        <table className="w-full text-sm border-collapse min-w-[500px]">
                             <tbody>
                                 <tr>
                                     <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">소속</th>
@@ -214,20 +211,21 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                             </div>
                         )}
 
-                        <div className="pt-8 text-center">
+                        <div className="pt-8 text-center border-t">
                             <p>위와 같이 시말서를 제출합니다.</p>
-                            <p className="mt-4">{new Date(doc.created_at).getFullYear()}년 {new Date(doc.created_at).getMonth() + 1}월 {new Date(doc.created_at).getDate()}일</p>
-                            <p className="mt-4">제출자: {formData.requesterName} (인)</p>
+                            <p className="mt-4 font-medium">{new Date(doc.created_at).getFullYear()}년 {new Date(doc.created_at).getMonth() + 1}월 {new Date(doc.created_at).getDate()}일</p>
+                            <p className="mt-4 font-bold text-lg">제출자: {formData.requesterName} (인)</p>
                         </div>
                     </div>
                 </div>
             </div>
-            <div className="w-96 p-8 no-print">
-                <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
-                    {/* --- [추가] --- 문서 상태가 '완료'일 때만 PDF 저장 버튼을 표시합니다. --- */}
+            
+            {/* 결재선 영역 */}
+            <div className="w-full lg:w-96 no-print">
+                <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 lg:sticky lg:top-8">
                     {doc?.status === '완료' && (
                         <div className="border-b pb-4">
-                            <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-semibold" >
+                            <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-semibold shadow-md active:scale-95 transition-transform" >
                                 {isExporting ? 'PDF 저장 중...' : 'PDF로 저장'}
                             </button>
                         </div>
@@ -238,7 +236,7 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                             {approvalHistory && approvalHistory.map((step, index) => (
                                 <div key={step.id} className={`flex flex-col p-2 rounded-md ${step.status === '대기' ? 'bg-yellow-50' : step.status === '승인' ? 'bg-green-50' : step.status === '반려' ? 'bg-red-50' : ''}`}>
                                     <div className="flex items-center space-x-2">
-                                        <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
+                                        <span className="font-semibold text-sm text-gray-600 shrink-0">{index + 1}차:</span>
                                         <span className="text-sm font-medium">{step.approver?.full_name} ({step.approver?.position})</span>
                                         <span className="ml-auto text-sm">{getStatusIcon(step.status)} {step.approved_at ? new Date(step.approved_at).toLocaleDateString('ko-KR') : ''}</span>
                                     </div>
@@ -270,10 +268,10 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                             <h2 className="text-lg font-bold mb-2">결재 의견</h2>
                             <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} placeholder="결재 의견을 입력하세요." className="w-full p-2 border rounded-md h-24 resize-none mb-4" />
                             <div className="flex space-x-4">
-                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 font-semibold" >
+                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 font-semibold shadow-md" >
                                     {loading ? '처리 중...' : '승인'}
                                 </button>
-                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 font-semibold" >
+                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 font-semibold shadow-md" >
                                     {loading ? '처리 중...' : '반려'}
                                 </button>
                             </div>

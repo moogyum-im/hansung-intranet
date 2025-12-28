@@ -23,7 +23,6 @@ export default function LeaveRequestPage() {
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
     const [loading, setLoading] = useState(false);
-    // --- [수정] --- 여러 파일을 저장하기 위해 배열로 상태를 관리합니다.
     const [attachments, setAttachments] = useState([]);
 
     useEffect(() => {
@@ -61,7 +60,6 @@ export default function LeaveRequestPage() {
     };
     const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
 
-    // --- [수정] --- 파일 목록 전체를 상태에 저장합니다.
     const handleUploadComplete = (files) => {
         setAttachments(files);
     };
@@ -102,7 +100,6 @@ export default function LeaveRequestPage() {
             requester_name: employee.full_name,
             requester_department: employee.department,
             requester_position: employee.position,
-            // --- [수정] --- 파일 배열을 API로 전송합니다.
             attachments: attachments.length > 0 ? attachments : null,
         };
         
@@ -129,12 +126,13 @@ export default function LeaveRequestPage() {
     if (!employee) return <div className="flex justify-center items-center h-screen text-red-500">직원 정보를 불러올 수 없습니다.</div>;
 
     return (
-        <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
-            <div className="flex-1">
-                <div className="bg-white p-10 rounded-xl shadow-lg border">
+        <div className="flex flex-col lg:flex-row bg-gray-50 min-h-screen p-4 sm:p-8 lg:space-x-8 space-y-6 lg:space-y-0">
+            {/* 왼쪽: 문서 본문 */}
+            <div className="flex-1 w-full">
+                <div className="bg-white p-6 sm:p-10 rounded-xl shadow-lg border">
                     <h1 className="text-2xl font-bold text-center mb-8">휴가 신청서</h1>
-                    <div className="mb-8 border border-gray-300">
-                        <table className="w-full text-sm border-collapse">
+                    <div className="mb-8 border border-gray-300 overflow-x-auto">
+                        <table className="w-full text-sm border-collapse min-w-[500px]">
                             <tbody>
                                 <tr>
                                     <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">소속</th>
@@ -159,7 +157,7 @@ export default function LeaveRequestPage() {
                                 <option>연차</option><option>반차</option><option>병가</option><option>경조사</option>
                             </select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-gray-700 font-bold mb-2 text-sm">시작일</label>
                                 <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" />
@@ -179,19 +177,21 @@ export default function LeaveRequestPage() {
                     </div>
                 </div>
             </div>
-            <div className="w-96 p-8">
-                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
+
+            {/* 오른쪽: 결재선 및 제출 버튼 (모바일에서는 하단) */}
+            <div className="w-full lg:w-96 no-print">
+                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 lg:sticky lg:top-8">
                     <div className="border-b pb-4">
                         <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">결재선</h2><button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
                         <div className="space-y-3">
                             {approvers.map((approver, index) => (
                                 <div key={index} className="flex items-center space-x-2">
-                                    <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
+                                    <span className="font-semibold text-sm text-gray-600 shrink-0">{index + 1}차:</span>
                                     <select value={approver.id} onChange={(e) => handleApproverChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm" required>
                                         <option value="">결재자 선택</option>
                                         {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
-                                    <button type="button" onClick={() => removeApprover(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
+                                    <button type="button" onClick={() => removeApprover(index)} className="text-red-500 hover:text-red-700 text-lg font-bold px-2">×</button>
                                 </div>
                             ))}
                         </div>
@@ -205,12 +205,12 @@ export default function LeaveRequestPage() {
                                         <option value="">참조인 선택</option>
                                         {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
-                                    <button type="button" onClick={() => removeReferrer(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
+                                    <button type="button" onClick={() => removeReferrer(index)} className="text-red-500 hover:text-red-700 text-lg font-bold px-2">×</button>
                                 </div>
                             ))}
                         </div>
                     </div>
-                    <button type="submit" disabled={loading} className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold">{loading ? '상신 중...' : '결재 상신'}</button>
+                    <button type="submit" disabled={loading} className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold shadow-md active:scale-95 transition-transform">{loading ? '상신 중...' : '결재 상신'}</button>
                 </form>
             </div>
         </div>

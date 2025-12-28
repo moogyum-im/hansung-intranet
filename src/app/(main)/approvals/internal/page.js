@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
-// --- [추가] --- 저희가 만든 파일 업로드 컴포넌트를 가져옵니다.
 import FileUploadDnd from '@/components/FileUploadDnd';
 
 export default function InternalApprovalPage() {
@@ -20,7 +19,6 @@ export default function InternalApprovalPage() {
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
     const [loading, setLoading] = useState(false);
-    // --- [추가] --- 여러 파일을 저장하기 위해 배열 상태를 추가합니다.
     const [attachments, setAttachments] = useState([]);
 
     useEffect(() => {
@@ -42,7 +40,6 @@ export default function InternalApprovalPage() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // --- [추가] --- 파일 업로드 완료 시 호출될 콜백 함수입니다.
     const handleUploadComplete = (files) => {
         setAttachments(files);
     };
@@ -95,7 +92,6 @@ export default function InternalApprovalPage() {
             document_type: 'internal_approval',
             approver_ids: approver_ids_with_names,
             referrer_ids: referrer_ids_with_names,
-            // --- [추가] --- 파일 배열을 API로 전송합니다.
             attachments: attachments.length > 0 ? attachments : null,
             requester_id: employee.id,
             requester_name: employee.full_name,
@@ -126,12 +122,12 @@ export default function InternalApprovalPage() {
     if (!employee) return <div className="flex justify-center items-center h-screen text-red-500">직원 정보를 불러올 수 없습니다.</div>;
 
     return (
-        <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
-            <div className="flex-1">
-                <div className="bg-white p-10 rounded-xl shadow-lg border">
-                    <h1 className="text-2xl font-bold text-center mb-8">내부 결재</h1>
-                    <div className="mb-8 border border-gray-300">
-                        <table className="w-full text-sm border-collapse">
+        <div className="flex flex-col lg:flex-row bg-gray-50 min-h-screen p-4 sm:p-8 lg:space-x-8 space-y-6 lg:space-y-0">
+            <div className="flex-1 w-full">
+                <div className="bg-white p-6 sm:p-10 rounded-xl shadow-lg border">
+                    <h1 className="text-2xl font-bold text-center mb-8">내부 결재 기안</h1>
+                    <div className="mb-8 border border-gray-300 overflow-x-auto">
+                        <table className="w-full text-sm border-collapse min-w-[500px]">
                             <tbody>
                                 <tr>
                                     <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">소속</th>
@@ -151,52 +147,66 @@ export default function InternalApprovalPage() {
                     
                     <div className="space-y-6">
                         <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">제목</label>
-                            <input type="text" name="title" value={formData.title} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required />
+                            <label className="block text-gray-700 font-bold mb-2 text-sm">기안 제목</label>
+                            <input type="text" name="title" value={formData.title} onChange={handleChange} placeholder="문서 제목을 입력하세요" className="w-full p-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none" required />
                         </div>
                         <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">내용</label>
-                            <textarea name="content" value={formData.content} onChange={handleChange} className="w-full p-3 border rounded-md h-40 resize-none" required />
+                            <label className="block text-gray-700 font-bold mb-2 text-sm">기안 내용</label>
+                            <textarea name="content" value={formData.content} onChange={handleChange} placeholder="내용을 상세히 입력하세요" className="w-full p-3 border rounded-md h-60 resize-none text-sm focus:ring-2 focus:ring-blue-500 outline-none" required />
                         </div>
-                        {/* --- [추가] --- 파일 업로드 컴포넌트를 여기에 삽입합니다. --- */}
                         <div className="pt-2">
                             <FileUploadDnd onUploadComplete={handleUploadComplete} />
                         </div>
                     </div>
                 </div>
             </div>
-            <div className="w-96 p-8">
-                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
-                    <div className="border-b pb-4">
-                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">결재선</h2><button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
+
+            <div className="w-full lg:w-96">
+                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 lg:sticky lg:top-8">
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-bold">결재선 지정</h2>
+                            <button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full hover:bg-blue-200 transition-colors">추가 +</button>
+                        </div>
                         <div className="space-y-3">
                             {approvers.map((approver, index) => (
-                                <div key={index} className="flex items-center space-x-2">
-                                    <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
+                                <div key={index} className="flex items-center space-x-2 animate-in fade-in slide-in-from-right-2">
+                                    <span className="font-semibold text-xs text-gray-500 shrink-0">{index + 1}차</span>
                                     <select value={approver.id} onChange={(e) => handleApproverChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm" required>
                                         <option value="">결재자 선택</option>
                                         {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
-                                    <button type="button" onClick={() => removeApprover(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
+                                    <button type="button" onClick={() => removeApprover(index)} className="text-red-500 hover:text-red-700 text-xl font-bold px-1">×</button>
                                 </div>
                             ))}
                         </div>
                     </div>
-                    <div className="border-b pb-4">
-                        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">참조인</h2><button type="button" onClick={addReferrer} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full hover:bg-blue-200">추가 +</button></div>
+
+                    <div className="border-t pt-4">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-bold">참조인 선택</h2>
+                            <button type="button" onClick={addReferrer} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-full hover:bg-gray-200 transition-colors">추가 +</button>
+                        </div>
                         <div className="space-y-3">
                             {referrers.map((referrer, index) => (
-                                <div key={index} className="flex items-center space-x-2">
+                                <div key={index} className="flex items-center space-x-2 animate-in fade-in slide-in-from-right-2">
                                     <select value={referrer.id} onChange={(e) => handleReferrerChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm">
                                         <option value="">참조인 선택</option>
                                         {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
                                     </select>
-                                    <button type="button" onClick={() => removeReferrer(index)} className="text-red-500 hover:text-red-700 text-lg font-bold">×</button>
+                                    <button type="button" onClick={() => removeReferrer(index)} className="text-red-500 hover:text-red-700 text-xl font-bold px-1">×</button>
                                 </div>
                             ))}
                         </div>
                     </div>
-                    <button type="submit" disabled={loading} className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold">{loading ? '상신 중...' : '결재 상신'}</button>
+
+                    <button 
+                        type="submit" 
+                        disabled={loading} 
+                        className="w-full py-3 bg-blue-600 text-white rounded-md font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
+                    >
+                        {loading ? '기안 상신 중...' : '결재 상신'}
+                    </button>
                 </form>
             </div>
         </div>

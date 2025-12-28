@@ -26,7 +26,6 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
     const [manualDocNumber, setManualDocNumber] = useState('');
 
-    // --- [PDF 추가] ---
     const printRef = useRef(null);
     const { exportToPdf, isExporting } = usePdfExport(printRef);
 
@@ -53,20 +52,12 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                     
                     if (doc.attachments && doc.attachments.length > 0) {
                         const signedUrlPromises = doc.attachments.map(file => 
-                            supabase.storage
-                                .from('approval_attachments')
-                                .createSignedUrl(file.path, 60)
+                            supabase.storage.from('approval_attachments').createSignedUrl(file.path, 60)
                         );
                         const signedUrlResults = await Promise.all(signedUrlPromises);
                         const urls = signedUrlResults.map((result, index) => {
-                            if (result.error) {
-                                console.error('Signed URL 생성 실패:', result.error);
-                                return null;
-                            }
-                            return {
-                                url: result.data.signedUrl,
-                                name: doc.attachments[index].name,
-                            };
+                            if (result.error) return null;
+                            return { url: result.data.signedUrl, name: doc.attachments[index].name };
                         }).filter(Boolean);
                         setAttachmentSignedUrls(urls);
                     }
@@ -128,7 +119,6 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
         }
     };
 
-    // --- [PDF 추가] ---
     const handlePdfExport = () => {
         const fileName = `${formData.requesterName}_내부결재서_${new Date().toISOString().split('T')[0]}.pdf`;
         exportToPdf(fileName);
@@ -149,15 +139,15 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
     };
 
     return (
-        <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
-            <div className="flex-1" ref={printRef}>
-                <div className="bg-white p-10 rounded-xl shadow-lg border">
-                    <h1 className="text-2xl font-bold text-center mb-4">내 부 결 재 서</h1>
+        <div className="flex flex-col lg:flex-row bg-gray-50 min-h-screen p-4 sm:p-8 lg:space-x-8 space-y-6 lg:space-y-0">
+            <div className="flex-1 w-full" ref={printRef}>
+                <div className="bg-white p-6 sm:p-10 rounded-xl shadow-lg border">
+                    <h1 className="text-2xl font-bold text-center mb-6">내 부 결 재 서</h1>
                     <div className="text-right text-sm text-gray-500 mb-4">
-                        <p>문서번호: {formData.documentNumber}</p> 
+                        <p className="font-medium">문서번호: {formData.documentNumber}</p> 
                     </div>
-                    <div className="mb-8 border border-gray-300">
-                        <table className="w-full text-sm border-collapse">
+                    <div className="mb-8 border border-gray-300 overflow-x-auto">
+                        <table className="w-full text-sm border-collapse min-w-[500px]">
                             <tbody>
                                 <tr>
                                     <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">기안부서</th>
@@ -175,14 +165,14 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                         </table>
                     </div>
 
-                    <div className="space-y-6 text-sm">
-                        <div className="mb-6">
-                            <label className="block text-gray-700 font-bold mb-2">제목</label>
-                            <p className="w-full p-3 border rounded-md bg-gray-100">{formData.approvalTitle}</p>
+                    <div className="space-y-6">
+                        <div>
+                            <label className="block text-gray-700 font-bold mb-2 text-sm">제목</label>
+                            <div className="w-full p-3 border rounded-md bg-gray-50 font-medium">{formData.approvalTitle}</div>
                         </div>
-                        <div className="mb-6">
-                            <label className="block text-gray-700 font-bold mb-2">내용</label>
-                            <div className="border rounded-md bg-gray-100 p-2 min-h-[200px] quill-readonly-container">
+                        <div>
+                            <label className="block text-gray-700 font-bold mb-2 text-sm">내용</label>
+                            <div className="border rounded-md bg-gray-50 p-2 min-h-[300px] quill-readonly-container overflow-auto">
                                 <ReactQuill
                                     value={formData.approvalContent} 
                                     readOnly={true}
@@ -192,13 +182,14 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                             </div>
                         </div>
                         {attachmentSignedUrls.length > 0 && (
-                            <div className="mt-6">
-                                <h3 className="text-lg font-bold mb-2">첨부 파일</h3>
+                            <div className="mt-6 border-t pt-4">
+                                <h3 className="text-md font-bold mb-3 flex items-center">
+                                    <span className="mr-2">📎</span> 첨부 파일
+                                </h3>
                                 <ul className="space-y-2">
                                     {attachmentSignedUrls.map((file, index) => (
                                         <li key={index}>
-                                            <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name || true} className="text-blue-600 hover:underline flex items-center">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" /></svg>
+                                            <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center text-sm">
                                                 {file.name || '첨부파일 보기'}
                                             </a>
                                         </li>
@@ -209,64 +200,50 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                     </div>
                 </div>
             </div>
-            <div className="w-96 p-8 no-print">
-                <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
+
+            <div className="w-full lg:w-96 no-print">
+                <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 lg:sticky lg:top-8">
                     {doc?.status === '완료' && (
-                        <div className="border-b pb-4">
-                            <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-semibold">
-                                {isExporting ? 'PDF 저장 중...' : 'PDF로 저장'}
-                            </button>
-                        </div>
+                        <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-md transition-all font-semibold">
+                            {isExporting ? 'PDF 저장 중...' : 'PDF로 저장'}
+                        </button>
                     )}
                     <div className="border-b pb-4">
                         <h2 className="text-lg font-bold mb-4">결재선</h2>
                         <div className="space-y-3">
-                            {approvalHistory && approvalHistory.map((step, index) => (
-                                <div key={step.id} className={`flex flex-col p-2 rounded-md ${step.status === '대기' ? 'bg-yellow-50' : step.status === '승인' ? 'bg-green-50' : step.status === '반려' ? 'bg-red-50' : ''}`}>
+                            {approvalHistory?.map((step, index) => (
+                                <div key={step.id} className={`flex flex-col p-3 rounded-md border ${step.status === '대기' ? 'bg-yellow-50 border-yellow-200' : step.status === '승인' ? 'bg-green-50 border-green-200' : step.status === '반려' ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`}>
                                    <div className="flex items-center space-x-2">
-                                        <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
-                                        <span className="text-sm font-medium">{step.approver?.full_name} ({step.approver?.position})</span>
-                                        <span className="ml-auto text-sm">{getStatusIcon(step.status)} {step.approved_at ? new Date(step.approved_at).toLocaleDateString('ko-KR') : ''}</span>
+                                        <span className="font-semibold text-xs text-gray-500">{index + 1}차</span>
+                                        <span className="text-sm font-bold">{step.approver?.full_name}</span>
+                                        <span className="text-xs text-gray-500">({step.approver?.position})</span>
+                                        <span className="ml-auto text-sm">{getStatusIcon(step.status)}</span>
                                     </div>
-                                    {step.comment && <p className="text-xs text-gray-500 mt-1">의견: {step.comment}</p>}
+                                    {step.comment && <p className="text-xs text-gray-600 mt-2 bg-white/50 p-1 rounded">의견: {step.comment}</p>}
+                                    {step.approved_at && <p className="text-[10px] text-gray-400 mt-1 text-right">{new Date(step.approved_at).toLocaleString('ko-KR')}</p>}
                                 </div>
                             ))}
                         </div>
                     </div>
-                    {referrerHistory && referrerHistory.length > 0 && (
-                        <div className="border-b pb-4">
-                            <h2 className="text-lg font-bold mb-4">참조인</h2>
-                            <div className="space-y-2">
-                                {referrerHistory.map((ref) => (
-                                    <div key={ref.id} className="flex items-center space-x-2">
-                                        <span className="text-sm font-medium">{ref.referrer?.full_name} ({ref.referrer?.position})</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                     {isMyTurnToApprove && (
-                        <div className="border-t pt-4 mt-4">
+                        <div className="space-y-4">
                             {isFinalApprover && (
-                                <div className="mb-4">
-                                    <label className="block text-lg font-bold mb-2 text-blue-600">문서 번호 입력</label>
-                                    <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} placeholder="예: 내부-2025-001" className="w-full p-2 border border-blue-300 rounded-md" />
+                                <div>
+                                    <label className="block text-sm font-bold mb-2 text-blue-600">문서 번호 부여</label>
+                                    <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} placeholder="예: 내부-2025-001" className="w-full p-2 border border-blue-300 rounded-md text-sm" />
                                 </div>
                             )}
-                            <h2 className="text-lg font-bold mb-2">결재 의견</h2>
-                            <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} placeholder="결재 의견을 입력하세요." className="w-full p-2 border rounded-md h-24 resize-none mb-4" />
-                            <div className="flex space-x-4">
-                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 font-semibold">
-                                    {loading ? '처리 중...' : '승인'}
-                                </button>
-                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 font-semibold">
-                                    {loading ? '처리 중...' : '반려'}
-                                </button>
+                            <div>
+                                <h2 className="text-sm font-bold mb-2">결재 의견</h2>
+                                <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} placeholder="의견을 입력하세요." className="w-full p-2 border rounded-md h-24 resize-none text-sm focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div className="flex space-x-3">
+                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 py-2 bg-green-600 text-white rounded-md font-bold shadow hover:bg-green-700">승인</button>
+                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 py-2 bg-red-600 text-white rounded-md font-bold shadow hover:bg-red-700">반려</button>
                             </div>
                         </div>
                     )}
-                    {doc?.status === '완료' && <p className="text-center text-green-600 font-bold mt-4">✅ 최종 승인 완료된 문서입니다.</p>}
-                    {doc?.status === '반려' && <p className="text-center text-red-600 font-bold mt-4">❌ 문서가 반려되었습니다.</p>}
+                    {doc?.status === '완료' && <p className="text-center text-green-600 font-bold pt-2">✅ 결재 완료</p>}
                 </div>
             </div>
         </div>

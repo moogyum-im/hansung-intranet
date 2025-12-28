@@ -28,7 +28,6 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
     
     const [manualDocNumber, setManualDocNumber] = useState('');
 
-    // --- [추가] --- 문서 번호 수정을 위한 상태변수
     const [isEditingDocNum, setIsEditingDocNum] = useState(false);
     const [tempDocNum, setTempDocNum] = useState('');
 
@@ -60,7 +59,6 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                         documentNumber: doc.document_number || '미지정', 
                     });
 
-                    // 수정 모드 초기값 설정
                     setTempDocNum(doc.document_number || '');
 
                     const activeStep = approvalHistory?.find(step => step.status === 'pending' || step.status === '대기');
@@ -93,7 +91,6 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
         setupPage();
     }, [doc, approvalHistory]);
 
-    // --- [추가] --- 문서 번호 수정 핸들러
     const handleUpdateDocNumber = async () => {
         if (!tempDocNum.trim()) return toast.error("문서 번호를 입력해주세요.");
 
@@ -136,7 +133,6 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
 
             if (newStatus === '반려' || !nextStep) {
                 const finalStatus = newStatus === '반려' ? '반려' : '완료';
-                
                 const docNumToSave = (finalStatus === '완료') ? manualDocNumber : doc.document_number;
 
                 await supabase
@@ -151,9 +147,8 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                 
                 if (finalStatus === '완료') {
                     setFormData(prev => ({ ...prev, documentNumber: manualDocNumber || '미지정' }));
-                    setTempDocNum(manualDocNumber); // 수정 모드 값도 업데이트
+                    setTempDocNum(manualDocNumber);
                 }
-
             } else {
                 await supabase.from('approval_document_approvers').update({ status: '대기' }).eq('id', nextStep.id).throwOnError();
                 await supabase.from('approval_documents').update({ status: '진행중', current_approver_id: nextStep.approver_id }).eq('id', doc.id).throwOnError();
@@ -182,21 +177,17 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
         }
     };
     
-    if (loading) {
-        return <div className="flex justify-center items-center h-screen">지출결의서 내용을 불러오는 중...</div>;
-    }
-
-    if (!doc || !employee) {
-        return <div className="p-8 text-center text-red-500">문서 또는 사용자 정보를 불러올 수 없습니다.</div>;
-    }
+    if (loading) return <div className="flex justify-center items-center h-screen">지출결의서 내용을 불러오는 중...</div>;
+    if (!doc || !employee) return <div className="p-8 text-center text-red-500">문서 또는 사용자 정보를 불러올 수 없습니다.</div>;
 
     return (
-        <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
-            <div className="flex-1" ref={printRef}>
-                <div className="bg-white p-10 rounded-xl shadow-lg border">
+        <div className="flex flex-col lg:flex-row bg-gray-50 min-h-screen p-4 sm:p-8 lg:space-x-8 space-y-6 lg:space-y-0">
+            {/* 본문 영역 */}
+            <div className="flex-1 w-full" ref={printRef}>
+                <div className="bg-white p-6 sm:p-10 rounded-xl shadow-lg border">
                     <h1 className="text-2xl font-bold text-center mb-8">{doc.title || '지출 결의서'}</h1>
+                    
                     <div className="text-right text-sm text-gray-500 mb-4 flex flex-col items-end">
-                        {/* --- [수정] --- 문서 번호 수정 UI 적용 --- */}
                         <div className="flex items-center space-x-2">
                             <span className="font-bold text-gray-600">문서번호:</span>
                             {isEditingDocNum ? (
@@ -213,23 +204,17 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                             ) : (
                                 <div className="flex items-center space-x-2 group">
                                     <span>{formData.documentNumber}</span>
-                                    {/* 완료된 문서일 때만 수정 버튼 노출 (프린트 시에는 숨김) */}
                                     {doc?.status === '완료' && (
-                                        <button 
-                                            onClick={() => setIsEditingDocNum(true)} 
-                                            className="text-gray-400 hover:text-blue-500 no-print"
-                                            title="문서번호 수정"
-                                        >
-                                            ✏️
-                                        </button>
+                                        <button onClick={() => setIsEditingDocNum(true)} className="text-gray-400 hover:text-blue-500 no-print" title="문서번호 수정">✏️</button>
                                     )}
                                 </div>
                             )}
                         </div>
                         <p>작성일: {new Date(doc.created_at).toLocaleDateString('ko-KR')}</p>
                     </div>
-                    <div className="mb-8 border border-gray-300">
-                        <table className="w-full text-sm border-collapse">
+
+                    <div className="mb-8 border border-gray-300 overflow-x-auto">
+                        <table className="w-full text-sm border-collapse min-w-[500px]">
                             <tbody>
                                 <tr>
                                     <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">기안부서</th>
@@ -246,41 +231,43 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                             </tbody>
                         </table>
                     </div>
+
                     <div className="mb-8 border border-gray-300">
                         <h2 className="p-2 bg-gray-100 font-bold border-b">지출 정보</h2>
                         <div className="p-4 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><label className="block text-gray-700 font-bold mb-2 text-sm">지출일자</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label className="block text-gray-700 font-bold mb-1 text-sm">지출일자</label>
                                     <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.expenseDate}</p>
                                 </div>
-                                <div><label className="block text-gray-700 font-bold mb-2 text-sm">금액</label>
-                                    <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.amount ? `${Number(formData.amount).toLocaleString()}원` : ''}</p>
+                                <div><label className="block text-gray-700 font-bold mb-1 text-sm">금액</label>
+                                    <p className="w-full p-2 border rounded-md bg-gray-50 text-sm font-semibold">{formData.amount ? `${Number(formData.amount).toLocaleString()}원` : ''}</p>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><label className="block text-gray-700 font-bold mb-2 text-sm">계정 과목</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label className="block text-gray-700 font-bold mb-1 text-sm">계정 과목</label>
                                     <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.accountType}</p>
                                 </div>
-                                <div><label className="block text-gray-700 font-bold mb-2 text-sm">결제 수단</label>
+                                <div><label className="block text-gray-700 font-bold mb-1 text-sm">결제 수단</label>
                                     <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.paymentMethod}</p>
                                 </div>
                             </div>
                             {formData.paymentMethod === '법인카드' && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="block text-gray-700 font-bold mb-2 text-sm">카드번호 뒷 4자리</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div><label className="block text-gray-700 font-bold mb-1 text-sm">카드번호 뒷 4자리</label>
                                         <p className="w-full p-2 border rounded-md bg-gray-50 text-sm">{formData.cardNumberLastFour}</p>
                                     </div>
-                                    <div></div>
                                 </div>
                             )}
                         </div>
                     </div>
+
                     <div className="border border-gray-300">
                         <h2 className="p-2 bg-gray-100 font-bold border-b">상세 내역 (적요)</h2>
                         <div className="p-4">
                             <p className="w-full p-3 border rounded-md bg-gray-50 h-40 overflow-auto text-sm whitespace-pre-wrap break-all">{formData.description}</p>
                         </div>
                     </div>
+
                     {attachmentSignedUrls.length > 0 && (
                         <div className="mt-6">
                             <h3 className="text-lg font-bold mb-2">첨부 파일</h3>
@@ -298,11 +285,13 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                     )}
                 </div>
             </div>
-            <div className="w-96 p-8 no-print">
-                <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
+
+            {/* 사이드바 영역 */}
+            <div className="w-full lg:w-96 no-print">
+                <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 lg:sticky lg:top-8">
                     {doc?.status === '완료' && (
                         <div className="border-b pb-4">
-                            <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-semibold">
+                            <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-semibold shadow-md active:scale-95 transition-transform">
                                 {isExporting ? 'PDF 저장 중...' : 'PDF로 저장'}
                             </button>
                         </div>
@@ -314,7 +303,7 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                                 approvalHistory.map((step, index) => (
                                     <div key={step.id} className={`flex flex-col p-2 rounded-md ${step.status === 'pending' || step.status === '대기' ? 'bg-yellow-50' : step.status === '승인' || step.status === '완료' ? 'bg-green-50' : step.status === '반려' ? 'bg-red-50' : ''}`}>
                                         <div className="flex items-center space-x-2">
-                                            <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
+                                            <span className="font-semibold text-sm text-gray-600 shrink-0">{index + 1}차:</span>
                                             <span className="text-sm font-medium">{step.approver?.full_name || '이름 없음'} ({step.approver?.position || '직위 없음'})</span>
                                             <span className="ml-auto text-sm">{getStatusIcon(step.status)} {step.approved_at ? new Date(step.approved_at).toLocaleDateString('ko-KR') : ''}</span>
                                         </div>
@@ -328,7 +317,7 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                         <div>
                             <h2 className="text-lg font-bold mb-4 border-b pb-2">참조인</h2>
                             <div className="space-y-2">
-                                {referrerHistory.map((ref, index) => (
+                                {referrerHistory.map((ref) => (
                                     <div key={ref.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-md">
                                         <span className="text-sm font-medium">{ref.referrer?.full_name || '이름 없음'} ({ref.referrer?.position || '직위 없음'})</span>
                                     </div>
@@ -345,7 +334,7 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                                         type="text"
                                         value={manualDocNumber}
                                         onChange={(e) => setManualDocNumber(e.target.value)}
-                                        placeholder="예: 지출-2025-001 (미입력 시 공란)"
+                                        placeholder="예: 지출-2025-001"
                                         className="w-full p-2 border border-blue-300 rounded-md"
                                     />
                                 </div>
@@ -358,12 +347,8 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                                 className="w-full p-2 border rounded-md h-24 resize-none mb-4"
                             />
                             <div className="flex space-x-4">
-                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 font-semibold">
-                                    {loading ? '처리 중...' : '승인'}
-                                </button>
-                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 font-semibold">
-                                    {loading ? '처리 중...' : '반려'}
-                                </button>
+                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 shadow-md">승인</button>
+                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 shadow-md">반려</button>
                             </div>
                         </div>
                     )}

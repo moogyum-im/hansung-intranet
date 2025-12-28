@@ -25,7 +25,6 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
     const [manualDocNumber, setManualDocNumber] = useState('');
 
-    // --- [PDF 추가] --- PDF 저장을 위한 useRef와 커스텀 훅
     const printRef = useRef(null);
     const { exportToPdf, isExporting } = usePdfExport(printRef);
 
@@ -158,15 +157,16 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
     };
 
     return (
-        <div className="flex bg-gray-50 min-h-screen p-8 space-x-8">
-            <div className="flex-1" ref={printRef}>
-                <div className="bg-white p-10 rounded-xl shadow-lg border">
+        <div className="flex flex-col lg:flex-row bg-gray-50 min-h-screen p-4 sm:p-8 lg:space-x-8 space-y-6 lg:space-y-0">
+            {/* 왼쪽: 문서 본문 */}
+            <div className="flex-1 w-full" ref={printRef}>
+                <div className="bg-white p-6 sm:p-10 rounded-xl shadow-lg border">
                     <h1 className="text-2xl font-bold text-center mb-4">휴 가 신 청 서</h1>
                     <div className="text-right text-sm text-gray-500 mb-4">
                         <p>문서번호: {formData.documentNumber}</p>
                     </div>
-                    <div className="mb-8 border border-gray-300">
-                        <table className="w-full text-sm border-collapse">
+                    <div className="mb-8 border border-gray-300 overflow-x-auto">
+                        <table className="w-full text-sm border-collapse min-w-[500px]">
                             <tbody>
                                 <tr>
                                     <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">소속</th>
@@ -188,7 +188,7 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                             <label className="block text-gray-700 font-bold mb-2">휴가 종류</label>
                             <p className="w-full p-3 border rounded-md bg-gray-100">{formData.leaveType}</p>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-gray-700 font-bold mb-2">시작일</label>
                                 <p className="w-full p-3 border rounded-md bg-gray-100">{formData.startDate}</p>
@@ -224,11 +224,13 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                     </div>
                 </div>
             </div>
-            <div className="w-96 p-8 no-print">
-                <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 sticky top-8">
+
+            {/* 오른쪽: 결재선 및 액션 (모바일에서는 하단) */}
+            <div className="w-full lg:w-96 no-print">
+                <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 lg:sticky lg:top-8">
                     {doc?.status === '완료' && (
                         <div className="border-b pb-4">
-                            <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-semibold">
+                            <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-semibold shadow-md active:scale-95 transition-transform">
                                 {isExporting ? 'PDF 저장 중...' : 'PDF로 저장'}
                             </button>
                         </div>
@@ -239,7 +241,7 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                             {approvalHistory && approvalHistory.map((step, index) => (
                                 <div key={step.id} className={`flex flex-col p-2 rounded-md ${step.status === '대기' ? 'bg-yellow-50' : step.status === '승인' ? 'bg-green-50' : step.status === '반려' ? 'bg-red-50' : ''}`}>
                                     <div className="flex items-center space-x-2">
-                                        <span className="font-semibold text-sm text-gray-600">{index + 1}차:</span>
+                                        <span className="font-semibold text-sm text-gray-600 shrink-0">{index + 1}차:</span>
                                         <span className="text-sm font-medium">{step.approver?.full_name} ({step.approver?.position})</span>
                                         <span className="ml-auto text-sm">{getStatusIcon(step.status)} {step.approved_at ? new Date(step.approved_at).toLocaleDateString('ko-KR') : ''}</span>
                                     </div>
@@ -271,10 +273,10 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                             <h2 className="text-lg font-bold mb-2">결재 의견</h2>
                             <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} placeholder="결재 의견을 입력하세요." className="w-full p-2 border rounded-md h-24 resize-none mb-4" />
                             <div className="flex space-x-4">
-                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 font-semibold">
+                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 font-semibold shadow-md active:scale-95 transition-transform">
                                     {loading ? '처리 중...' : '승인'}
                                 </button>
-                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 font-semibold">
+                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 font-semibold shadow-md active:scale-95 transition-transform">
                                     {loading ? '처리 중...' : '반려'}
                                 </button>
                             </div>
