@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardCalendar from './DashboardCalendar';
 import PushSubscriptionButton from '@/components/PushSubscriptionButton'; 
+import { formatDistanceToNow } from 'date-fns';
+import { ko } from 'date-fns/locale';
 import { 
   Bell, 
   FileCheck, 
@@ -119,12 +121,24 @@ function NotificationWidget() {
     useEffect(() => {
         if (employee) {
             const fetchNotifications = async () => {
-                const { data } = await supabase.from('notifications').select('*').eq('recipient_id', employee.id).eq('is_read', false).order('created_at', { ascending: false }).limit(5);
+                const { data } = await supabase
+                    .from('notifications')
+                    .select('*')
+                    .eq('recipient_id', employee.id)
+                    .eq('is_read', false)
+                    .order('created_at', { ascending: false })
+                    .limit(5);
                 setNotifications(data || []);
             };
             fetchNotifications();
         }
     }, [employee]);
+
+    // 상대 시간 계산 함수
+    const getRelativeTime = (dateString) => {
+        if (!dateString) return '';
+        return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: ko });
+    };
 
     return (
         <PremiumWidget title="알림 센터" icon={Bell} badge={notifications.length} className="h-[320px]">
@@ -141,7 +155,9 @@ function NotificationWidget() {
                                 </div>
                                 <div className="flex-grow">
                                     <p className="text-[13px] text-slate-600 leading-snug font-medium group-hover:text-slate-900">{noti.content}</p>
-                                    <p className="text-[10px] text-slate-400 mt-1.5">방금 전</p>
+                                    <p className="text-[10px] text-slate-400 mt-1.5 font-bold uppercase tracking-tighter">
+                                        {getRelativeTime(noti.created_at)}
+                                    </p>
                                 </div>
                             </div>
                         </div>
