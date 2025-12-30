@@ -19,7 +19,10 @@ import {
   MessagesSquare, 
   UserCircle, 
   LogOut, 
-  ChevronDown 
+  ChevronDown,
+  BarChart3,
+  Landmark,
+  Target // 입찰 전략용 아이콘 추가
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -69,11 +72,16 @@ export default function Sidebar({ isOpen, onClose }) {
         if (!loading) fetchAccessibleBoards();
     }, [employee, loading]);
 
+    // --- [수정] 관리 관제 그룹에 '스마트 입찰 전략' 항목 추가 ---
     const menuItems = [
       { name: '대시보드', href: '/dashboard', icon: LayoutDashboard },
       { name: '공지사항', href: '/notices', icon: Megaphone },
       { name: '조직도', href: '/organization', icon: Users2 },
       { name: '현장 관리', href: '/sites', icon: Construction },
+      { name: '실행 예산 관리', href: '/management/budget', icon: BarChart3 }, 
+      { name: '재무/인사 대시보드', href: '/management/financial-report', icon: Landmark },
+      // [신규] 스마트 입찰 전략 메뉴 추가
+      { name: '스마트 입찰 전략', href: '/management/bidding-strategy', icon: Target },
       { name: '전자 결재', href: '/approvals', icon: FileCheck },
       { name: '업무 전용', href: '/work', icon: Briefcase, isDropdown: true, menuKey: 'work' },
       { name: '데이터베이스', href: '/database', icon: Database, isDropdown: true, menuKey: 'db', requiresPermission: true },
@@ -117,19 +125,16 @@ export default function Sidebar({ isOpen, onClose }) {
 
     return (
         <>
-            {/* 모바일 배경 흐림 처리 */}
             <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden ${isOpen ? 'block' : 'hidden'}`} onClick={onClose}></div>
             
             <aside className={`fixed top-0 left-0 w-64 h-full bg-[#1e293b] text-slate-300 flex flex-col z-50 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-200 ease-in-out border-r border-slate-700/50 shadow-xl`}>
                 
-                {/* 로고 영역: 한성 로고 원복 */}
                 <div className="h-16 flex items-center justify-center p-4 border-b border-slate-700/50 bg-[#1e293b]">
                     <Link href="/dashboard" className="flex items-center">
                         <img src="/hansung_logo.png" alt="한성 로고" className="h-7 w-auto" />
                     </Link>
                 </div>
 
-                {/* 네비게이션 리스트 */}
                 <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-hide">
                     {menuItems.map((item) => {
                         if (item.requiresPermission && accessibleBoards.length === 0) return null;
@@ -196,7 +201,6 @@ export default function Sidebar({ isOpen, onClose }) {
                     })}
                 </nav>
 
-                {/* 하단 사용자 프로필 섹션 */}
                 <div className="p-4 border-t border-slate-700/50 bg-[#1e293b]">
                     {loading ? (
                         <div className="text-center text-xs text-slate-500 py-2">Loading...</div>

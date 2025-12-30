@@ -82,6 +82,7 @@ function ReportEditPage({ onCancel, onSave, siteData, initialData, isSaving, onD
         }, 0);
     };
 
+    // --- [통계 연동의 핵심] 실시간 투입비 계산 ---
     const totalExpense = useMemo(() => {
         return getSum('labor_costs') + getSum('tree_costs') + getSum('material_costs') + 
                getSum('equipment_costs') + getSum('card_costs') + getSum('transport_costs');
@@ -137,15 +138,15 @@ function ReportEditPage({ onCancel, onSave, siteData, initialData, isSaving, onD
                     </button>
                     <div className="flex items-center gap-4 bg-white px-6 py-2 rounded-xl border border-blue-100 shadow-sm">
                         <div className="text-center border-r pr-4 border-gray-100">
-                            <span className="text-[10px] block font-bold text-gray-400">총 예산</span>
+                            <span className="text-[10px] block font-bold text-gray-400 text-left">현장 실행예산</span>
                             <span className="text-sm font-bold text-gray-700">{Number(siteData.budget || 0).toLocaleString()}원</span>
                         </div>
                         <div className="text-center border-r pr-4 border-gray-100">
-                            <span className="text-[10px] block font-bold text-blue-400 uppercase tracking-tighter">금일 투입비</span>
+                            <span className="text-[10px] block font-bold text-blue-400 uppercase tracking-tighter text-left text-blue-500">금일 실투입비</span>
                             <span className="text-lg font-black text-blue-800">{totalExpense.toLocaleString()}원</span>
                         </div>
                         <div className="text-center">
-                            <span className="text-[10px] block font-bold text-orange-400 flex items-center gap-1 justify-center"><PieChart size={10}/> 예산 대비</span>
+                            <span className="text-[10px] block font-bold text-orange-400 flex items-center gap-1 justify-center"><PieChart size={10}/> 예산 집행률</span>
                             <span className="text-lg font-black text-orange-600">{budgetRate}%</span>
                         </div>
                     </div>
@@ -153,7 +154,7 @@ function ReportEditPage({ onCancel, onSave, siteData, initialData, isSaving, onD
                 <div className="flex gap-2">
                     {initialData && <button onClick={() => onDelete(initialData.id)} className="px-4 py-2 text-red-500 font-bold text-sm hover:bg-red-50 rounded"><Trash2 size={16}/></button>}
                     <button onClick={() => window.print()} className="px-4 py-2 bg-white border border-gray-300 rounded font-bold text-sm shadow-sm flex items-center gap-2 hover:bg-gray-50"><Printer size={16}/> 인쇄</button>
-                    <button onClick={() => onSave(formData, photoEntries)} disabled={isSaving} className="px-6 py-2 bg-blue-700 text-white rounded font-bold shadow-md text-sm flex items-center gap-2 transition-all hover:bg-blue-800">
+                    <button onClick={() => onSave(formData, photoEntries, totalExpense)} disabled={isSaving} className="px-6 py-2 bg-blue-700 text-white rounded font-bold shadow-md text-sm flex items-center gap-2 transition-all hover:bg-blue-800">
                         {isSaving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>}
                         {initialData ? '수정 내용 저장' : '작업일보 저장'}
                     </button>
@@ -170,28 +171,29 @@ function ReportEditPage({ onCancel, onSave, siteData, initialData, isSaving, onD
                             <td className="border border-black p-2 font-bold text-base" colSpan="3">{siteData.name}</td>
                             <td className="border border-black bg-gray-100 p-2 text-center font-bold w-24">현장소장</td>
                             <td className="border border-black p-0 w-40">
-                                <input className="w-full h-full border-none p-2 text-center focus:ring-0 font-bold bg-transparent" value={formData.leader_name} onChange={e => setFormData({...formData, leader_name: e.target.value})} />
+                                <input className="w-full h-full border-none p-2 text-center focus:ring-0 font-bold bg-transparent outline-none" value={formData.leader_name} onChange={e => setFormData({...formData, leader_name: e.target.value})} />
                             </td>
                         </tr>
                         <tr>
                             <td className="border border-black bg-gray-100 p-2 text-center font-bold">일시</td>
-                            <td className="border border-black p-2"><input type="date" className="w-full border-none p-0 focus:ring-0 font-medium text-center bg-transparent" value={formData.report_date} onChange={e => setFormData({...formData, report_date: e.target.value})} /></td>
+                            <td className="border border-black p-2"><input type="date" className="w-full border-none p-0 focus:ring-0 font-medium text-center bg-transparent outline-none" value={formData.report_date} onChange={e => setFormData({...formData, report_date: e.target.value})} /></td>
                             <td className="border border-black bg-gray-100 p-2 text-center font-bold w-24">날씨</td>
-                            <td className="border border-black p-2"><input className="w-full border-none p-0 focus:ring-0 text-center bg-transparent" value={formData.weather} onChange={e => setFormData({...formData, weather: e.target.value})} /></td>
+                            <td className="border border-black p-2"><input className="w-full border-none p-0 focus:ring-0 text-center bg-transparent outline-none" value={formData.weather} onChange={e => setFormData({...formData, weather: e.target.value})} /></td>
                             <td className="border border-black bg-gray-100 p-2 text-center font-bold w-24">작성자</td>
                             <td className="border border-black p-0 text-center font-bold text-gray-700">{formData.author_name}</td>
                         </tr>
                     </tbody>
                 </table>
 
+                {/* 하단 그리드 및 사진 영역 (기존과 동일하므로 유지) */}
                 <div className="grid grid-cols-2 border border-black mb-6 min-h-[160px]">
                     <div className="border-r border-black p-3">
                         <h4 className="text-[11px] font-bold mb-2 text-blue-700 underline underline-offset-2">■ 금일 작업 내용</h4>
-                        <textarea className="w-full h-28 border-none p-0 text-sm focus:ring-0 leading-relaxed resize-none font-medium" value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} />
+                        <textarea className="w-full h-28 border-none p-0 text-sm focus:ring-0 leading-relaxed resize-none font-medium outline-none" value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} />
                     </div>
                     <div className="p-3">
                         <h4 className="text-[11px] font-bold mb-2 text-gray-400 underline underline-offset-2">■ 명일 작업 예정</h4>
-                        <textarea className="w-full h-28 border-none p-0 text-sm focus:ring-0 leading-relaxed resize-none font-medium" value={formData.tomorrow_content} onChange={e => setFormData({...formData, tomorrow_content: e.target.value})} />
+                        <textarea className="w-full h-28 border-none p-0 text-sm focus:ring-0 leading-relaxed resize-none font-medium outline-none" value={formData.tomorrow_content} onChange={e => setFormData({...formData, tomorrow_content: e.target.value})} />
                     </div>
                 </div>
 
@@ -219,7 +221,7 @@ function ReportEditPage({ onCancel, onSave, siteData, initialData, isSaving, onD
                                 <img src={entry.url || entry.preview} className="w-32 h-full object-cover border shrink-0 bg-gray-50" />
                                 <div className="flex-1 space-y-2">
                                     <div className="text-[10px] font-bold underline decoration-blue-500 underline-offset-2">{entry.type} 사진</div>
-                                    <textarea className="w-full h-16 text-[10px] border-none p-0 focus:ring-0 resize-none font-medium leading-tight" placeholder="설명 입력..." value={entry.description} onChange={e => setPhotoEntries(ps => ps.map(p => p.id === entry.id ? {...p, description: e.target.value} : p))} />
+                                    <textarea className="w-full h-16 text-[10px] border-none p-0 focus:ring-0 resize-none font-medium leading-tight outline-none" placeholder="설명 입력..." value={entry.description} onChange={e => setPhotoEntries(ps => ps.map(p => p.id === entry.id ? {...p, description: e.target.value} : p))} />
                                 </div>
                                 <button onClick={() => setPhotoEntries(ps => ps.filter(p => p.id !== entry.id))} className="absolute top-1 right-1 text-red-500 no-print px-1 text-lg">×</button>
                             </div>
@@ -251,7 +253,7 @@ function Table({ section, title, headers, fields, formData, handleGridChange, ad
                         <tr key={i} className="border-b border-gray-200">
                             {fields.map(f => (
                                 <td key={f} className="border-r border-black last:border-0 p-0">
-                                    <input className="w-full border-none p-1 text-center focus:ring-0 bg-transparent font-medium" value={row[f]} onChange={e => handleGridChange(section, i, f, e.target.value)} />
+                                    <input className="w-full border-none p-1 text-center focus:ring-0 bg-transparent font-medium outline-none" value={row[f]} onChange={e => handleGridChange(section, i, f, e.target.value)} />
                                 </td>
                             ))}
                             <td className="text-center no-print"><button onClick={() => deleteRow(section, i)} className="text-red-300 hover:text-red-600">×</button></td>
@@ -263,7 +265,7 @@ function Table({ section, title, headers, fields, formData, handleGridChange, ad
     );
 }
 
-// [3. 메인 관리 컴포넌트 - 목록 UI 전면 수정]
+// [3. 메인 관리 컴포넌트]
 export default function DailyReportSection({ siteId }) {
     const { employee: currentUser } = useEmployee();
     const [view, setView] = useState('list');
@@ -276,7 +278,6 @@ export default function DailyReportSection({ siteId }) {
         const { data: siteInfo } = await supabase.from('construction_sites').select('name, budget').eq('id', siteId).single();
         if (siteInfo) setSiteData({ name: siteInfo.name, budget: siteInfo.budget || 0 });
 
-        // profiles를 조인해서 작성자 이름을 가져오도록 쿼리 수정
         const { data: reportList } = await supabase
             .from('daily_site_reports')
             .select(`*, profiles(full_name)`)
@@ -287,10 +288,12 @@ export default function DailyReportSection({ siteId }) {
 
     useEffect(() => { fetchAllData(); }, [fetchAllData]);
 
-    const handleSaveReport = async (formData, photos) => {
+    // --- [통계 연동 핵심 로직] 저장 시 실행예산 업데이트 ---
+    const handleSaveReport = async (formData, photos, currentDayExpense) => {
         if (!currentUser || isSaving) return;
         setIsSaving(true);
         try {
+            // 1. 사진 업로드
             const uploadedPhotos = await Promise.all(photos.map(async (p) => {
                 if (p.url) return p; 
                 const fileName = `${siteId}/${uuidv4()}.jpg`;
@@ -300,6 +303,7 @@ export default function DailyReportSection({ siteId }) {
                 return { id: p.id, url: publicUrl, type: p.type, description: p.description };
             }));
 
+            // 2. 리포트 데이터 준비
             const payload = {
                 site_id: siteId,
                 report_date: formData.report_date,
@@ -310,13 +314,23 @@ export default function DailyReportSection({ siteId }) {
                 notes: JSON.stringify(formData)
             };
 
-            const result = selectedReport 
+            // 3. 리포트 저장 (Insert/Update)
+            const { error: saveError } = selectedReport 
                 ? await supabase.from('daily_site_reports').update(payload).eq('id', selectedReport.id)
                 : await supabase.from('daily_site_reports').insert(payload);
 
-            if (result.error) throw result.error;
-            
-            alert('저장되었습니다.');
+            if (saveError) throw saveError;
+
+            // 4. [중요] 현장 테이블의 '실투입원가' 누적 업데이트
+            // 기존 누적액을 가져와서 현재 투입비를 더해줍니다.
+            const { data: currentSite } = await supabase.from('construction_sites').select('total_spent').eq('id', siteId).single();
+            const newTotalSpent = (currentSite?.total_spent || 0) + currentDayExpense;
+
+            await supabase.from('construction_sites')
+                .update({ total_spent: newTotalSpent })
+                .eq('id', siteId);
+
+            alert('작업일보가 저장되었으며, 현장 원가 통계에 실시간 반영되었습니다.');
             setView('list');
             setSelectedReport(null);
             fetchAllData();
@@ -355,7 +369,6 @@ export default function DailyReportSection({ siteId }) {
                 </button>
             </div>
             
-            {/* [업그레이드된 문서 목록 테이블] */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <table className="w-full text-left">
                     <thead className="bg-gray-50 border-b border-gray-100">
@@ -433,13 +446,6 @@ export default function DailyReportSection({ siteId }) {
                         )}
                     </tbody>
                 </table>
-            </div>
-            
-            <div className="mt-8 flex justify-center no-print">
-                <div className="flex items-center gap-6 text-[10px] font-bold text-gray-400 tracking-tighter">
-                    <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-green-500"/> 데이터 실시간 동기화 완료</span>
-                    <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-green-500"/> 클라우드 안전 저장</span>
-                </div>
             </div>
         </div>
     );
