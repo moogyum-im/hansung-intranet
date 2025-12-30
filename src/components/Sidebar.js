@@ -19,10 +19,7 @@ import {
   MessagesSquare, 
   UserCircle, 
   LogOut, 
-  ChevronDown,
-  BarChart3,
-  Landmark,
-  Target // 입찰 전략용 아이콘 추가
+  ChevronDown
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -72,16 +69,13 @@ export default function Sidebar({ isOpen, onClose }) {
         if (!loading) fetchAccessibleBoards();
     }, [employee, loading]);
 
-    // --- [수정] 관리 관제 그룹에 '스마트 입찰 전략' 항목 추가 ---
+    // --- [수정] 경영진 전용 대시보드 및 입찰 전략 메뉴를 목록에서 제외했습니다. ---
     const menuItems = [
       { name: '대시보드', href: '/dashboard', icon: LayoutDashboard },
       { name: '공지사항', href: '/notices', icon: Megaphone },
       { name: '조직도', href: '/organization', icon: Users2 },
       { name: '현장 관리', href: '/sites', icon: Construction },
-      { name: '실행 예산 관리', href: '/management/budget', icon: BarChart3 }, 
-      { name: '재무/인사 대시보드', href: '/management/financial-report', icon: Landmark },
-      // [신규] 스마트 입찰 전략 메뉴 추가
-      { name: '스마트 입찰 전략', href: '/management/bidding-strategy', icon: Target },
+      // [숨김 처리됨] 실행 예산 관리, 재무/인사 대시보드, 스마트 입찰 전략
       { name: '전자 결재', href: '/approvals', icon: FileCheck },
       { name: '업무 전용', href: '/work', icon: Briefcase, isDropdown: true, menuKey: 'work' },
       { name: '데이터베이스', href: '/database', icon: Database, isDropdown: true, menuKey: 'db', requiresPermission: true },
@@ -215,7 +209,7 @@ export default function Sidebar({ isOpen, onClose }) {
                                     </div>
                                 )}
                             </div>
-                            <div className="flex-1 min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <p className="text-xs font-bold text-white truncate">{employee.full_name} {employee.position}</p>
                                 <button onClick={handleLogout} className="text-[10px] font-medium text-slate-500 hover:text-red-400 flex items-center gap-1 mt-0.5 transition-colors">
                                     <LogOut size={10} /> 로그아웃
