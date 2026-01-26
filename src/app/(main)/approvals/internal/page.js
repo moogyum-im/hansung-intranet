@@ -1,213 +1,241 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
+import dynamic from 'next/dynamic';
+import { X, Plus, Loader2, Database, CheckCircle, FileIcon, ChevronRight, Users, ImageIcon } from 'lucide-react';
+import 'react-quill/dist/quill.snow.css';
+
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 export default function InternalApprovalPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
 
     const [allEmployees, setAllEmployees] = useState([]);
-    const [formData, setFormData] = useState({
-        title: '',
-        content: '',
-    });
+    const [formData, setFormData] = useState({ title: '', content: '' });
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
+
+    // 1. [데이터 보존] 로컬 스토리지 복구
+    useEffect(() => {
+        const saved = localStorage.getItem('internal_draft_backup');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                setFormData(parsed.formData || { title: '', content: '' });
+                setApprovers(parsed.approvers || []);
+                setReferrers(parsed.referrers || []);
+                setAttachments(parsed.attachments || []);
+            } catch (e) { console.error("복구 실패", e); }
+        }
+    }, []);
+
+    // 2. [실시간 저장] 상태 변경 시 백업
+    useEffect(() => {
+        const dataToSave = { formData, approvers, referrers, attachments };
+        localStorage.setItem('internal_draft_backup', JSON.stringify(dataToSave));
+    }, [formData, approvers, referrers, attachments]);
 
     useEffect(() => {
         const fetchEmployees = async () => {
-            const { data, error } = await supabase.from('profiles').select('id, full_name, department, position');
-            if (error) console.error("직원 목록 로딩 실패:", error);
-            else setAllEmployees(data || []);
+            const { data } = await supabase.from('profiles').select('id, full_name, department, position');
+            setAllEmployees(data || []);
         };
         if (!employeeLoading && employee) {
             fetchEmployees();
-            if (employee.team_leader_id && employee.id !== employee.team_leader_id) {
+            const saved = localStorage.getItem('internal_draft_backup');
+            if (!saved && employee.team_leader_id && employee.id !== employee.team_leader_id) {
                 setApprovers([{ id: employee.team_leader_id }]);
             }
         }
     }, [employee, employeeLoading]);
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
+    const handleUploadComplete = useCallback((uploadedFiles) => {
+        if (Array.isArray(uploadedFiles)) {
+            const formattedFiles = uploadedFiles.map(file => ({
+                name: file.name.normalize('NFC'),
+                path: file.path,
+                size: file.size
+            }));
+            setAttachments(prev => [...prev, ...formattedFiles]);
+            setIsUploading(false);
+        }
+    }, []);
 
-    const handleUploadComplete = (files) => {
-        setAttachments(files);
+    const removeAttachment = (idx) => {
+        setAttachments(prev => prev.filter((_, i) => i !== idx));
     };
 
     const addApprover = () => setApprovers([...approvers, { id: '' }]);
-    const handleApproverChange = (index, id) => {
-        const newApprovers = [...approvers];
-        newApprovers[index] = { id };
-        setApprovers(newApprovers);
-    };
     const removeApprover = (index) => setApprovers(approvers.filter((_, i) => i !== index));
 
     const addReferrer = () => setReferrers([...referrers, { id: '' }]);
-    const handleReferrerChange = (index, id) => {
-        const newReferrers = [...referrers];
-        newReferrers[index] = { id };
-        setReferrers(newReferrers);
-    };
     const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isUploading) return toast.error("파일 업로드가 완료될 때까지 기다려주세요.");
+        if (!formData.title || !formData.content) return toast.error("제목과 내용을 입력해주세요.");
+        if (approvers.length === 0 || approvers.some(app => !app.id)) return toast.error("결재자를 지정해주세요.");
+
         setLoading(true);
-
-        if (approvers.length === 0 || approvers.some(app => !app.id)) {
-            toast.error("결재자를 모두 지정해주세요.");
-            setLoading(false);
-            return;
-        }
-
-        const approver_ids_with_names = approvers.map(app => ({
-            id: app.id,
-            full_name: allEmployees.find(emp => emp.id === app.id)?.full_name || '알 수 없음',
-            position: allEmployees.find(emp => emp.id === app.id)?.position || '알 수 없음',
-        }));
-        const referrer_ids_with_names = referrers.map(ref => ({
-            id: ref.id,
-            full_name: allEmployees.find(emp => emp.id === ref.id)?.full_name || '알 수 없음',
-            position: allEmployees.find(emp => emp.id === ref.id)?.position || '알 수 없음',
-        }));
-
-        const submissionData = {
-            title: formData.title,
-            content: JSON.stringify({
-                ...formData,
-                requesterName: employee.full_name,
-                requesterDepartment: employee.department,
-                requesterPosition: employee.position,
-            }),
-            document_type: 'internal_approval',
-            approver_ids: approver_ids_with_names,
-            referrer_ids: referrer_ids_with_names,
-            attachments: attachments.length > 0 ? attachments : null,
-            requester_id: employee.id,
-            requester_name: employee.full_name,
-            requester_department: employee.department,
-            requester_position: employee.position,
-        };
-        
         try {
+            const submissionData = {
+                title: `내부결재: ${formData.title} (${employee?.full_name})`,
+                content: JSON.stringify({
+                    ...formData,
+                    requesterName: employee.full_name,
+                    requesterDepartment: employee.department,
+                    requesterPosition: employee.position,
+                }),
+                document_type: 'internal_approval',
+                approver_ids: approvers.map(app => ({
+                    id: app.id,
+                    full_name: allEmployees.find(e => e.id === app.id)?.full_name || '',
+                    position: allEmployees.find(e => e.id === app.id)?.position || '',
+                })),
+                referrer_ids: referrers.filter(r => r.id).map(ref => ({
+                    id: ref.id,
+                    full_name: allEmployees.find(e => e.id === ref.id)?.full_name || '',
+                })),
+                requester_id: employee.id,
+                requester_name: employee.full_name,
+                requester_department: employee.department,
+                requester_position: employee.position,
+                attachments: attachments,
+            };
+
             const response = await fetch('/api/submit-approval', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(submissionData),
             });
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: '서버 응답 없음' }));
-                throw new Error(errorData.error || '상신 실패');
-            }
-            toast.success("내부 결재 문서가 성공적으로 상신되었습니다.");
+
+            if (!response.ok) throw new Error('상신 실패');
+            localStorage.removeItem('internal_draft_backup');
+            toast.success("내부결재 상신 완료");
             router.push('/mypage');
-        } catch (error) {
-            toast.error(`내부 결재 상신 실패: ${error.message}`);
-        } finally {
-            setLoading(false);
-        }
+        } catch (error) { toast.error(error.message); } finally { setLoading(false); }
     };
 
-    if (employeeLoading) return <div className="flex justify-center items-center h-screen">로딩 중...</div>;
-    if (!employee) return <div className="flex justify-center items-center h-screen text-red-500">직원 정보를 불러올 수 없습니다.</div>;
+    const quillModules = {
+        toolbar: [[{ 'header': [1, 2, false] }], ['bold', 'italic', 'underline', 'strike'], [{ 'list': 'ordered' }, { 'list': 'bullet' }], ['clean']],
+    };
+
+    if (employeeLoading) return <div className="p-10 text-black font-black text-xs h-screen flex items-center justify-center font-sans animate-pulse">HANSUNG ERP SYNCING...</div>;
 
     return (
-        <div className="flex flex-col lg:flex-row bg-gray-50 min-h-screen p-4 sm:p-8 lg:space-x-8 space-y-6 lg:space-y-0">
-            <div className="flex-1 w-full">
-                <div className="bg-white p-6 sm:p-10 rounded-xl shadow-lg border">
-                    <h1 className="text-2xl font-bold text-center mb-8">내부 결재 기안</h1>
-                    <div className="mb-8 border border-gray-300 overflow-x-auto">
-                        <table className="w-full text-sm border-collapse min-w-[500px]">
+        <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none">
+            <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
+                <div className="flex items-center gap-2 text-slate-400">
+                    <Database size={14} className="text-black" />
+                    <span className="text-[10px] uppercase tracking-widest font-black text-black">HANSUNG INTERNAL DOCUMENT</span>
+                </div>
+                <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : <><CheckCircle size={14} /> 내부결재 상신</>}
+                </button>
+            </div>
+
+            <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">
+                <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative text-black font-black">
+                    <header className="mb-10 border-b-4 border-black pb-6 font-black">
+                        <p className="text-[9px] tracking-widest text-slate-400 uppercase font-black">Hansung Landscape & Construction</p>
+                        <h1 className="text-3xl tracking-tighter uppercase font-black">내 부 결 재 서 작 성</h1>
+                    </header>
+
+                    <div className="space-y-10 font-black text-black">
+                        <table className="w-full border-collapse border-t border-l border-black text-[11px] font-black">
                             <tbody>
-                                <tr>
-                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">소속</th>
-                                    <td className="p-2 w-2/5 border-b border-r">{employee?.department}</td>
-                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직위</th>
-                                    <td className="p-2 w-1/5 border-b">{employee?.position}</td>
+                                <tr className="border-b border-r border-black divide-x divide-black">
+                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase">기안부서</th>
+                                    <td className="p-3 font-black">{employee?.department}</td>
+                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase">기안자</th>
+                                    <td className="p-3 font-black">{employee?.full_name} {employee?.position}</td>
                                 </tr>
-                                <tr>
-                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">성명</th>
-                                    <td className="p-2 border-r">{employee?.full_name}</td>
-                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">작성일</th>
-                                    <td className="p-2">{new Date().toLocaleDateString('ko-KR')}</td>
+                                <tr className="border-b border-r border-black divide-x divide-black">
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase">기안일자</th>
+                                    <td className="p-3 font-mono font-black">{new Date().toLocaleDateString('ko-KR')}</td>
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter">문서번호</th>
+                                    <td className="p-3 text-slate-400 font-black italic">상신 후 부여</td>
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
-                    
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">기안 제목</label>
-                            <input type="text" name="title" value={formData.title} onChange={handleChange} placeholder="문서 제목을 입력하세요" className="w-full p-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none" required />
-                        </div>
-                        <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">기안 내용</label>
-                            <textarea name="content" value={formData.content} onChange={handleChange} placeholder="내용을 상세히 입력하세요" className="w-full p-3 border rounded-md h-60 resize-none text-sm focus:ring-2 focus:ring-blue-500 outline-none" required />
-                        </div>
-                        <div className="pt-2">
-                            <FileUploadDnd onUploadComplete={handleUploadComplete} />
+
+                        <section className="font-black">
+                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black">01. 결재 건명</h2>
+                            <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} placeholder="제목을 입력하십시오." className="w-full border border-black p-4 text-[12px] font-black outline-none focus:bg-slate-50 transition-all bg-transparent" required />
+                        </section>
+
+                        <section className="font-black">
+                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black">02. 결재 상세 내용</h2>
+                            <div className="border border-black font-black">
+                                <ReactQuill value={formData.content} onChange={(content) => setFormData({...formData, content})} modules={quillModules} placeholder="내용을 입력하십시오." className="h-[400px] mb-12 font-black" />
+                            </div>
+                        </section>
+
+                        {/* 위치 픽스: 서명란 위 4번 증빙 자료 */}
+                        <section className="font-black border-t border-black/5 pt-6">
+                            <h2 className="text-[10px] mb-4 uppercase tracking-tighter font-black">03. 증빙 자료 첨부 (EVIDENCE)</h2>
+                            <FileUploadDnd onUploadComplete={handleUploadComplete} onUploadingStateChange={setIsUploading} />
+                            {attachments.length > 0 && (
+                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 font-black">
+                                    {attachments.map((file, idx) => (
+                                        <div key={idx} className="flex items-center justify-between bg-slate-50 p-3 border border-black/10 rounded-lg group">
+                                            <div className="flex items-center gap-2 text-[10px] font-black overflow-hidden text-black"><ImageIcon size={14} className="text-blue-600 flex-shrink-0" /><span className="truncate">{file.name}</span></div>
+                                            <X size={16} className="cursor-pointer text-slate-300 hover:text-red-500 font-black" onClick={() => removeAttachment(idx)} />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+
+                        <div className="pt-16 text-center space-y-6 font-black text-black">
+                            <p className="text-[14px] font-black underline underline-offset-4 decoration-1 font-mono">{new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'})}</p>
+                            <p className="text-xl font-black uppercase tracking-widest">기안자: {employee?.full_name} (인)</p>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="w-full lg:w-96">
-                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 lg:sticky lg:top-8">
-                    <div>
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold">결재선 지정</h2>
-                            <button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full hover:bg-blue-200 transition-colors">추가 +</button>
-                        </div>
-                        <div className="space-y-3">
-                            {approvers.map((approver, index) => (
-                                <div key={index} className="flex items-center space-x-2 animate-in fade-in slide-in-from-right-2">
-                                    <span className="font-semibold text-xs text-gray-500 shrink-0">{index + 1}차</span>
-                                    <select value={approver.id} onChange={(e) => handleApproverChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm" required>
+                <aside className="lg:col-span-4 space-y-4 no-print font-black">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black">
+                        <div className="flex items-center justify-between mb-4 border-b pb-2 font-black text-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black"><Users size={14}/> 결재선 지정</h2><button type="button" onClick={addApprover} className="text-[10px] border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-all font-black">+ 추가</button></div>
+                        <div className="space-y-2 font-black">
+                            {approvers.map((app, i) => (
+                                <div key={i} className="flex items-center gap-2 font-black">
+                                    <span className="text-[10px] text-slate-400 w-4 font-black">{i+1}</span>
+                                    <select value={app.id} onChange={(e) => { const n = [...approvers]; n[i].id = e.target.value; setApprovers(n); }} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-black font-black text-black" required>
                                         <option value="">결재자 선택</option>
-                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
+                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>[{emp.department}] {emp.full_name}</option>))}
                                     </select>
-                                    <button type="button" onClick={() => removeApprover(index)} className="text-red-500 hover:text-red-700 text-xl font-bold px-1">×</button>
+                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black" onClick={() => removeApprover(i)} />
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <div className="border-t pt-4">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold">참조인 선택</h2>
-                            <button type="button" onClick={addReferrer} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-full hover:bg-gray-200 transition-colors">추가 +</button>
-                        </div>
-                        <div className="space-y-3">
-                            {referrers.map((referrer, index) => (
-                                <div key={index} className="flex items-center space-x-2 animate-in fade-in slide-in-from-right-2">
-                                    <select value={referrer.id} onChange={(e) => handleReferrerChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black">
+                        <div className="flex items-center justify-between mb-4 border-b pb-2 text-blue-600 font-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black text-black"><Users size={14}/> 참조인 지정</h2><button type="button" onClick={addReferrer} className="text-[10px] border border-blue-600 px-2 py-0.5 hover:bg-blue-600 hover:text-white transition-all font-black">+ 추가</button></div>
+                        <div className="space-y-2 font-black text-black">
+                            {referrers.map((ref, i) => (
+                                <div key={i} className="flex items-center gap-2 font-black">
+                                    <select value={ref.id} onChange={(e) => { const n = [...referrers]; n[i].id = e.target.value; setReferrers(n); }} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-blue-600 font-black text-black">
                                         <option value="">참조인 선택</option>
-                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
+                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name}</option>))}
                                     </select>
-                                    <button type="button" onClick={() => removeReferrer(index)} className="text-red-500 hover:text-red-700 text-xl font-bold px-1">×</button>
+                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black" onClick={() => removeReferrer(i)} />
                                 </div>
                             ))}
                         </div>
                     </div>
-
-                    <button 
-                        type="submit" 
-                        disabled={loading} 
-                        className="w-full py-3 bg-blue-600 text-white rounded-md font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
-                    >
-                        {loading ? '기안 상신 중...' : '결재 상신'}
-                    </button>
-                </form>
+                </aside>
             </div>
         </div>
     );

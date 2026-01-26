@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
 import 'react-quill/dist/quill.snow.css';
 import FileUploadDnd from '@/components/FileUploadDnd';
+import { X, Plus, Loader2, Database, CheckCircle, FileIcon, ChevronRight, Users, Calendar, Layout, ImageIcon } from 'lucide-react';
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
@@ -43,59 +44,72 @@ export default function WorkReportPage() {
         hourlyTasks: timeSlots.reduce((acc, time) => ({ ...acc, [time]: '' }), {}),
     });
     const [loading, setLoading] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
+
+    // 1. [데이터 보존] 로컬 스토리지 복구
+    useEffect(() => {
+        const saved = localStorage.getItem('work_report_draft_backup');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                setFormData(parsed.formData || formData);
+                setApprovers(parsed.approvers || []);
+                setReferrers(parsed.referrers || []);
+                setAttachments(parsed.attachments || []);
+                setVisibleSections(parsed.visibleSections || visibleSections);
+            } catch (e) { console.error("복구 실패", e); }
+        }
+    }, []);
+
+    // 2. [실시간 저장] 상태 변경 시 백업
+    useEffect(() => {
+        const dataToSave = { formData, approvers, referrers, attachments, visibleSections };
+        localStorage.setItem('work_report_draft_backup', JSON.stringify(dataToSave));
+    }, [formData, approvers, referrers, attachments, visibleSections]);
 
     useEffect(() => {
         const fetchEmployees = async () => {
-            const { data, error } = await supabase.from('profiles').select('id, full_name, department, position');
-            if (error) console.error("직원 목록 로딩 실패:", error);
-            else setAllEmployees(data || []);
+            const { data } = await supabase.from('profiles').select('id, full_name, department, position');
+            setAllEmployees(data || []);
         };
         if (!employeeLoading && employee) {
             fetchEmployees();
-            if (employee?.team_leader_id && employee.id !== employee.team_leader_id) {
+            const saved = localStorage.getItem('work_report_draft_backup');
+            if (!saved && employee?.team_leader_id && employee.id !== employee.team_leader_id) {
                 setApprovers([{ id: employee.team_leader_id }]);
             }
         }
     }, [employee, employeeLoading]);
 
-    const handleVisibilityChange = (section) => {
-        setVisibleSections(prev => ({ ...prev, [section]: !prev[section] }));
+    const handleVisibilityChange = (section) => setVisibleSections(prev => ({ ...prev, [section]: !prev[section] }));
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleHourlyChange = (time, value) => setFormData(prev => ({ ...prev, hourlyTasks: { ...prev.hourlyTasks, [time]: value } }));
+    const handleQuillChange = (value) => setFormData(prev => ({ ...prev, achievements: value }));
+
+    const handleUploadComplete = useCallback((uploadedFiles) => {
+        if (Array.isArray(uploadedFiles)) {
+            const formattedFiles = uploadedFiles.map(file => ({
+                name: file.name.normalize('NFC'),
+                path: file.path,
+                size: file.size
+            }));
+            setAttachments(prev => [...prev, ...formattedFiles]);
+            setIsUploading(false);
+        }
+    }, []);
+
+    const removeAttachment = (idx) => {
+        setAttachments(prev => prev.filter((_, i) => i !== idx));
     };
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleHourlyChange = (time, value) => {
-        setFormData(prev => ({
-            ...prev,
-            hourlyTasks: { ...prev.hourlyTasks, [time]: value }
-        }));
-    };
-
-    const handleQuillChange = (value) => {
-        setFormData(prev => ({ ...prev, achievements: value }));
-    };
-    
-    const handleUploadComplete = (files) => {
-        setAttachments(files);
-    };
-
-    const addApprover = () => {
-        if (approvers.length < 5) setApprovers([...approvers, { id: '' }]);
-        else toast.error('결재선은 최대 5명까지 추가할 수 있습니다.');
-    };
-    const handleApproverChange = (index, approverId) => {
+    const addApprover = () => setApprovers([...approvers, { id: '' }]);
+    const handleApproverChange = (index, id) => {
         const newApprovers = [...approvers];
-        newApprovers[index].id = approverId;
+        newApprovers[index].id = id;
         setApprovers(newApprovers);
     };
-    const removeApprover = (index) => {
-        const newApprovers = approvers.filter((_, i) => i !== index);
-        setApprovers(newApprovers);
-    };
+    const removeApprover = (index) => setApprovers(approvers.filter((_, i) => i !== index));
 
     const addReferrer = () => setReferrers([...referrers, { id: '' }]);
     const handleReferrerChange = (index, id) => {
@@ -107,215 +121,199 @@ export default function WorkReportPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
-
-        if (!employee) {
-            toast.error("사용자 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
-            setLoading(false);
-            return;
-        }
-        if (approvers.length === 0 || approvers.some(app => !app.id)) {
-            toast.error("결재자를 모두 지정해주세요.");
-            setLoading(false);
-            return;
-        }
+        if (isUploading) return toast.error("파일 업로드가 완료될 때까지 기다려주세요.");
+        if (approvers.length === 0 || approvers.some(app => !app.id)) return toast.error("결재자를 지정해주세요.");
         
-        const submissionData = {
-            title: `${formData.reportType} (${employee.full_name})`,
-            content: JSON.stringify({
-                ...formData,
-                visibleSections,
-                requesterName: employee.full_name,
-                requesterDepartment: employee.department,
-                requesterPosition: employee.position,
-            }),
-            document_type: 'work_report',
-            approver_ids: approvers.map(app => {
-                const emp = allEmployees.find(e => e.id === app.id);
-                return { id: app.id, full_name: emp?.full_name || '알 수 없음', position: emp?.position || '알 수 없음' };
-            }),
-            referrer_ids: referrers.map(ref => {
-                const emp = allEmployees.find(e => e.id === ref.id);
-                return { id: ref.id, full_name: emp?.full_name || '알 수 없음', position: emp?.position || '알 수 없음' };
-            }),
-            attachments: attachments.length > 0 ? attachments : null,
-            requester_id: employee.id,
-            requester_name: employee.full_name,
-            requester_department: employee.department,
-            requester_position: employee.position,
-        };
-
+        setLoading(true);
         try {
+            const submissionData = {
+                title: `${formData.reportType} (${employee.full_name})`,
+                content: JSON.stringify({
+                    ...formData,
+                    visibleSections,
+                    requesterName: employee.full_name,
+                    requesterDepartment: employee.department,
+                    requesterPosition: employee.position,
+                }),
+                document_type: 'work_report',
+                approver_ids: approvers.map(app => {
+                    const emp = allEmployees.find(e => e.id === app.id);
+                    return { id: app.id, full_name: emp?.full_name, position: emp?.position };
+                }),
+                referrer_ids: referrers.filter(r => r.id).map(ref => {
+                    const emp = allEmployees.find(e => e.id === ref.id);
+                    return { id: ref.id, full_name: emp?.full_name, position: emp?.position, department: emp?.department };
+                }),
+                attachments: attachments,
+                requester_id: employee.id,
+                requester_name: employee.full_name,
+                requester_department: employee.department,
+                requester_position: employee.position,
+            };
+
             const response = await fetch('/api/submit-approval', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(submissionData),
             });
             if (!response.ok) throw new Error('상신 실패');
-            toast.success("업무보고서가 성공적으로 상신되었습니다.");
+            
+            localStorage.removeItem('work_report_draft_backup');
+            toast.success("업무보고서 상신 완료!");
             router.push('/mypage');
         } catch (error) {
-            toast.error(`상신 실패: ${error.message}`);
+            toast.error(error.message);
         } finally {
             setLoading(false);
         }
     };
 
     const quillModules = useMemo(() => ({
-        toolbar: [
-            ['bold', 'italic', 'underline'],
-            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-            ['clean']
-        ],
+        toolbar: [['bold', 'italic', 'underline'], [{ 'list': 'ordered' }, { 'list': 'bullet' }], ['clean']],
     }), []);
 
-    if (employeeLoading) return <div className="flex justify-center items-center h-screen">로딩 중...</div>;
+    if (employeeLoading) return <div className="p-10 text-black font-black text-xs h-screen flex items-center justify-center font-sans animate-pulse">HANSUNG ERP SYNCING...</div>;
 
     return (
-        /* 반응형 레이아웃 조절: flex-col (모바일) -> flex-row (PC) */
-        <div className="flex flex-col lg:flex-row bg-gray-50 min-h-screen p-4 sm:p-8 lg:space-x-8 space-y-6 lg:space-y-0">
-            <div className="flex-1 w-full">
-                <div className="bg-white p-6 sm:p-10 rounded-xl shadow-lg border">
-                    <h1 className="text-2xl font-bold text-center mb-8 text-slate-800">업무 보고서 작성</h1>
+        <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none font-black">
+            <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
+                <div className="flex items-center gap-2 text-slate-400 font-black">
+                    <Database size={14} className="text-black" />
+                    <span className="text-[10px] uppercase tracking-widest font-black text-black">HANSUNG ERP DOCUMENT SYSTEM</span>
+                </div>
+                <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : <><CheckCircle size={14} /> 업무보고서 상신</>}
+                </button>
+            </div>
 
-                    {/* 항목 설정: 모바일에서 줄바꿈(flex-wrap) 처리 */}
-                    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                        <p className="text-[11px] font-black text-gray-400 mb-3 uppercase tracking-widest">보고서 구성 설정</p>
-                        <div className="flex flex-wrap gap-x-4 gap-y-2">
+            <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">
+                <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative font-black">
+                    <header className="mb-10 border-b-4 border-black pb-6 font-black font-black">
+                        <p className="text-[9px] tracking-widest text-slate-400 uppercase font-black">Hansung Landscape & Construction</p>
+                        <h1 className="text-3xl tracking-tighter uppercase font-black font-black">업 무 보 고 서 작 성</h1>
+                    </header>
+
+                    <div className="mb-8 p-5 bg-slate-50 border border-black font-black">
+                        <p className="text-[10px] font-black text-slate-400 mb-4 uppercase tracking-tighter font-black">REPORT SECTION CONFIGURATION</p>
+                        <div className="flex flex-wrap gap-6 font-black font-black font-black font-black">
                             {['hourlyTasks', 'todayPlan', 'achievements', 'issues', 'nextPlan'].map((key) => (
-                                <label key={key} className="flex items-center space-x-2 cursor-pointer group">
-                                    <input type="checkbox" checked={visibleSections[key]} onChange={() => handleVisibilityChange(key)} className="w-4 h-4 text-blue-600 rounded" />
-                                    <span className="text-sm text-gray-600 group-hover:text-blue-600">
-                                        {key === 'hourlyTasks' ? '시간별' : key === 'todayPlan' ? '금일계획' : key === 'achievements' ? '실적' : key === 'issues' ? '특이사항' : '향후계획'}
-                                    </span>
+                                <label key={key} className="flex items-center gap-2 cursor-pointer font-black font-black">
+                                    <input type="checkbox" checked={visibleSections[key]} onChange={() => handleVisibilityChange(key)} className="accent-black font-black" />
+                                    <span className="text-[11px] font-black uppercase font-black">{key === 'hourlyTasks' ? '시간별 내역' : key === 'todayPlan' ? '금일 계획' : key === 'achievements' ? '상세 실적' : key === 'issues' ? '특이사항' : '향후 계획'}</span>
                                 </label>
                             ))}
                         </div>
                     </div>
-                    
-                    {/* 테이블 모바일 찌그러짐 방지 */}
-                    <div className="mb-8 border border-gray-300 overflow-x-auto">
-                        <table className="w-full text-sm border-collapse min-w-[500px]">
+
+                    <div className="space-y-10 text-black font-black">
+                        <table className="w-full border-collapse border-t border-l border-black text-[11px] font-black font-black">
                             <tbody>
-                                <tr>
-                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">기안부서</th>
-                                    <td className="p-2 w-2/5 border-b border-r">{employee?.department || '정보 없음'}</td>
-                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직 위</th>
-                                    <td className="p-2 w-1/5 border-b">{employee?.position || '정보 없음'}</td>
+                                <tr className="border-b border-r border-black divide-x divide-black font-black">
+                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black">기안부서</th>
+                                    <td className="p-3 font-black">{employee?.department}</td>
+                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black">기안자</th>
+                                    <td className="p-3 font-black">{employee?.full_name} {employee?.position}</td>
                                 </tr>
-                                <tr>
-                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">기안자</th>
-                                    <td className="p-2 border-r">{employee?.full_name || '정보 없음'}</td>
-                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">작성일</th>
-                                    <td className="p-2">{new Date().toLocaleDateString('ko-KR')}</td>
+                                <tr className="border-b border-r border-black divide-x divide-black font-black">
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black">보고유형</th>
+                                    <td className="p-3 font-black">
+                                        <select name="reportType" value={formData.reportType} onChange={handleChange} className="w-full bg-transparent outline-none font-black font-black"><option>일일보고</option><option>주간보고</option><option>월간보고</option><option>기타</option></select>
+                                    </td>
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black font-black">보고일자</th>
+                                    <td className="p-3 font-black font-mono"><input type="date" name="reportDate" value={formData.reportDate} onChange={handleChange} className="w-full bg-transparent outline-none font-black" /></td>
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
 
-                    <div className="space-y-8">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-gray-700 font-bold mb-2 text-sm">보고서 유형</label>
-                                <select name="reportType" value={formData.reportType} onChange={handleChange} className="w-full p-2 border rounded-md text-sm">
-                                    <option value="일일보고">일일보고</option>
-                                    <option value="주간보고">주간보고</option>
-                                    <option value="월간보고">월간보고</option>
-                                    <option value="기타">기타</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-gray-700 font-bold mb-2 text-sm">보고일자</label>
-                                <input type="date" name="reportDate" value={formData.reportDate} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" />
-                            </div>
-                        </div>
-
-                        {/* 시간별 내역: 모바일 가로스크롤 보장 */}
                         {visibleSections.hourlyTasks && (
-                            <div className="p-4 sm:p-6 bg-blue-50/50 rounded-xl border border-blue-100">
-                                <h2 className="text-sm font-bold text-blue-800 mb-4 flex items-center gap-2">🕒 시간별 주요 업무 내역</h2>
-                                <div className="space-y-3">
+                            <section className="font-black font-black">
+                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black">01. 시간별 주요 업무 내역</h2>
+                                <div className="border border-black font-black font-black">
                                     {timeSlots.map(time => (
-                                        <div key={time} className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                            <span className="w-32 text-xs font-bold text-gray-400 shrink-0">{time}</span>
-                                            <input 
-                                                type="text" 
-                                                value={formData.hourlyTasks[time]} 
-                                                onChange={(e) => handleHourlyChange(time, e.target.value)}
-                                                className="flex-1 p-2 border-b border-blue-200 bg-transparent outline-none focus:border-blue-500 text-sm transition-all"
-                                                placeholder="내용을 입력하세요"
-                                            />
+                                        <div key={time} className="flex border-b border-black last:border-0 divide-x divide-black font-black font-black">
+                                            <div className="bg-slate-50 w-32 p-2 text-center text-[10px] font-mono font-black font-black">{time}</div>
+                                            <input type="text" value={formData.hourlyTasks[time]} onChange={(e) => handleHourlyChange(time, e.target.value)} className="flex-1 px-4 py-2 outline-none text-[11px] font-black bg-transparent font-black" placeholder="업무 내용을 입력하십시오." />
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </section>
                         )}
 
                         {visibleSections.todayPlan && (
-                            <div>
-                                <label className="block text-gray-700 font-bold mb-2 text-sm">금일 업무 계획</label>
-                                <textarea name="todayPlan" value={formData.todayPlan} onChange={handleChange} className="w-full p-3 border rounded-md h-24 resize-none text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="업무 계획을 입력하세요." />
-                            </div>
+                            <section className="font-black font-black">
+                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black">02. 금일 주요 업무 계획</h2>
+                                <textarea name="todayPlan" value={formData.todayPlan} onChange={handleChange} className="w-full border border-black p-5 text-[12px] leading-relaxed min-h-[100px] outline-none font-black bg-transparent font-black font-black" placeholder="금일 진행 예정인 업무를 입력하십시오." />
+                            </section>
                         )}
 
                         {visibleSections.achievements && (
-                            <div>
-                                <label className="block text-gray-700 font-bold mb-2 text-sm">상세 업무 진행 및 실적</label>
-                                <div className="min-h-[200px] mb-14">
-                                    <ReactQuill theme="snow" value={formData.achievements} onChange={handleQuillChange} modules={quillModules} className="h-40" />
+                            <section className="font-black font-black">
+                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black">03. 상세 업무 진행 실적</h2>
+                                <div className="border border-black font-black font-black font-black">
+                                    <ReactQuill theme="snow" value={formData.achievements} onChange={handleQuillChange} modules={quillModules} className="h-64 mb-10 font-black" />
                                 </div>
-                            </div>
+                            </section>
                         )}
 
                         {visibleSections.issues && (
-                            <div>
-                                <label className="block text-red-600 font-bold mb-2 text-sm">특이사항 및 문제점</label>
-                                <textarea name="issues" value={formData.issues} onChange={handleChange} className="w-full p-3 border border-red-100 rounded-md h-24 resize-none text-sm focus:ring-2 focus:ring-red-500 outline-none bg-red-50/20" placeholder="특이사항을 입력하세요." />
-                            </div>
+                            <section className="font-black font-black">
+                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black text-red-600 font-black">04. 특이사항 및 문제점</h2>
+                                <textarea name="issues" value={formData.issues} onChange={handleChange} className="w-full border border-black p-5 text-[12px] leading-relaxed min-h-[100px] outline-none bg-red-50/5 font-black font-black" placeholder="특이사항을 기술하십시오." />
+                            </section>
                         )}
 
-                        {visibleSections.nextPlan && (
-                            <div>
-                                <label className="block text-gray-700 font-bold mb-2 text-sm">향후 업무 계획</label>
-                                <textarea name="nextPlan" value={formData.nextPlan} onChange={handleChange} className="w-full p-3 border rounded-md h-24 resize-none text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="다음 업무 계획을 입력하세요." />
-                            </div>
-                        )}
+                        <section className="font-black border-t border-black/5 pt-6 font-black">
+                            <h2 className="text-[10px] mb-4 uppercase tracking-tighter font-black font-black">05. 증빙 자료 첨부 (EVIDENCE)</h2>
+                            <FileUploadDnd onUploadComplete={handleUploadComplete} onUploadingStateChange={setIsUploading} />
+                            {attachments.length > 0 && (
+                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 no-print font-black font-black">
+                                    {attachments.map((file, idx) => (
+                                        <div key={idx} className="flex items-center justify-between bg-slate-50 p-3 border border-black/10 rounded-lg group font-black font-black">
+                                            <div className="flex items-center gap-2 text-[10px] font-black overflow-hidden text-black font-black font-black font-black"><ImageIcon size={14} className="text-blue-600 flex-shrink-0 font-black font-black" /><span className="truncate font-black">{file.name}</span></div>
+                                            <X size={16} className="cursor-pointer text-slate-300 hover:text-red-500 transition-colors font-black font-black" onClick={() => removeAttachment(idx)} />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+
+                        <div className="pt-10 text-center font-black font-black font-black">
+                            <p className="text-xl font-black uppercase tracking-widest font-black">보고인: {employee?.full_name} (인)</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            {/* 결재선 설정 사이드바 (모바일 하단 배치) */}
-            <div className="w-full lg:w-96 no-print">
-                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg border space-y-6 lg:sticky lg:top-8">
-                    <div>
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold text-slate-800">결재선</h2>
-                            <button type="button" onClick={addApprover} className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full hover:bg-blue-700 transition-all">+ 추가</button>
-                        </div>
-                        <div className="space-y-3">
-                            {approvers.map((approver, index) => (
-                                <div key={index} className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-gray-400 shrink-0">{index + 1}차</span>
-                                    <select value={approver.id} onChange={(e) => handleApproverChange(index, e.target.value)} className="w-full p-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none" required>
+
+                <aside className="lg:col-span-4 space-y-4 no-print font-black font-black">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black font-black font-black font-black">
+                        <div className="flex items-center justify-between mb-4 border-b pb-2 font-black font-black font-black font-black font-black font-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black font-black font-black"><Users size={14}/> 결재선 지정</h2><button type="button" onClick={addApprover} className="text-[10px] border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-all font-black">+ 추가</button></div>
+                        <div className="space-y-2 font-black">
+                            {approvers.map((app, i) => (
+                                <div key={i} className="flex items-center gap-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black"><span className="text-[10px] text-slate-400 w-4 font-black">{i+1}</span>
+                                    <select value={app.id} onChange={(e) => handleApproverChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-black font-black text-black" required>
                                         <option value="">결재자 선택</option>
-                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>))}
+                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>[{emp.department}] {emp.full_name} ({emp.position})</option>))}
                                     </select>
-                                    <button type="button" onClick={() => removeApprover(index)} className="text-red-500 font-bold px-2 text-xl">×</button>
+                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black font-black" onClick={() => removeApprover(i)} />
                                 </div>
                             ))}
                         </div>
                     </div>
-                    
-                    <FileUploadDnd onUploadComplete={handleUploadComplete} />
-                    
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:bg-gray-400 shadow-lg active:scale-95 transition-all"
-                    >
-                        {loading ? '상신 중...' : '보고서 결재 상신'}
-                    </button>
-                </form>
+
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black font-black font-black font-black font-black font-black">
+                        <div className="flex items-center justify-between mb-4 border-b pb-2 text-blue-600 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black text-black font-black font-black font-black"><Users size={14}/> 참조인 지정</h2><button type="button" onClick={addReferrer} className="text-[10px] border border-blue-600 px-2 py-0.5 hover:bg-blue-600 hover:text-white transition-all font-black font-black">+ 추가</button></div>
+                        <div className="space-y-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                            {referrers.map((ref, i) => (
+                                <div key={i} className="flex items-center gap-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                                    <select value={ref.id} onChange={(e) => handleReferrerChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-blue-600 font-black text-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                                        <option value="">참조인 선택</option>
+                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>[{emp.department}] {emp.full_name} ({emp.position})</option>))}
+                                    </select>
+                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black" onClick={() => removeReferrer(i)} />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </aside>
             </div>
         </div>
     );

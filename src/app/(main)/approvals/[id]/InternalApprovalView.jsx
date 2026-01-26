@@ -1,250 +1,212 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { usePdfExport } from '@/hooks/usePdfExport';
 import dynamic from 'next/dynamic';
+import { 
+    Printer, Download, Eye, Hash, 
+    Paperclip, FileIcon, CheckCircle, XCircle,
+    Settings, Users, ChevronRight, ImageIcon
+} from 'lucide-react';
 import 'react-quill/dist/quill.snow.css';
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 export default function InternalApprovalView({ doc, employee, approvalHistory, referrerHistory }) {
     const router = useRouter();
-    const [formData, setFormData] = useState({
-        requesterDepartment: '',
-        requesterPosition: '',
-        requesterName: '',
-        approvalTitle: '',
-        approvalContent: '',
-        documentNumber: '미지정',
-    });
-    const [currentStep, setCurrentStep] = useState(null);
+    const [formData, setFormData] = useState({});
     const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState(false);
     const [approvalComment, setApprovalComment] = useState('');
+    const [currentStep, setCurrentStep] = useState(null);
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
     const [manualDocNumber, setManualDocNumber] = useState('');
 
-    const printRef = useRef(null);
-    const { exportToPdf, isExporting } = usePdfExport(printRef);
-
-    const isMyTurnToApprove = employee && currentStep && currentStep.approver?.id === employee.id && currentStep.status === '대기';
-    const isFinalApprover = currentStep ? approvalHistory.findIndex(step => step.id === currentStep.id) === approvalHistory.length - 1 : false;
+    const isReferrer = referrerHistory?.some(ref => ref.referrer_id === employee?.id || ref.referrer?.id === employee?.id);
+    const isMyTurn = employee && currentStep && currentStep.approver?.id === employee.id && (currentStep.status === 'pending' || currentStep.status === '대기');
 
     useEffect(() => {
         const setupPage = async () => {
             if (doc) {
                 try {
-                    let parsedContent = doc.content ? JSON.parse(doc.content) : {};
-                    
-                    setFormData({
-                        requesterDepartment: parsedContent.requesterDepartment || '정보 없음', 
-                        requesterPosition: parsedContent.requesterPosition || '정보 없음',     
-                        requesterName: parsedContent.requesterName || '정보 없음',           
-                        approvalTitle: parsedContent.title || '',
-                        approvalContent: parsedContent.content || '',
-                        documentNumber: doc.document_number || '미지정',
-                    });
-                    
-                    const activeStep = approvalHistory?.find(step => step.status === '대기');
-                    setCurrentStep(activeStep || null);
-                    
-                    if (doc.attachments && doc.attachments.length > 0) {
-                        const signedUrlPromises = doc.attachments.map(file => 
-                            supabase.storage.from('approval_attachments').createSignedUrl(file.path, 60)
-                        );
-                        const signedUrlResults = await Promise.all(signedUrlPromises);
-                        const urls = signedUrlResults.map((result, index) => {
-                            if (result.error) return null;
-                            return { url: result.data.signedUrl, name: doc.attachments[index].name };
-                        }).filter(Boolean);
-                        setAttachmentSignedUrls(urls);
+                    const content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content || {};
+                    setFormData(content);
+                    setManualDocNumber(doc.document_number || '');
+                    setCurrentStep(approvalHistory?.find(s => s.status === 'pending' || s.status === '대기'));
+
+                    let rawFiles = doc.attachments;
+                    if (typeof rawFiles === 'string') {
+                        try { rawFiles = JSON.parse(rawFiles); } catch (e) { rawFiles = []; }
                     }
-                } catch (e) {
-                    console.error("내부 결재 문서 처리 중 오류:", e);
-                    toast.error("문서 정보를 처리하는 중 오류가 발생했습니다.");
-                } finally {
-                    setLoading(false);
-                }
-            } else {
-                setLoading(false); 
+
+                    if (rawFiles && Array.isArray(rawFiles) && rawFiles.length > 0) {
+                        const signedUrlPromises = rawFiles.map(async (file) => {
+                            if (!file) return null;
+                            const filePath = typeof file === 'object' ? file.path : file;
+                            const cleanPath = filePath.replace('approval_attachments/', '').replace('settlement_proofs/', '').trim();
+                            const { data } = await supabase.storage.from('approval_attachments').createSignedUrl(cleanPath, 3600);
+                            return data?.signedUrl ? { url: data.signedUrl, name: file.name || cleanPath } : null;
+                        });
+                        const results = await Promise.all(signedUrlPromises);
+                        setAttachmentSignedUrls(results.filter(Boolean));
+                    }
+                } catch (e) { console.error("로드 오류:", e); } finally { setLoading(false); }
             }
         };
         setupPage();
     }, [doc, approvalHistory]);
 
     const handleApprovalAction = async (newStatus) => {
-        if (!currentStep) return toast.error("결재를 진행할 수 없습니다.");
-        if (newStatus === '반려' && !approvalComment.trim()) return toast.error("반려 시에는 의견을 입력해야 합니다.");
-        if (newStatus === '승인' && isFinalApprover && !manualDocNumber.trim()) {
-            return toast.error("최종 승인 시에는 문서 번호를 반드시 입력해야 합니다.");
-        }
-
-        setLoading(true);
+        if (!currentStep || (newStatus === '반려' && !approvalComment.trim())) return toast.error("반려 사유 필수");
+        setActionLoading(true);
         try {
-            await supabase
-                .from('approval_document_approvers')
-                .update({ status: newStatus, comment: approvalComment, approved_at: new Date().toISOString() })
-                .eq('id', currentStep.id)
-                .throwOnError();
-
+            await supabase.from('approval_document_approvers').update({ status: newStatus, comment: approvalComment, approved_at: new Date().toISOString() }).eq('id', currentStep.id);
             const nextStep = approvalHistory.find(step => step.sequence === currentStep.sequence + 1);
-
             if (newStatus === '반려' || !nextStep) {
-                const finalStatus = newStatus === '반려' ? '반려' : '완료';
-                await supabase
-                    .from('approval_documents')
-                    .update({ 
-                        status: finalStatus, 
-                        completed_at: new Date().toISOString(),
-                        document_number: finalStatus === '완료' ? manualDocNumber : doc.document_number 
-                    })
-                    .eq('id', doc.id)
-                    .throwOnError();
-                
-                if (finalStatus === '완료') {
-                    setFormData(prev => ({ ...prev, documentNumber: manualDocNumber }));
-                }
+                await supabase.from('approval_documents').update({ status: newStatus === '반려' ? '반려' : '완료', completed_at: new Date().toISOString() }).eq('id', doc.id);
             } else {
-                await supabase.from('approval_document_approvers').update({ status: '대기' }).eq('id', nextStep.id).throwOnError();
-                await supabase.from('approval_documents').update({ status: '진행중' }).eq('id', doc.id).throwOnError();
+                await supabase.from('approval_document_approvers').update({ status: '대기' }).eq('id', nextStep.id);
+                await supabase.from('approval_documents').update({ status: '진행중', current_approver_id: nextStep.approver_id }).eq('id', doc.id);
             }
-            toast.success(`문서가 ${newStatus}되었습니다.`);
+            window.location.reload();
+        } catch (error) { toast.error("처리 실패"); } finally { setActionLoading(false); }
+    };
+
+    const handleUpdateDocNumber = async () => {
+        if (!manualDocNumber.trim()) return toast.error("문서 번호 입력 필요");
+        setActionLoading(true);
+        try {
+            await supabase.from('approval_documents').update({ document_number: manualDocNumber }).eq('id', doc.id);
+            toast.success("반영되었습니다.");
             router.refresh();
-        } catch (error) {
-            toast.error(`${newStatus} 처리 실패: ${error.message}`);
-        } finally {
-            setLoading(false);
-        }
+        } catch (error) { toast.error("실패"); } finally { setActionLoading(false); }
     };
 
-    const handlePdfExport = () => {
-        const fileName = `${formData.requesterName}_내부결재서_${new Date().toISOString().split('T')[0]}.pdf`;
-        exportToPdf(fileName);
-    };
-
-    const quillModules = useMemo(() => ({ toolbar: false }), []);
-    
-    if (loading) return <div className="flex justify-center items-center h-screen">문서 내용을 불러오는 중...</div>;
-    if (!doc) return <div className="flex justify-center items-center h-screen text-red-500">문서 정보를 찾을 수 없습니다.</div>;
-
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case '대기': return '⌛';
-            case '승인': return '✅';
-            case '반려': return '❌';
-            default: return '';
-        }
-    };
+    if (loading) return <div className="p-20 text-center font-black text-black text-xs font-sans animate-pulse italic uppercase">HANSUNG ERP LOADING...</div>;
 
     return (
-        <div className="flex flex-col lg:flex-row bg-gray-50 min-h-screen p-4 sm:p-8 lg:space-x-8 space-y-6 lg:space-y-0">
-            <div className="flex-1 w-full" ref={printRef}>
-                <div className="bg-white p-6 sm:p-10 rounded-xl shadow-lg border">
-                    <h1 className="text-2xl font-bold text-center mb-6">내 부 결 재 서</h1>
-                    <div className="text-right text-sm text-gray-500 mb-4">
-                        <p className="font-medium">문서번호: {formData.documentNumber}</p> 
-                    </div>
-                    <div className="mb-8 border border-gray-300 overflow-x-auto">
-                        <table className="w-full text-sm border-collapse min-w-[500px]">
+        <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none print:bg-white print:p-0 font-black">
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                    @page { size: A4; margin: 0; }
+                    body { margin: 0 !important; padding: 0 !important; background: white !important; overflow: visible !important; }
+                    .no-print, nav, header, aside, .sidebar { display: none !important; }
+                    .print-container { width: 210mm !important; margin: 0 auto !important; padding: 25mm 20mm !important; border: none !important; box-sizing: border-box !important; }
+                    table { border-collapse: collapse !important; border: 1px solid black !important; width: 100% !important; }
+                    th, td { border: 1px solid black !important; padding: 10px !important; }
+                    .print-section { page-break-inside: avoid !important; break-inside: avoid-page !important; }
+                    .ql-container.ql-snow { border: none !important; } .ql-editor { padding: 0 !important; }
+                    ::-webkit-scrollbar { display: none !important; }
+                }
+                ::-webkit-scrollbar { width: 0px; } 
+            `}} />
+            
+            <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
+                <span className="text-[10px] uppercase tracking-widest font-black text-slate-400">Internal Approval Viewer</span>
+                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-black text-white hover:bg-slate-800 text-[11px] transition-all font-black shadow-lg font-black"><Printer size={14} /> 인쇄 및 PDF 저장</button>
+            </div>
+
+            <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black text-black font-black">
+                <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative print-container text-black font-black font-black">
+                    <header className="mb-10 border-b-4 border-black pb-6 font-black print-section font-black">
+                        <h1 className="text-3xl font-black tracking-tighter uppercase font-black">내 부 결 재 서</h1>
+                        <div className="flex justify-between text-[10px] mt-4 font-black">
+                            <span>문서번호 : {doc.document_number || '미발급'}</span>
+                            <span>작성일자 : {doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR') : '-'}</span>
+                        </div>
+                    </header>
+
+                    <div className="space-y-12 text-black font-black font-black">
+                        <table className="w-full border-collapse border border-black text-[11px] font-black print-section font-black">
                             <tbody>
-                                <tr>
-                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">기안부서</th>
-                                    <td className="p-2 w-2/5 border-b border-r">{formData.requesterDepartment}</td>
-                                    <th className="p-2 bg-gray-100 font-bold w-1/5 text-left border-r border-b">직 위</th>
-                                    <td className="p-2 w-1/5 border-b">{formData.requesterPosition}</td>
-                                </tr>
-                                <tr>
-                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">기안자</th>
-                                    <td className="p-2 border-r">{formData.requesterName}</td>
-                                    <th className="p-2 bg-gray-100 font-bold text-left border-r">기안일자</th>
-                                    <td className="p-2">{new Date(doc.created_at).toLocaleDateString('ko-KR')}</td>
+                                <tr className="border-b border-black text-black font-black">
+                                    <th className="bg-slate-50 p-4 w-28 text-left border-r border-black font-black uppercase font-black">기안부서</th>
+                                    <td className="p-4 border-r border-black font-black font-black">{doc.requester_department}</td>
+                                    <th className="bg-slate-50 p-4 w-28 text-left border-r border-black font-black uppercase font-black">기안자</th>
+                                    <td className="p-4 font-black font-black">{doc.requester_name} {doc.requester_position}</td>
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
 
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">제목</label>
-                            <div className="w-full p-3 border rounded-md bg-gray-50 font-medium">{formData.approvalTitle}</div>
-                        </div>
-                        <div>
-                            <label className="block text-gray-700 font-bold mb-2 text-sm">내용</label>
-                            <div className="border rounded-md bg-gray-50 p-2 min-h-[300px] quill-readonly-container overflow-auto">
-                                <ReactQuill
-                                    value={formData.approvalContent} 
-                                    readOnly={true}
-                                    theme="snow"
-                                    modules={quillModules}
-                                />
+                        <section className="print-section font-black text-black font-black">
+                            <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black font-black">01. 결재 건명</h2>
+                            <div className="border border-black p-5 text-[14px] font-black bg-slate-50/20">{formData.title}</div>
+                        </section>
+
+                        <section className="print-section font-black text-black font-black">
+                            <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black font-black">02. 결재 상세 내용</h2>
+                            <div className="border border-black p-5 min-h-[300px]">
+                                <ReactQuill value={formData.content || ''} readOnly={true} theme="snow" modules={{toolbar:false}} />
                             </div>
-                        </div>
+                        </section>
+
+                        {/* [픽스] 서명란 위 증빙 자료 갤러리 */}
                         {attachmentSignedUrls.length > 0 && (
-                            <div className="mt-6 border-t pt-4">
-                                <h3 className="text-md font-bold mb-3 flex items-center">
-                                    <span className="mr-2">📎</span> 첨부 파일
-                                </h3>
-                                <ul className="space-y-2">
-                                    {attachmentSignedUrls.map((file, index) => (
-                                        <li key={index}>
-                                            <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center text-sm">
-                                                {file.name || '첨부파일 보기'}
-                                            </a>
-                                        </li>
+                            <section className="print-section font-black text-black pt-6 font-black">
+                                <h2 className="text-[10px] mb-6 uppercase tracking-tighter border-l-4 border-black pl-2 font-black font-black font-black">03. 첨부 증빙 자료</h2>
+                                <div className="space-y-8 font-black font-black">
+                                    {attachmentSignedUrls.map((file, i) => (
+                                        <div key={i} className="border border-slate-200 p-2 bg-white rounded-sm print-section font-black font-black">
+                                            <p className="text-[9px] text-slate-400 mb-2 font-mono uppercase font-black font-black">Evidence File {i+1}: {file.name}</p>
+                                            <img src={file.url} alt={file.name} className="w-full h-auto block shadow-sm font-black font-black" />
+                                        </div>
                                     ))}
-                                </ul>
-                            </div>
+                                </div>
+                            </section>
                         )}
+
+                        <div className="pt-20 text-center space-y-6 print-section font-black text-black font-black">
+                            <div className="space-y-4 font-black">
+                                <p className="text-[15px] font-black underline underline-offset-8 decoration-1 font-mono font-black">{doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'}) : '-'}</p>
+                                <p className="text-2xl font-black uppercase tracking-[0.4em] mt-6 font-black font-black">기안자: {doc.requester_name} (인)</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="w-full lg:w-96 no-print">
-                <div className="bg-white p-6 rounded-xl shadow-lg border space-y-6 lg:sticky lg:top-8">
-                    {doc?.status === '완료' && (
-                        <button onClick={handlePdfExport} disabled={isExporting} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-md transition-all font-semibold">
-                            {isExporting ? 'PDF 저장 중...' : 'PDF로 저장'}
-                        </button>
+                <aside className="lg:col-span-4 space-y-5 no-print font-black font-black">
+                    {isReferrer && (
+                        <div className="bg-white border border-black p-6 shadow-sm font-black text-black font-black">
+                            <div className="flex gap-2 font-black font-black font-black">
+                                <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} className="flex-1 border border-black px-3 py-1.5 text-[11px] outline-none font-black text-black focus:bg-slate-50 font-black font-black" placeholder="문서번호 입력" />
+                                <button onClick={handleUpdateDocNumber} className="bg-black text-white px-4 py-1.5 text-[10px] font-black hover:bg-slate-800 transition-all font-black font-black font-black">반영</button>
+                            </div>
+                        </div>
                     )}
-                    <div className="border-b pb-4">
-                        <h2 className="text-lg font-bold mb-4">결재선</h2>
-                        <div className="space-y-3">
-                            {approvalHistory?.map((step, index) => (
-                                <div key={step.id} className={`flex flex-col p-3 rounded-md border ${step.status === '대기' ? 'bg-yellow-50 border-yellow-200' : step.status === '승인' ? 'bg-green-50 border-green-200' : step.status === '반려' ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`}>
-                                   <div className="flex items-center space-x-2">
-                                        <span className="font-semibold text-xs text-gray-500">{index + 1}차</span>
-                                        <span className="text-sm font-bold">{step.approver?.full_name}</span>
-                                        <span className="text-xs text-gray-500">({step.approver?.position})</span>
-                                        <span className="ml-auto text-sm">{getStatusIcon(step.status)}</span>
-                                    </div>
-                                    {step.comment && <p className="text-xs text-gray-600 mt-2 bg-white/50 p-1 rounded">의견: {step.comment}</p>}
-                                    {step.approved_at && <p className="text-[10px] text-gray-400 mt-1 text-right">{new Date(step.approved_at).toLocaleString('ko-KR')}</p>}
+
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-black font-black font-black font-black font-black">
+                        <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 text-black font-black font-black">
+                            <Users size={16} /><h2 className="text-[11px] uppercase font-black text-black font-black font-black font-black">결재 프로세스</h2>
+                        </div>
+                        <div className="space-y-2 mb-5 font-black text-black">
+                            {approvalHistory?.map((step, idx) => (
+                                <div key={idx} className={`p-3 rounded-xl border flex justify-between items-center ${step.status === '승인' || step.status === '완료' ? 'bg-slate-50 border-black' : 'bg-white opacity-60'} font-black font-black`}>
+                                    <div className="text-[12px] font-black font-black">{step.approver?.full_name || step.approver_name} <span className="text-[9px] text-slate-400 ml-1 font-black font-black">{idx + 1}차</span></div>
+                                    <span className={`text-[8px] px-2 py-0.5 rounded-full font-black font-black ${step.status === '승인' || step.status === '완료' ? 'bg-black text-white' : 'bg-amber-400 text-white'} font-black`}>{step.status === 'pending' ? '대기' : step.status}</span>
                                 </div>
                             ))}
                         </div>
-                    </div>
-                    {isMyTurnToApprove && (
-                        <div className="space-y-4">
-                            {isFinalApprover && (
-                                <div>
-                                    <label className="block text-sm font-bold mb-2 text-blue-600">문서 번호 부여</label>
-                                    <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} placeholder="예: 내부-2025-001" className="w-full p-2 border border-blue-300 rounded-md text-sm" />
-                                </div>
-                            )}
-                            <div>
-                                <h2 className="text-sm font-bold mb-2">결재 의견</h2>
-                                <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} placeholder="의견을 입력하세요." className="w-full p-2 border rounded-md h-24 resize-none text-sm focus:ring-2 focus:ring-blue-500" />
+                        <div className="pt-4 border-t border-dashed border-slate-200 font-black font-black">
+                            <p className="text-[9px] uppercase mb-2 font-black text-blue-600 tracking-widest font-black font-black font-black">Official CC (참조)</p>
+                            <div className="text-[11px] font-black text-blue-900 bg-blue-50/50 p-3 rounded-xl leading-relaxed font-black font-black">
+                                {referrerHistory?.length > 0 ? referrerHistory.map(r => r.referrer?.full_name || r.referrer_name).join(', ') : '지정된 참조인 없음'}
                             </div>
-                            <div className="flex space-x-3">
-                                <button onClick={() => handleApprovalAction('승인')} disabled={loading} className="flex-1 py-2 bg-green-600 text-white rounded-md font-bold shadow hover:bg-green-700">승인</button>
-                                <button onClick={() => handleApprovalAction('반려')} disabled={loading} className="flex-1 py-2 bg-red-600 text-white rounded-md font-bold shadow hover:bg-red-700">반려</button>
+                        </div>
+                    </div>
+
+                    {isMyTurn && (
+                        <div className="bg-slate-900 border border-black rounded-2xl p-6 shadow-xl text-white font-black font-black font-black font-black">
+                            <h3 className="text-[11px] uppercase mb-4 font-black text-slate-400 font-black font-black font-black">결재 의견 작성</h3>
+                            <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-[12px] font-black font-black outline-none mb-4 h-28 focus:border-white transition-all text-white placeholder-slate-500 font-black font-black" placeholder="승인 또는 반려 의견을 입력하십시오." />
+                            <div className="grid grid-cols-2 gap-3 font-black">
+                                <button onClick={() => handleApprovalAction('승인')} className="bg-white text-black py-3 rounded-xl text-[11px] font-black hover:bg-slate-200 transition-all flex items-center justify-center gap-2 font-black font-black font-black"><CheckCircle size={14}/> 승인</button>
+                                <button onClick={() => handleApprovalAction('반려')} className="bg-rose-600 text-white py-3 rounded-xl text-[11px] font-black hover:bg-rose-700 transition-all flex items-center justify-center gap-2 font-black font-black font-black font-black font-black font-black"><XCircle size={14}/> 반려</button>
                             </div>
                         </div>
                     )}
-                    {doc?.status === '완료' && <p className="text-center text-green-600 font-bold pt-2">✅ 결재 완료</p>}
-                </div>
+                </aside>
             </div>
         </div>
     );
