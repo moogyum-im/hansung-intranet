@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { 
-    Printer, FileText, CheckCircle, XCircle, Users, Download, Paperclip, ImageIcon, ExternalLink, Settings
+    Printer, FileText, CheckCircle, XCircle, Users, Download, Paperclip, ImageIcon, ExternalLink, Settings, Music
 } from 'lucide-react';
 
 export default function ApologyView({ doc, employee, approvalHistory, referrerHistory }) {
@@ -30,6 +30,7 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                     setManualDocNumber(doc.document_number || '');
                     setCurrentStep(approvalHistory?.find(s => s.status === '대기') || null);
 
+                    // 🚀 [카이 방식] 첨부파일 로직 이식
                     let rawAttachments = doc.attachments || content?.attachments || [];
                     if (typeof rawAttachments === 'string') {
                         try { rawAttachments = JSON.parse(rawAttachments); } catch (e) { rawAttachments = []; }
@@ -43,7 +44,10 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                             const cleanPath = filePath.replace('approval_attachments/', '').trim();
                             const { data } = await supabase.storage.from('approval_attachments').createSignedUrl(cleanPath, 3600);
                             if (data?.signedUrl) {
-                                return { url: data.signedUrl, name: typeof file === 'object' ? (file.name || cleanPath) : cleanPath };
+                                return { 
+                                    url: data.signedUrl, 
+                                    name: typeof file === 'object' ? (file.name || cleanPath) : cleanPath 
+                                };
                             }
                             return null;
                         });
@@ -86,37 +90,16 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
     if (loading) return <div className="p-20 text-center font-black text-black text-xs animate-pulse italic">HANSUNG ERP LOADING...</div>;
 
     return (
-        <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none print:bg-white print:p-0">
-            {/* 인쇄 및 스크롤바 제거 핵심 스타일 */}
+        <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none print:bg-white print:p-0 font-black">
             <style dangerouslySetInnerHTML={{ __html: `
                 @media print {
                     @page { size: A4; margin: 0; }
-                    body { 
-                        margin: 0 !important; 
-                        padding: 0 !important; 
-                        background: white !important; 
-                        overflow: visible !important; /* 스크롤바 제거 */
-                    }
+                    body { margin: 0 !important; padding: 0 !important; background: white !important; overflow: visible !important; }
                     .no-print, nav, header, aside, .sidebar { display: none !important; }
-                    
-                    /* 제목 잘림 방지: 상단 여백 강제 확보 */
-                    .print-container { 
-                        width: 210mm !important; 
-                        margin: 0 auto !important; 
-                        padding: 25mm 20mm !important; /* 상단 25mm 여백 */
-                        border: none !important; 
-                        box-shadow: none !important;
-                        box-sizing: border-box !important;
-                    }
-                    
-                    /* 섹션 잘림 방지 */
+                    .print-container { width: 210mm !important; margin: 0 auto !important; padding: 25mm 20mm !important; border: none !important; box-shadow: none !important; box-sizing: border-box !important; }
                     .print-section { page-break-inside: avoid !important; break-inside: avoid-page !important; }
-                    .page-split { page-break-before: always; padding-top: 20mm; }
-                    
-                    /* 스크롤바 강제 숨김 */
                     ::-webkit-scrollbar { display: none !important; }
                 }
-                /* 웹 뷰용 스크롤바 최적화 */
                 ::-webkit-scrollbar { width: 0px; } 
             `}} />
             
@@ -129,11 +112,11 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
 
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">
                 <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative print-container text-black font-black">
-                    <header className="mb-10 border-b-4 border-black pb-6 font-black print-section">
+                    <header className="mb-10 border-b-4 border-black pb-6 font-black print-section font-black">
                         <div className="flex justify-between items-start mb-6 font-black">
                             <div className="space-y-1 font-black">
                                 <p className="text-[9px] tracking-widest text-slate-400 font-black uppercase">Hansung Landscape & Construction</p>
-                                <h1 className="text-3xl font-black tracking-tighter uppercase">시 말 서</h1>
+                                <h1 className="text-3xl font-black tracking-tighter uppercase font-black">시 말 서</h1>
                             </div>
                         </div>
                         <div className="flex justify-between text-[10px] font-black">
@@ -147,15 +130,15 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                             <tbody>
                                 <tr className="border-b border-black text-black font-black">
                                     <th className="bg-slate-50 p-4 w-28 text-left border-r border-black font-black uppercase">소속부서</th>
-                                    <td className="p-4 border-r border-black font-black">{doc.requester_department}</td>
+                                    <td className="p-4 border-r border-black font-black font-black">{doc.requester_department}</td>
                                     <th className="bg-slate-50 p-4 w-28 text-left border-r border-black font-black uppercase">성명/직위</th>
-                                    <td className="p-4 font-black">{doc.requester_name} {doc.requester_position}</td>
+                                    <td className="p-4 font-black font-black">{doc.requester_name} {doc.requester_position}</td>
                                 </tr>
                                 <tr className="border-b border-black text-black">
                                     <th className="bg-slate-50 p-4 text-left border-r border-black font-black uppercase">발생일시</th>
-                                    <td className="p-4 border-r border-black font-black font-mono">{formData.incidentDate ? formData.incidentDate.replace('T', ' ') : '-'}</td>
+                                    <td className="p-4 border-r border-black font-black font-mono font-black">{formData.incidentDate ? formData.incidentDate.replace('T', ' ') : '-'}</td>
                                     <th className="bg-slate-50 p-4 text-left border-r border-black font-black uppercase">문서상태</th>
-                                    <td className="p-4 font-black underline underline-offset-4 decoration-1 font-black">{doc.status}</td>
+                                    <td className="p-4 font-black underline underline-offset-4 decoration-1 font-black font-black">{doc.status}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -175,41 +158,60 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                             <div className="border border-black p-5 text-[12px] leading-relaxed min-h-[150px] whitespace-pre-wrap font-black">{formData.apologyContent}</div>
                         </section>
 
-                        {/* 4번 섹션: 서명란 위로 이동 및 갤러리 뷰 적용 */}
+                        {/* 🚀 [카이 방식 적용] 첨부 증빙 자료 갤러리 및 다운로드 */}
                         {attachmentSignedUrls.length > 0 && (
                             <section className="print-section font-black text-black pt-6">
                                 <h2 className="text-[10px] mb-6 uppercase font-black tracking-tighter border-l-4 border-black pl-2">04. 첨부 증빙 자료</h2>
                                 <div className="space-y-8 font-black">
                                     {attachmentSignedUrls.map((file, i) => (
-                                        <div key={i} className="border border-slate-200 p-2 bg-white rounded-sm print-section">
-                                            <p className="text-[9px] text-slate-400 mb-2 font-mono uppercase tracking-tighter">Evidence File {i+1}: {file.name}</p>
-                                            <img src={file.url} alt={file.name} className="w-full h-auto block shadow-sm" />
+                                        <div key={i} className="border border-black bg-white p-3 shadow-sm font-black">
+                                            <div className="flex justify-between items-center mb-3 px-1 no-print">
+                                                <p className="text-[10px] text-black font-black uppercase tracking-tighter flex items-center gap-2">
+                                                    {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? <ImageIcon size={14} className="text-blue-600" /> : <FileText size={14} className="text-slate-400" />} 
+                                                    파일 {i+1}: {file.name}
+                                                </p>
+                                                <a href={file.url} download={file.name} target="_blank" rel="noreferrer" className="text-blue-600 font-black text-[10px] flex items-center gap-1 hover:underline">
+                                                    <Download size={12} /> 다운로드
+                                                </a>
+                                            </div>
+                                            {/* 인쇄 시에도 보여야 하는 제목 */}
+                                            <p className="hidden print:block text-[9px] text-slate-400 mb-2 font-mono uppercase tracking-tighter">Attachment {i+1}: {file.name}</p>
+                                            
+                                            {/* 이미지면 원본 노출, 아니면 아이콘박스 노출 */}
+                                            {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                                <img src={file.url} alt={file.name} className="w-full h-auto block border border-slate-100" />
+                                            ) : (
+                                                <div className="w-full py-12 bg-slate-50 border border-slate-100 flex flex-col items-center justify-center gap-3">
+                                                    <FileText size={48} className="text-slate-300" />
+                                                    <span className="text-[11px] font-black text-slate-500">이 파일은 미리보기를 지원하지 않습니다. (다운로드하여 확인)</span>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             </section>
                         )}
 
-                        <div className="pt-16 text-center space-y-6 print-section font-black text-black">
-                            <p className="text-[13px] font-black">위와 같이 시말서를 제출하며, 향후 재발 방지를 약속합니다.</p>
+                        <div className="pt-16 text-center space-y-6 print-section font-black text-black font-black">
+                            <p className="text-[13px] font-black font-black">위와 같이 시말서를 제출하며, 향후 재발 방지를 약속합니다.</p>
                             <div className="space-y-4 font-black">
-                                <p className="text-[15px] font-black underline underline-offset-8 decoration-1 font-mono">{doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'}) : '-'}</p>
-                                <p className="text-2xl font-black uppercase tracking-[0.4em] mt-6">제출인: {doc.requester_name} (인)</p>
+                                <p className="text-[15px] font-black underline underline-offset-8 decoration-1 font-mono font-black font-black">{doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'}) : '-'}</p>
+                                <p className="text-2xl font-black uppercase tracking-[0.4em] mt-6 font-black font-black">제출인: {doc.requester_name} (인)</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <aside className="lg:col-span-4 space-y-5 no-print font-black">
+                    {/* ... (오른쪽 사이드바 결재 프로세스 및 의견란 기존 유지) ... */}
                     {isReferrer && (
-                        <div className="bg-white border border-black p-6 shadow-sm font-black text-black">
-                            <div className="flex gap-2 font-black">
+                        <div className="bg-white border border-black p-6 shadow-sm font-black text-black font-black">
+                            <div className="flex gap-2 font-black font-black">
                                 <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} className="flex-1 border border-black px-3 py-1.5 text-[11px] outline-none font-black text-black focus:bg-slate-50" placeholder="문서번호 입력" />
                                 <button onClick={handleUpdateDocNumber} className="bg-black text-white px-4 py-1.5 text-[10px] font-black hover:bg-slate-800 transition-all font-black">반영</button>
                             </div>
                         </div>
                     )}
-
                     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-black font-black">
                         <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 text-black font-black">
                             <Users size={16} /><h2 className="text-[11px] uppercase font-black text-black font-black">결재 프로세스</h2>
@@ -229,7 +231,6 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                             </div>
                         </div>
                     </div>
-
                     {isMyTurn && (
                         <div className="bg-slate-900 border border-black rounded-2xl p-6 shadow-xl text-white font-black">
                             <h3 className="text-[11px] uppercase mb-4 font-black text-slate-400 font-black">결재 의견 작성</h3>

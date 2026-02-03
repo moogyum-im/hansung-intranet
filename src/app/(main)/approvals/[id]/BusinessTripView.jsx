@@ -26,7 +26,6 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
         const setupPage = async () => {
             if (doc) {
                 try {
-                    // 1. 문서 데이터 파싱
                     const content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content;
                     setFormData(content);
                     setManualDocNumber(doc.document_number || '');
@@ -34,7 +33,6 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                     const activeStep = approvalHistory?.find(s => s.status === '대기');
                     setCurrentStep(activeStep || null);
 
-                    // 2. [강력 수리] 첨부파일 경로 정규화 및 서명된 URL 생성
                     let rawAttachments = doc.attachments;
                     if (typeof rawAttachments === 'string') {
                         try { rawAttachments = JSON.parse(rawAttachments); } catch (e) { rawAttachments = []; }
@@ -43,21 +41,13 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                     if (rawAttachments && Array.isArray(rawAttachments) && rawAttachments.length > 0) {
                         const signedUrlPromises = rawAttachments.map(async (file) => {
                             if (!file) return null;
-                            
-                            // 객체 형태({path: '...'}) 또는 문자열 형태 모두 대응
                             const rawPath = typeof file === 'object' ? file.path : file;
                             if (!rawPath) return null;
 
-                            /**
-                             * [핵심 수리] 
-                             * DB에 저장된 path에서 버킷 이름이 포함되어 있을 경우를 대비하여 
-                             * 순수 파일 경로만 추출합니다.
-                             */
                             const cleanPath = rawPath.replace('approval_attachments/', '').trim();
-                            
                             const { data, error } = await supabase.storage
                                 .from('approval_attachments')
-                                .createSignedUrl(cleanPath, 3600); // 1시간 유효 링크
+                                .createSignedUrl(cleanPath, 3600);
 
                             if (!error && data?.signedUrl) {
                                 return {
@@ -158,7 +148,7 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                         <div className="flex justify-between items-start mb-6">
                             <div className="space-y-1">
                                 <p className="text-[9px] tracking-widest text-slate-400 font-black uppercase">Hansung Landscape & Construction</p>
-                                <h1 className="text-3xl font-black tracking-tighter uppercase">출 장 신 청 서</h1>
+                                <h1 className="text-3xl font-black tracking-tighter uppercase">출 장 신 신청서</h1>
                             </div>
                         </div>
                         <div className="flex justify-between text-[10px] font-black">
@@ -258,28 +248,40 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                         </div>
                     )}
 
+                    {/* 🚀 [갤러리 영역만 카이 방식으로 수정] */}
                     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-black font-black">
-                        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2 font-black text-black">
-                            <h2 className="text-[11px] uppercase font-black flex items-center gap-2"><ImageIcon size={14} /> 증빙 갤러리</h2>
+                        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2 text-black">
+                            <h2 className="text-[11px] uppercase font-black flex items-center gap-2"><Paperclip size={14} /> 증빙 자료 및 첨부파일</h2>
                             <span className="text-[10px] text-slate-400 font-black">{attachmentSignedUrls.length} Files</span>
                         </div>
                         
                         {attachmentSignedUrls.length > 0 ? (
-                            <div className="grid grid-cols-2 gap-3 font-black">
+                            <div className="grid grid-cols-1 gap-2 font-black">
                                 {attachmentSignedUrls.map((file, i) => (
-                                    <div key={i} className="group relative aspect-square bg-slate-50 border border-slate-100 rounded-lg overflow-hidden hover:border-black transition-all font-black">
-                                        <img src={file.url} alt={file.name} className="w-full h-full object-cover grayscale-[0.5] group-hover:grayscale-0 transition-all duration-300 font-black" />
-                                        <a href={file.url} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 text-white p-2 font-black">
-                                            <ExternalLink size={16} />
-                                            <span className="text-[8px] text-center line-clamp-2 font-black">{file.name}</span>
-                                        </a>
+                                    <div key={i} className="flex flex-col border border-slate-100 rounded-lg overflow-hidden bg-slate-50 shadow-sm">
+                                        {/* 상단 파일 정보 바 */}
+                                        <div className="flex items-center justify-between p-2 bg-white border-b border-slate-100">
+                                            <div className="flex items-center gap-2 flex-1 truncate">
+                                                {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? <ImageIcon size={14} className="text-blue-500" /> : <FileText size={14} className="text-slate-400" />}
+                                                <span className="text-[10px] font-black truncate">{file.name}</span>
+                                            </div>
+                                            <a href={file.url} download={file.name} target="_blank" rel="noreferrer" className="text-blue-600 hover:bg-blue-50 p-1 rounded transition-colors shadow-sm bg-white border border-blue-100">
+                                                <Download size={14} />
+                                            </a>
+                                        </div>
+                                        {/* 이미지인 경우만 미리보기 노출 */}
+                                        {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
+                                            <div className="p-2 flex justify-center bg-slate-50">
+                                                <img src={file.url} alt={file.name} className="max-w-full h-auto rounded border border-white shadow-sm" />
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
                         ) : (
                             <div className="py-10 text-center border-2 border-dashed border-slate-50 rounded-xl font-black">
                                 <Paperclip size={20} className="mx-auto text-slate-200 mb-2" />
-                                <p className="text-[10px] text-slate-300 font-black italic">NO ATTACHMENTS</p>
+                                <p className="text-[10px] text-slate-300 font-black italic uppercase">No Attachments</p>
                             </div>
                         )}
                     </div>
