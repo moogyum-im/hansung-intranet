@@ -225,7 +225,7 @@ export default function NewSitePageFinal() {
                                     <div className="sm:col-span-3">
                                         <label htmlFor="site_type" className="block text-sm font-medium leading-6 text-gray-900">공사 구분</label>
                                         <select name="site_type" id="site_type" value={formData.site_type} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
-                                            <option>건축</option> <option>토목</option> <option>조경</option> <option>인테리어</option> <option>기타</option>
+                                            <option>토목</option> <option>조경</option><option>조경시설물</option> <option>조경식재</option><option>기타</option>
                                         </select>
                                     </div>
                                     <div className="sm:col-span-3">
@@ -266,7 +266,7 @@ export default function NewSitePageFinal() {
                                         </select>
                                     </div>
                                     <div className="sm:col-span-3">
-                                        <label htmlFor="budget" className="block text-sm font-medium leading-6 text-gray-900">총 예산 (원)</label>
+                                        <label htmlFor="budget" className="block text-sm font-medium leading-6 text-gray-900">총 도급액 (원)</label>
                                         <input type="number" name="budget" id="budget" value={formData.budget || ''} onChange={handleChange} className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" placeholder="숫자만 입력" />
                                     </div>
                                 </div>

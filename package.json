@@ -25,6 +25,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
     "frappe-gantt": "^1.0.3",
     "googleapis": "^150.0.1",
     "html2canvas": "^1.4.1",
