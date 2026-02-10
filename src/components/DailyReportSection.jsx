@@ -271,7 +271,7 @@ export default function DailyReportSection({ siteId }) {
         sheet.addRow(['전 체 총 합 계', '', totalSumToday, '', totalSumPrev, '', totalSumTotal, '']);
         ['A','C','E','G'].forEach(col => { sheet.mergeCells(`${col}${currentRow}:${String.fromCharCode(col.charCodeAt(0)+1)}${currentRow}`); sheet.getCell(`${col}${currentRow}`).font = {bold: true}; if(col !== 'A') sheet.getCell(`${col}${currentRow}`).numFmt = '#,##0'; });
         currentRow += 2;
-        sheet.addRow(['▣ 현장 전경 사진 대지 (PHOTO BOARD)']);
+        sheet.addRow(['▣ 현장 전경 사진 대지']);
         sheet.mergeCells(`A${currentRow}:H${currentRow}`);
         sheet.getCell(`A${currentRow}`).fill = titleBg;
         sheet.getCell(`A${currentRow}`).font = { bold: true };
@@ -503,7 +503,7 @@ export default function DailyReportSection({ siteId }) {
                 </div>
 
                 <div className="border-2 border-black mb-10 overflow-hidden font-black">
-                    <div className="bg-gray-800 text-white p-2 text-center font-bold text-sm tracking-widest uppercase font-black">정 산 내 역 (SUMMARY)</div>
+                    <div className="bg-gray-800 text-white p-2 text-center font-bold text-sm tracking-widest uppercase font-black">정 산 내 역</div>
                     <table className="w-full border-collapse text-xs font-black font-black">
                         <thead><tr className="bg-gray-100 border-b border-black font-black font-black font-black font-black"><th className="border-r border-black p-3 w-48 font-black">구 분</th><th className="border-r border-black p-3 text-blue-700 font-black">금 일 합 계</th><th className="border-r border-black p-3 text-gray-500 font-black">전 일 누 계</th><th className="p-3 text-red-600 font-black">총 누 계</th></tr></thead>
                         <tbody>
