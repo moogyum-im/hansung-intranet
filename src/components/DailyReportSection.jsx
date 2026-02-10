@@ -529,9 +529,9 @@ export default function DailyReportSection({ siteId }) {
                 </div>
 
                 <div className="border-2 border-black font-black font-black font-black">
-                    <div className="bg-[#48D1CC] border-b-2 border-black p-2.5 text-center font-black font-black">현장 전경 사진 대지 (PHOTO BOARD)</div>
+                    <div className="bg-[#48D1CC] border-b-2 border-black p-2.5 text-center font-black font-black">현장 전경 사진 대지</div>
                     <div className="grid grid-cols-2 text-center border-b border-black text-sm bg-gray-50 font-black">
-                        <div className="border-r border-black py-1.5 font-black">전 일 (PREVIOUS)</div><div className="py-1.5 font-black">금 일 (TODAY)</div>
+                        <div className="border-r border-black py-1.5 font-black">전 일</div><div className="py-1.5 font-black">금 일</div>
                     </div>
                     {Array.from({ length: maxPhotoRows }).map((_, idx) => (
                         <div key={idx} className="grid grid-cols-2 border-b border-black min-h-[400px] bg-white font-black font-black">
