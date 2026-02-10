@@ -276,7 +276,7 @@ export default function DailyReportSection({ siteId }) {
         sheet.getCell(`A${currentRow}`).fill = titleBg;
         sheet.getCell(`A${currentRow}`).font = { bold: true };
         currentRow++;
-        const allPhotos = [{ title: '전 일 (PREVIOUS)', photos: tomorrowPhotos }, { title: '금 일 (TODAY)', photos: todayPhotos }];
+        const allPhotos = [{ title: '전 일', photos: tomorrowPhotos }, { title: '금 일', photos: todayPhotos }];
         for (const section of allPhotos) {
             sheet.addRow([section.title]);
             sheet.mergeCells(`A${currentRow}:H${currentRow}`);
