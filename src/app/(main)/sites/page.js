@@ -59,7 +59,7 @@ function StatusSection({ title, count, sites, statusColor, icon }) {
         lightBg: "bg-emerald-50/50", 
         border: "border-emerald-100", 
         text: "text-emerald-600", 
-        plantProgress: "bg-emerald-500",
+        plantProgress: "bg-blue-600",
         facilityProgress: "bg-teal-500",
         shadow: "shadow-emerald-100"
     }
@@ -87,13 +87,12 @@ function StatusSection({ title, count, sites, statusColor, icon }) {
             <thead className={`bg-slate-50/50 border-b border-slate-100 font-black`}>
                 <tr>
                 <th className="px-8 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest font-black">현장 정보</th>
-                <th className="px-8 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center font-black" colSpan={2}>공정률 현황 (활성 공종)</th>
-                <th className="px-8 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right font-black">상세 현황</th>
+                <th className="px-8 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center font-black" colSpan={2}>공정률 현황 (실시간 연동)</th>
+                <th className="px-8 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right font-black">상세</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 font-black">
                 {sites.map((site) => {
-                  // 활성화된 공종 개수 확인
                   const activeCount = (site.is_plant_active !== false ? 1 : 0) + (site.is_facility_active !== false ? 1 : 0);
                   
                   return (
@@ -116,12 +115,12 @@ function StatusSection({ title, count, sites, statusColor, icon }) {
                         </Link>
                         </td>
 
-                        {/* 🚀 식재 공정률: 활성화 시에만 표시 */}
-                        <td className={`px-4 py-6 font-black ${site.is_plant_active === false ? 'hidden' : ''} ${activeCount === 1 ? 'col-span-2' : ''}`}>
+                        {/* 식재 공정률 */}
+                        <td className={`px-4 py-6 font-black ${site.is_plant_active === false ? 'hidden' : ''}`}>
                             <div className="flex flex-col items-center gap-1.5 min-w-[140px] max-w-[180px] mx-auto font-black">
                                 <div className="flex justify-between w-full text-[10px] font-black text-slate-400 px-1 tracking-tighter font-black">
-                                    <span className="flex items-center gap-1 font-black"><Leaf size={10} className="text-green-600" /> 식재 공정</span>
-                                    <span className="text-green-600 font-black">{site.progress_plant || 0}%</span>
+                                    <span className="flex items-center gap-1 font-black"><Leaf size={10} className="text-green-600" /> 식재</span>
+                                    <span className="text-green-600 font-black">{(site.progress_plant || 0).toFixed(1)}%</span>
                                 </div>
                                 <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden p-[1px] font-black">
                                     <div 
@@ -132,12 +131,12 @@ function StatusSection({ title, count, sites, statusColor, icon }) {
                             </div>
                         </td>
 
-                        {/* 🚀 시설물 공정률: 활성화 시에만 표시 */}
-                        <td className={`px-4 py-6 font-black ${site.is_facility_active === false ? 'hidden' : ''} ${activeCount === 1 ? 'col-span-2' : ''}`}>
+                        {/* 시설물 공정률 */}
+                        <td className={`px-4 py-6 font-black ${site.is_facility_active === false ? 'hidden' : ''}`}>
                             <div className="flex flex-col items-center gap-1.5 min-w-[140px] max-w-[180px] mx-auto font-black">
                                 <div className="flex justify-between w-full text-[10px] font-black text-slate-400 px-1 tracking-tighter font-black">
-                                    <span className="flex items-center gap-1 font-black"><Hammer size={10} className="text-blue-600" /> 시설물 공정</span>
-                                    <span className="text-blue-600 font-black">{site.progress_facility || 0}%</span>
+                                    <span className="flex items-center gap-1 font-black"><Hammer size={10} className="text-blue-600" /> 시설물</span>
+                                    <span className="text-blue-600 font-black">{(site.progress_facility || 0).toFixed(1)}%</span>
                                 </div>
                                 <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden p-[1px] font-black">
                                     <div 
@@ -148,7 +147,6 @@ function StatusSection({ title, count, sites, statusColor, icon }) {
                             </div>
                         </td>
 
-                        {/* 공종이 모두 비활성화된 경우 예외처리 */}
                         {activeCount === 0 && (
                           <td className="px-4 py-6 text-center text-slate-300 text-[10px] font-black" colSpan={2}>
                             활성화된 공종이 없습니다.
@@ -175,9 +173,8 @@ export default function SitesPage() {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const { employee } = useEmployee(); 
 
-  // 🚀 [연동 로직] 목록 로딩 시 각 현장별 최신 일보 데이터를 체크하여 공정률 및 활성 상태 업데이트
+  // 🚀 [실시간 연동] 각 현장별 최신 작업일보 데이터를 체크하여 공정률 업데이트
   const syncAllSitesProgress = useCallback(async (siteList) => {
     const updatedSites = await Promise.all(siteList.map(async (site) => {
         try {
@@ -190,12 +187,16 @@ export default function SitesPage() {
 
             if (data?.[0]) {
                 const notes = JSON.parse(data[0].notes);
+                // 누계 공정률 계산 (전일누계 + 금일진행)
+                const plantAcc = Number(notes.progress_plant_prev || 0) + Number(notes.progress_plant || 0);
+                const facilityAcc = Number(notes.progress_facility_prev || 0) + Number(notes.progress_facility || 0);
+
                 return {
                     ...site,
-                    progress_plant: parseFloat(notes.progress_plant) || 0,
-                    progress_facility: parseFloat(notes.progress_facility) || 0,
-                    is_plant_active: notes.is_plant_active ?? true,
-                    is_facility_active: notes.is_facility_active ?? true
+                    progress_plant: plantAcc,
+                    progress_facility: facilityAcc,
+                    is_plant_active: notes.is_plant_active ?? site.is_plant_active,
+                    is_facility_active: notes.is_facility_active ?? site.is_facility_active
                 };
             }
         } catch (e) {
@@ -219,7 +220,7 @@ export default function SitesPage() {
         
         if (data) {
             setSites(data);
-            syncAllSitesProgress(data);
+            await syncAllSitesProgress(data);
         }
       } catch (error) {
         console.error('현장 목록 로드 실패:', error);
@@ -230,21 +231,22 @@ export default function SitesPage() {
     fetchSites();
   }, [syncAllSitesProgress]);
 
+  // 🚀 [수정] 수정 폼의 '진행', '대기' 등 명칭과 완벽히 일치하도록 필터 로직 수정
   const groupedSites = useMemo(() => {
     const filtered = sites.filter(site => 
       site.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
     return {
-      ongoing: filtered.filter(s => s.status === '진행중' || !s.status),
-      pending: filtered.filter(s => s.status === '보류' || s.status === '중단'),
+      // 🚩 기존 '진행중' -> '진행'으로 수정
+      ongoing: filtered.filter(s => s.status === '진행' || !s.status || s.status === '진행중'),
+      pending: filtered.filter(s => s.status === '대기' || s.status === '보류' || s.status === '중단'),
       completed: filtered.filter(s => s.status === '완료')
     };
   }, [sites, searchTerm]);
 
   return (
     <div className="p-6 sm:p-10 bg-[#f8fafc] min-h-screen font-black">
-      {/* --- 헤더 섹션 --- */}
       <header className="max-w-7xl mx-auto mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 font-black">
         <div>
           <div className="flex items-center gap-2 text-blue-600 font-black text-[11px] tracking-widest uppercase mb-2">
@@ -253,7 +255,7 @@ export default function SitesPage() {
           <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
             현장 관리 대장 <Construction className="text-blue-600" size={28} />
           </h1>
-          <p className="text-slate-500 text-[14px] mt-2 font-black">한성 인트라넷에서 관리하는 모든 현장의 공정률을 실시간으로 모니터링합니다.</p>
+          <p className="text-slate-500 text-[14px] mt-2 font-black">작업일보를 통해 업데이트되는 실시간 공정률을 모니터링합니다.</p>
         </div>
         
         <div className="flex items-center gap-3 font-black">
@@ -267,14 +269,13 @@ export default function SitesPage() {
               className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 transition-all w-64 shadow-sm font-black"
             />
           </div>
-          <Link href="/sites/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 group active:scale-95">
+          <Link href="/sites/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95">
             <Plus size={18} /> 
             <span className="hidden sm:inline text-sm">새 현장 등록</span>
           </Link>
         </div>
       </header>
 
-      {/* --- 메인 리스트 --- */}
       <main className="max-w-7xl mx-auto font-black">
         {loading ? (
             <div className="space-y-4 font-black">
@@ -283,7 +284,7 @@ export default function SitesPage() {
         ) : sites.length > 0 ? (
             <div className="space-y-2 font-black">
                 <StatusSection 
-                    title="진행 중인 프로젝트" 
+                    title="진행 중 프로젝트" 
                     count={groupedSites.ongoing.length} 
                     sites={groupedSites.ongoing} 
                     statusColor="blue" 
@@ -291,7 +292,7 @@ export default function SitesPage() {
                 />
                 
                 <StatusSection 
-                    title="보류 및 중단 현장" 
+                    title="착공 대기 및 보류 현장" 
                     count={groupedSites.pending.length} 
                     sites={groupedSites.pending} 
                     statusColor="orange" 
@@ -312,7 +313,6 @@ export default function SitesPage() {
                     <Construction size={40} className="text-slate-200" />
                 </div>
                 <p className="text-slate-800 font-black text-xl tracking-tight">등록된 현장이 없습니다</p>
-                <p className="text-sm text-slate-400 mt-2 font-black">새로운 현장을 등록하여 공정 관리를 시작하세요.</p>
                 <Link href="/sites/new" className="inline-flex items-center gap-2 mt-8 px-6 py-3 bg-slate-800 text-white rounded-xl font-black hover:bg-black transition-all">
                     첫 현장 등록하기 <Plus size={18} />
                 </Link>
