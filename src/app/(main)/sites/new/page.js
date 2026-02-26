@@ -3,13 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '../../../../lib/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { Building2, Users, Calendar, BarChart3, ChevronLeft, ShieldCheck, Leaf, Hammer, ClipboardList } from 'lucide-react';
 
 export default function NewSitePage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const siteId = searchParams.get('id'); // URL에서 수정할 현장 ID 추출
     const { employee } = useEmployee();
 
     const [formData, setFormData] = useState({
@@ -24,18 +26,39 @@ export default function NewSitePage() {
     const [allUsers, setAllUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
 
+    // 🚀 수정: 페이지 로드 시 사용자 목록과 기존 현장 데이터 로드
     useEffect(() => {
-        async function fetchUsers() {
-            const { data } = await supabase
+        async function loadInitialData() {
+            // 1. 프로필 목록 가져오기
+            const { data: profiles } = await supabase
                 .from('profiles')
                 .select('id, full_name, department, position')
                 .order('full_name', { ascending: true });
-            if (data) setAllUsers(data);
-        }
-        fetchUsers();
-    }, []);
+            if (profiles) setAllUsers(profiles);
 
-    // 🚀 숫자 포맷팅 (콤마 추가)
+            // 2. 쿼리에 id가 있으면 기존 데이터 불러오기 (정보 수정 모드)
+            if (siteId) {
+                const { data: siteData, error } = await supabase
+                    .from('construction_sites')
+                    .select('*')
+                    .eq('id', siteId)
+                    .single();
+
+                if (error) {
+                    toast.error('현장 정보를 불러오지 못했습니다.');
+                } else if (siteData) {
+                    setFormData({
+                        ...siteData,
+                        budget: siteData.budget?.toString() || '',
+                        start_date: siteData.start_date || '',
+                        end_date: siteData.end_date || '',
+                    });
+                }
+            }
+        }
+        loadInitialData();
+    }, [siteId]);
+
     const formatPrice = (value) => {
         if (!value) return "";
         return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -62,28 +85,39 @@ export default function NewSitePage() {
 
         setIsLoading(true);
         try {
-            // 🚀 [핵심 수정] 모든 날짜 및 숫자 데이터 최종 검증
             const finalData = {
                 ...formData,
-                // 날짜가 빈 문자열("")이면 확실하게 null로 변환
                 start_date: formData.start_date.trim() === "" ? null : formData.start_date,
                 end_date: formData.end_date.trim() === "" ? null : formData.end_date,
-                // 예산에서 콤마 제외하고 숫자로 변환
                 budget: formData.budget ? parseInt(formData.budget) : null,
-                // 공정률 소수점 4자리 고정
                 progress_plant: parseFloat(Number(formData.progress_plant || 0).toFixed(4)),
                 progress_facility: parseFloat(Number(formData.progress_facility || 0).toFixed(4))
             };
 
-            const { data: site, error: siteError } = await supabase
-                .from('construction_sites')
-                .insert([finalData])
-                .select('id')
-                .single();
+            let error;
+            let currentId = siteId;
 
-            if (siteError) throw siteError;
+            if (siteId) {
+                // 🚀 정보 수정 (Update)
+                const { error: updateError } = await supabase
+                    .from('construction_sites')
+                    .update(finalData)
+                    .eq('id', siteId);
+                error = updateError;
+            } else {
+                // 🚀 신규 등록 (Insert)
+                const { data: newSite, error: insertError } = await supabase
+                    .from('construction_sites')
+                    .insert([finalData])
+                    .select('id')
+                    .single();
+                error = insertError;
+                if (newSite) currentId = newSite.id;
+            }
 
-            // 참여자 정보 등록
+            if (error) throw error;
+
+            // 참여자 정보 갱신
             const uniqueUserIds = Array.from(new Set([
                 formData.pm_id, 
                 formData.staff_id, 
@@ -91,20 +125,21 @@ export default function NewSitePage() {
             ].filter(id => id && id !== "")));
 
             const membersToInsert = uniqueUserIds.map(uid => ({
-                site_id: site.id,
+                site_id: currentId,
                 user_id: uid,
                 role: uid === formData.pm_id ? '현장소장' : '현장멤버'
             }));
 
             if (membersToInsert.length > 0) {
-                await supabase.from('site_members').insert(membersToInsert);
+                // upsert를 사용하여 기존 멤버 정보 갱신 및 추가
+                await supabase.from('site_members').upsert(membersToInsert, { onConflict: 'site_id, user_id' });
             }
 
-            toast.success('현장 등록이 완료되었습니다.');
-            router.push(`/sites/${site.id}`);
+            toast.success(siteId ? '현장 정보가 수정되었습니다.' : '현장 등록이 완료되었습니다.');
+            router.push(`/sites/${currentId}`);
         } catch (error) {
             console.error(error);
-            toast.error('등록 실패: 데이터 형식을 확인하십시오.');
+            toast.error('처리에 실패했습니다.');
         } finally {
             setIsLoading(false);
         }
@@ -115,15 +150,13 @@ export default function NewSitePage() {
             <div className="bg-[#1E293B] sticky top-0 z-30 shadow-lg font-sans">
                 <div className="max-w-5xl mx-auto px-8 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-6">
-                        <Link href="/sites" className="text-slate-400 hover:text-white transition-colors flex items-center gap-2 font-bold text-sm font-sans">
-                            <ChevronLeft size={20} /> 현장 목록 돌아가기
+                        <Link href={siteId ? `/sites/${siteId}` : "/sites"} className="text-slate-400 hover:text-white transition-colors flex items-center gap-2 font-bold text-sm font-sans">
+                            <ChevronLeft size={20} /> 돌아가기
                         </Link>
                         <div className="h-4 w-px bg-slate-700"></div>
-                        <h1 className="text-white font-black tracking-tight font-sans">신규 현장 개설 시스템</h1>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-400 font-sans">
-                        <ShieldCheck size={16} />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] font-sans">한성 인트라넷 통합 관리</span>
+                        <h1 className="text-white font-black tracking-tight font-sans">
+                            {siteId ? '현장 정보 수정' : '신규 현장 개설 시스템'}
+                        </h1>
                     </div>
                 </div>
             </div>
@@ -185,7 +218,7 @@ export default function NewSitePage() {
                                     <input type="checkbox" name="is_plant_active" checked={formData.is_plant_active} onChange={handleChange} className="w-5 h-5 accent-slate-900 font-sans" />
                                 </div>
                                 <div className="space-y-3 font-sans">
-                                    <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase font-sans font-sans"><span>초기 공정률</span><span className="text-slate-900 font-sans">{Number(formData.progress_plant || 0).toFixed(4)}%</span></div>
+                                    <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase"><span>초기 공정률</span><span className="text-slate-900">{Number(formData.progress_plant || 0).toFixed(4)}%</span></div>
                                     <input type="range" name="progress_plant" min="0" max="100" step="0.0001" value={formData.progress_plant} onChange={(e) => setFormData({...formData, progress_plant: e.target.value})} disabled={!formData.is_plant_active} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900 font-sans" />
                                 </div>
                             </div>
@@ -198,7 +231,7 @@ export default function NewSitePage() {
                                     <input type="checkbox" name="is_facility_active" checked={formData.is_facility_active} onChange={handleChange} className="w-5 h-5 accent-slate-900 font-sans" />
                                 </div>
                                 <div className="space-y-3 font-sans">
-                                    <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase font-sans"><span>초기 공정률</span><span className="text-slate-900 font-sans">{Number(formData.progress_facility || 0).toFixed(4)}%</span></div>
+                                    <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase"><span>초기 공정률</span><span className="text-slate-900">{Number(formData.progress_facility || 0).toFixed(4)}%</span></div>
                                     <input type="range" name="progress_facility" min="0" max="100" step="0.0001" value={formData.progress_facility} onChange={(e) => setFormData({...formData, progress_facility: e.target.value})} disabled={!formData.is_facility_active} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900 font-sans" />
                                 </div>
                             </div>
@@ -212,57 +245,57 @@ export default function NewSitePage() {
                         </div>
                         <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 font-sans">
                             <div className="font-sans">
-                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest font-sans font-sans">현장 소장 (책임자)</label>
-                                <select name="pm_id" value={formData.pm_id} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans font-sans">
+                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">현장 소장 (책임자)</label>
+                                <select name="pm_id" value={formData.pm_id} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans">
                                     <option value="">-- 소장 선택 --</option>
                                     {allUsers.map(user => <option key={user.id} value={user.id}>{user.full_name} ({user.department})</option>)}
                                 </select>
                             </div>
                             <div className="font-sans">
-                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest font-sans font-sans">현장 실무 담당자</label>
-                                <select name="staff_id" value={formData.staff_id} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans font-sans">
+                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">현장 실무 담당자</label>
+                                <select name="staff_id" value={formData.staff_id} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans">
                                     <option value="">-- 담당자 선택 --</option>
                                     {allUsers.map(user => <option key={user.id} value={user.id}>{user.full_name} ({user.department})</option>)}
                                 </select>
                             </div>
                             <div className="col-span-full font-sans">
-                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest font-sans font-sans">총 도급액 (실행 예산 기준)</label>
-                                <div className="relative font-sans font-sans">
-                                    <input type="text" name="budget" value={formatPrice(formData.budget)} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-black outline-none font-sans font-sans" placeholder="0" />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm font-sans font-sans">원 (KRW)</span>
+                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">총 도급액 (실행 예산 기준)</label>
+                                <div className="relative font-sans">
+                                    <input type="text" name="budget" value={formatPrice(formData.budget)} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-black outline-none" placeholder="0" />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm uppercase">원 (KRW)</span>
                                 </div>
                             </div>
                             <div className="font-sans">
-                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest font-sans font-sans">착공 예정일</label>
-                                <input type="date" name="start_date" value={formData.start_date} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans font-sans" />
+                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">착공 예정일</label>
+                                <input type="date" name="start_date" value={formData.start_date} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans" />
                             </div>
                             <div className="font-sans">
-                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest font-sans font-sans">준공 예정일</label>
-                                <input type="date" name="end_date" value={formData.end_date} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans font-sans" />
+                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">준공 예정일</label>
+                                <input type="date" name="end_date" value={formData.end_date} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans" />
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans">
-                        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-slate-700 font-bold font-sans font-sans">
+                        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-slate-700 font-bold font-sans">
                             <ClipboardList size={18} />
-                            <span className="text-sm font-sans font-sans">공사 개요 및 특이사항</span>
+                            <span className="text-sm font-sans">공사 개요 및 특이사항</span>
                         </div>
-                        <div className="p-8 font-sans font-sans">
-                            <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest font-sans font-sans">현장 상세 설명</label>
+                        <div className="p-8 font-sans">
+                            <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">현장 상세 설명</label>
                             <textarea name="description" value={formData.description} onChange={handleChange} rows={5}
-                                className="w-full px-4 py-4 border-2 border-slate-100 rounded-2xl outline-none font-bold focus:border-slate-900 transition-all font-sans font-sans font-sans"
+                                className="w-full px-4 py-4 border-2 border-slate-100 rounded-2xl outline-none font-bold focus:border-slate-900 transition-all font-sans"
                                 placeholder="현장 관련 특이사항이나 관리 주의사항을 자유롭게 기재하십시오." />
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-4 pt-8 font-sans font-sans">
-                        <Link href="/sites" className="px-8 py-3 text-sm font-black text-slate-400 hover:text-slate-900 transition-all font-sans font-sans">
-                            등록 절차 취소
+                    <div className="flex items-center justify-end gap-4 pt-8 font-sans">
+                        <Link href={siteId ? `/sites/${siteId}` : "/sites"} className="px-8 py-3 text-sm font-black text-slate-400 hover:text-slate-900 transition-all">
+                            취소 및 돌아가기
                         </Link>
                         <button type="submit" disabled={isLoading} 
-                            className="px-12 py-3 bg-[#1E293B] text-white rounded-xl font-black text-sm shadow-xl hover:bg-black transition-all disabled:bg-slate-300 active:scale-95 font-sans font-sans font-sans font-sans">
-                            {isLoading ? '현장 등록 진행 중...' : '신규 현장 개설 완료'}
+                            className="px-12 py-3 bg-[#1E293B] text-white rounded-xl font-black text-sm shadow-xl hover:bg-black transition-all disabled:bg-slate-300 active:scale-95">
+                            {isLoading ? '처리 중...' : (siteId ? '현장 정보 수정 완료' : '신규 현장 개설 완료')}
                         </button>
                     </div>
                 </form>

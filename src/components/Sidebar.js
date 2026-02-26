@@ -69,24 +69,17 @@ export default function Sidebar({ isOpen, onClose }) {
         if (!loading) fetchAccessibleBoards();
     }, [employee, loading]);
 
-    // --- [수정] 경영진 전용 대시보드 및 입찰 전략 메뉴를 목록에서 제외했습니다. ---
+    // --- [수정] 요청하신 4가지 메뉴(업무전용, 데이터베이스, 자료실, 시스템 관리)만 제외했습니다. ---
     const menuItems = [
       { name: '대시보드', href: '/dashboard', icon: LayoutDashboard },
       { name: '공지사항', href: '/notices', icon: Megaphone },
       { name: '조직도', href: '/organization', icon: Users2 },
       { name: '현장 관리', href: '/sites', icon: Construction },
-      // [숨김 처리됨] 실행 예산 관리, 재무/인사 대시보드, 스마트 입찰 전략
       { name: '전자 결재', href: '/approvals', icon: FileCheck },
-      { name: '업무 전용', href: '/work', icon: Briefcase, isDropdown: true, menuKey: 'work' },
-      { name: '데이터베이스', href: '/database', icon: Database, isDropdown: true, menuKey: 'db', requiresPermission: true },
-      { name: '자료실', href: '/resources', icon: FolderSearch },
-      ...(employee && employee.role === 'admin' ? [{ 
-          name: '시스템 관리', 
-          href: '/admin', 
-          icon: ShieldCheck, 
-          isDropdown: true, 
-          menuKey: 'admin' 
-      }] : []),
+      // 업무 전용 제외됨
+      // 데이터베이스 제외됨
+      // 자료실 제외됨
+      // 시스템 관리 제외됨
       { name: '사내 채팅', href: '/chatrooms', icon: MessagesSquare, count: totalUnreadCount },
       { name: '내 정보', href: '/mypage', icon: UserCircle },
     ];
@@ -131,58 +124,16 @@ export default function Sidebar({ isOpen, onClose }) {
 
                 <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-hide">
                     {menuItems.map((item) => {
-                        if (item.requiresPermission && accessibleBoards.length === 0) return null;
-                        
                         const isActive = pathname.startsWith(item.href);
                         
-                        return item.isDropdown ? (
-                            <div key={item.name} className="mb-1">
-                                <button onClick={() => toggleDropdown(item.menuKey)} 
-                                    className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm font-semibold transition-all
-                                    ${isActive ? 'bg-blue-600/10 text-blue-400' : 'hover:bg-slate-800 hover:text-white'}`}>
-                                    <div className="flex items-center gap-3">
-                                        <item.icon size={18} className={isActive ? 'text-blue-400' : 'text-slate-400 group-hover:text-white'} />
-                                        <span>{item.name}</span>
-                                    </div>
-                                    <ChevronDown size={14} className={`transition-transform duration-200 ${
-                                        (item.menuKey === 'work' && isWorkMenuOpen) || (item.menuKey === 'db' && isDbMenuOpen) || (item.menuKey === 'admin' && isAdminMenuOpen) ? 'rotate-180' : ''
-                                    }`} />
-                                </button>
-                                
-                                <div className={`overflow-hidden transition-all duration-200 ${
-                                    (item.menuKey === 'work' && isWorkMenuOpen) || (item.menuKey === 'db' && isDbMenuOpen) || (item.menuKey === 'admin' && isAdminMenuOpen)
-                                    ? 'max-h-96 mt-1' : 'max-h-0'
-                                }`}>
-                                    <ul className="pl-10 pr-2 space-y-1">
-                                        {item.menuKey === 'work' && departments.map((dept, index) => (
-                                            <li key={index}>
-                                                <Link href={`/work/${encodeURIComponent(dept.department)}/calendar`} 
-                                                    className={`block px-3 py-2 text-xs font-medium rounded-md transition-all ${pathname.includes(encodeURIComponent(dept.department)) ? 'text-blue-400 bg-blue-400/5' : 'text-slate-500 hover:text-slate-300'}`}>
-                                                    {dept.department}
-                                                </Link>
-                                            </li>
-                                        ))}
-                                        {item.menuKey === 'db' && accessibleBoards.map(board => (
-                                            <li key={board.name}>
-                                                <Link href={board.href} 
-                                                    className={`block px-3 py-2 text-xs font-medium rounded-md transition-all ${pathname === board.href ? 'text-blue-400 bg-blue-400/5' : 'text-slate-500 hover:text-slate-300'}`}>
-                                                    {board.name}
-                                                </Link>
-                                            </li>
-                                        ))}
-                                        {item.menuKey === 'admin' && (
-                                            <>
-                                                <li><Link href="/admin/permissions" className={`block px-3 py-2 text-xs font-medium rounded-md transition-all ${pathname === '/admin/permissions' ? 'text-blue-400 bg-blue-400/5' : 'text-slate-500 hover:text-slate-300'}`}>DB 권한 관리</Link></li>
-                                                <li><Link href="/admin/resources" className={`block px-3 py-2 text-xs font-medium rounded-md transition-all ${pathname.startsWith('/admin/resources') ? 'text-blue-400 bg-blue-400/5' : 'text-slate-500 hover:text-slate-300'}`}>자료실 관리</Link></li>
-                                            </>
-                                        )}
-                                    </ul>
-                                </div>
-                            </div>
-                        ) : (
-                            <Link key={item.name} href={item.href} 
+                        return (
+                            <Link 
+                                key={item.name} 
+                                href={item.href} 
+                                onClick={onClose} // 클릭 시 모바일 사이드바 닫힘 처리
                                 className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-all group
-                                ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'hover:bg-slate-800 hover:text-white'}`}>
+                                ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'hover:bg-slate-800 hover:text-white'}`}
+                            >
                                 <item.icon size={18} className={`mr-3 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
                                 <span className="flex-1">{item.name}</span>
                                 {item.count > 0 && ( 
@@ -191,7 +142,7 @@ export default function Sidebar({ isOpen, onClose }) {
                                     </span> 
                                 )}
                             </Link>
-                        )
+                        );
                     })}
                 </nav>
 

@@ -162,7 +162,7 @@ export default function ApprovalsPage() {
         { title: '내부 결재서', description: '사내 공문 및 중요 의사결정을 위한 기안서입니다.', href: '/approvals/internal', icon: '📑' },
         { title: '업무 보고서', description: '일간/주간/월간 주요 업무 현황을 보고합니다.', href: '/approvals/work-report', icon: '📈' },
         { title: '시말서', description: '사고 경위 및 재발 방지 대책을 상신합니다.', href: '/approvals/apology', icon: '⚠️' },
-        { title: '사직서', description: '근무 종료를 공식적으로 요청하는 서류입니다.', href: '/approvals/resignation', icon: '✉️' },
+        
     ];
 
     if (employeeLoading) return (

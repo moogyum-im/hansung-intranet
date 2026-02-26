@@ -3,225 +3,266 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
-  PieChart, Pie
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+  Cell, ReferenceLine
 } from 'recharts';
 import { 
-  TrendingDown, // <-- 누락되었던 아이콘 추가
-  Wallet, 
-  AlertCircle, 
-  Landmark, 
-  ArrowRightLeft, 
-  Calculator, 
-  Users, 
-  Building2,
-  BarChart3,
-  PieChart as PieIcon
+  TrendingDown, TrendingUp, Wallet, Target, Activity, FileText, ChevronRight, X, Calendar, Camera, Cloud, Users, Truck, Construction, Printer
 } from 'lucide-react';
 
-// --- 재무 전용 통계 카드 ---
-const FinanceStatCard = ({ title, value, subValue, icon: Icon, colorClass, bgColor }) => (
-  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
-    <div className="flex justify-between items-start">
-      <div>
-        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{title}</p>
-        <h3 className="text-2xl font-black text-slate-900 mt-2 tracking-tight">{value}</h3>
-        <p className={`text-[11px] mt-1.5 font-bold px-2 py-0.5 rounded-full inline-block ${bgColor} ${colorClass}`}>
-          {subValue}
-        </p>
-      </div>
-      <div className={`p-3 rounded-xl ${bgColor}`}>
-        <Icon size={24} className={colorClass} />
-      </div>
-    </div>
-  </div>
-);
-
-export default function FinancialDashboard() {
+export default function FinanceExecutiveReport() {
   const [loading, setLoading] = useState(true);
   const [pnlData, setPnlData] = useState([]);
+  const [selectedSite, setSelectedSite] = useState(null);
+  const [siteHistory, setSiteHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
 
-  // --- [핵심] 작업일보 데이터를 재무 계정별로 자동 매핑하여 집계하는 함수 ---
-  const fetchFinancialStatus = async () => {
+  const fetchStatus = async () => {
     try {
-      // 1. 현장 기본 정보 로드
-      const { data: sites, error: siteError } = await supabase
-        .from('construction_sites')
-        .select('id, name, budget');
-      
-      if (siteError) throw siteError;
+      const { data: sites } = await supabase.from('construction_sites').select('*');
+      const { data: reports } = await supabase.from('daily_site_reports').select('id, site_id, notes, report_date').order('report_date', { ascending: false });
 
-      // 2. 모든 작업일보의 비용 내역(notes JSON) 로드
-      const { data: reports, error: reportError } = await supabase
-        .from('daily_site_reports')
-        .select('site_id, notes');
-      
-      if (reportError) throw reportError;
-
-      // 3. 현장별 계정 매핑 집계
-      const siteStats = sites.map(site => {
+      const stats = sites.map(site => {
         const siteReports = reports.filter(r => r.site_id === site.id);
-        
-        let labor = 0, tree = 0, material = 0, equipment = 0, card = 0, transport = 0;
+        const latest = siteReports[0];
+        let totalCost = 0, progress = 0;
 
-        siteReports.forEach(report => {
+        if (latest) {
           try {
-            const notes = JSON.parse(report.notes);
-            // 작업일보 내부의 각 테이블 합계 자동 매핑
-            labor += (notes.labor_costs?.reduce((sum, r) => sum + (Number(r.total) || 0), 0) || 0);
-            tree += (notes.tree_costs?.reduce((sum, r) => sum + (Number(r.total) || 0), 0) || 0);
-            material += (notes.material_costs?.reduce((sum, r) => sum + (Number(r.total) || 0), 0) || 0);
-            equipment += (notes.equipment_costs?.reduce((sum, r) => sum + (Number(r.total) || 0), 0) || 0);
-            card += (notes.card_costs?.reduce((sum, r) => sum + (Number(r.price) || 0), 0) || 0);
-            transport += (notes.transport_costs?.reduce((sum, r) => sum + (Number(r.total) || 0), 0) || 0);
-          } catch (e) { console.error("JSON 파싱 에러", e); }
-        });
+            const rawNotes = JSON.parse(latest.notes);
+            totalCost = (rawNotes.settlement_costs || []).reduce((acc, cur) => acc + (Number(cur.total) || 0), 0);
+            progress = (Number(rawNotes.progress_plant_prev || 0) + Number(rawNotes.progress_plant || 0) + 
+                        Number(rawNotes.progress_facility_prev || 0) + Number(rawNotes.progress_facility || 0)) / 2;
+          } catch (e) { console.error(e); }
+        }
 
-        const totalExpense = labor + tree + material + equipment + card + transport;
-        const revenue = Number(site.budget || 0);
-        const profit = revenue - totalExpense;
-        const margin = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : 0;
-
+        const budget = Number(site.budget || 0);
         return {
-          name: site.name,
-          revenue,
-          labor,
-          material: tree + material, // 수목+자재 통합
-          equipment,
-          other: card + transport, // 카드+운반비 통합
-          totalExpense,
-          profit,
-          margin: parseFloat(margin)
+          id: site.id,
+          fullName: site.name,
+          shortName: site.name.length > 8 ? site.name.substring(0, 8) + '..' : site.name,
+          budget,
+          budgetInOck: budget / 100000000, 
+          totalCost,
+          totalCostInOck: totalCost / 100000000,
+          remainingBudget: budget - totalCost,
+          remainingInOck: (budget - totalCost) / 100000000,
+          progress: parseFloat(progress.toFixed(2))
         };
       });
-
-      setPnlData(siteStats);
-    } catch (err) {
-      console.error("재무 집계 중 오류:", err);
-    } finally {
-      setLoading(false);
-    }
+      setPnlData(stats);
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchFinancialStatus();
-  }, []);
+  const handleSiteSelect = async (site) => {
+    setSelectedSite(site);
+    setHistoryLoading(true);
+    try {
+      const { data } = await supabase.from('daily_site_reports').select('*').eq('site_id', site.id).order('report_date', { ascending: false });
+      setSiteHistory(data || []);
+    } catch (e) { console.error(e); } finally { setHistoryLoading(false); }
+  };
 
-  const totalRevenue = pnlData.reduce((acc, cur) => acc + cur.revenue, 0);
-  const totalExpense = pnlData.reduce((acc, cur) => acc + cur.totalExpense, 0);
-  const totalProfit = totalRevenue - totalExpense;
+  useEffect(() => { fetchStatus(); }, []);
 
-  const categoryData = [
-    { name: '노무비', value: pnlData.reduce((acc, cur) => acc + cur.labor, 0), fill: '#3b82f6' },
-    { name: '자재비', value: pnlData.reduce((acc, cur) => acc + cur.material, 0), fill: '#10b981' },
-    { name: '장비비', value: pnlData.reduce((acc, cur) => acc + cur.equipment, 0), fill: '#f59e0b' },
-    { name: '기타/일반', value: pnlData.reduce((acc, cur) => acc + cur.other, 0), fill: '#6366f1' },
-  ];
-
-  if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-50">
-      <div className="text-center">
-        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">전사 재무 데이터 매핑 중...</p>
-      </div>
-    </div>
-  );
+  if (loading) return <div className="h-screen flex items-center justify-center font-black text-xs tracking-widest text-slate-400">데이터 집계 중...</div>;
 
   return (
-    <div className="bg-[#f8fafc] min-h-screen p-6 lg:p-10">
-      <header className="max-w-7xl mx-auto mb-10">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2 text-blue-600 mb-2">
-              <Landmark size={16} />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em]">FINANCIAL-REPORT</span>
-            </div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tight">스마트 손익(P&L) 대시보드</h1>
-            <p className="text-slate-500 mt-2 font-medium text-sm">작업일보 계정 데이터를 자동으로 분류하여 실시간 손익을 집계합니다.</p>
+    <div className="bg-[#f8fafc] min-h-screen p-8 font-sans">
+      <header className="max-w-7xl mx-auto mb-10 flex justify-between items-end">
+        <div>
+          <div className="flex items-center gap-2 text-blue-600 mb-2 font-black">
+            <Target size={16} />
+            <span className="text-[10px] uppercase tracking-[0.3em]">Executive Finance Report</span>
           </div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tighter italic-none">전사 채산성 분석 및 예산 집행 현황</h1>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto space-y-8">
+        {/* 상단 지표 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <FinanceStatCard title="누적 매출액" value={`₩${(totalRevenue / 100000000).toFixed(2)}억`} subValue="전체 실행예산" icon={Wallet} colorClass="text-blue-600" bgColor="bg-blue-50" />
-          <FinanceStatCard title="누적 투입원가" value={`₩${(totalExpense / 100000000).toFixed(2)}억`} subValue="실 집행 총액" icon={TrendingDown} colorClass="text-rose-600" bgColor="bg-rose-50" />
-          <FinanceStatCard title="누적 세전이익" value={`₩${(totalProfit / 100000000).toFixed(2)}억`} subValue={`평균 이익률 ${totalRevenue > 0 ? ((totalProfit/totalRevenue)*100).toFixed(1) : 0}%`} icon={Calculator} colorClass="text-emerald-600" bgColor="bg-emerald-50" />
-          <FinanceStatCard title="투입 인건비" value={`₩${(categoryData[0].value / 10000000).toFixed(1)}천만`} subValue="노무비 집계 현황" icon={Users} colorClass="text-indigo-600" bgColor="bg-indigo-50" />
+          <StatCard title="총 도급액" value={`₩${pnlData.reduce((a,c)=>a+c.budget, 0).toLocaleString()}`} icon={Wallet} color="text-slate-900" />
+          <StatCard title="누적 집행원가" value={`₩${pnlData.reduce((a,c)=>a+c.totalCost, 0).toLocaleString()}`} icon={TrendingDown} color="text-rose-600" />
+          <StatCard title="전체 가용잔액" value={`₩${pnlData.reduce((a,c)=>a+c.remainingBudget, 0).toLocaleString()}`} icon={TrendingUp} color="text-emerald-600" />
+          <StatCard title="평균 공정률" value={`${(pnlData.reduce((a,c)=>a+c.progress,0)/pnlData.length).toFixed(1)}%`} icon={Activity} color="text-blue-600" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-            <h3 className="text-base font-black text-slate-800 mb-8 flex items-center gap-2">
-              <BarChart3 size={18} className="text-blue-600" /> 현장별 매출 대비 손익 구조 (억원)
-            </h3>
-            <div className="h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pnlData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 700 }} />
-                  <YAxis hide />
-                  <Tooltip formatter={(val) => `₩${(val / 100000000).toFixed(2)}억`} />
-                  <Legend />
-                  <Bar dataKey="revenue" name="매출(예산)" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="totalExpense" name="투입원가" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="profit" name="현장이익" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-            <h3 className="text-base font-black text-slate-800 mb-8 flex items-center gap-2">
-              <PieIcon size={18} className="text-blue-600" /> 비용 계정별 비중
-            </h3>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={categoryData} innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value">
-                    {categoryData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
-                  </Pie>
-                  <Tooltip formatter={(val) => `₩${(val/10000).toLocaleString()}만원`} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+        {/* 차트 */}
+        <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <div className="h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={pnlData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="shortName" tick={{ fontSize: 10, fontWeight: 800, fill: '#64748b' }} axisLine={false} interval={0} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} unit="억" />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', fontWeight: 'bold' }}
+                  formatter={(val, name, props) => [`₩${props.payload[props.dataKey === 'budgetInOck' ? 'budget' : 'totalCost'].toLocaleString()}`, name]}
+                />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '30px', fontSize: '12px', fontWeight: 'bold' }} />
+                <Bar dataKey="budgetInOck" name="도급액" fill="#e2e8f0" radius={[8, 8, 0, 0]} barSize={40} />
+                <Bar dataKey="totalCostInOck" name="집행원가" fill="#1e293b" radius={[8, 8, 0, 0]} barSize={25} />
+                <Bar dataKey="remainingInOck" name="가용잔액" barSize={15}>
+                  {pnlData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.remainingBudget < 0 ? '#f43f5e' : '#3b82f6'} radius={entry.remainingBudget < 0 ? [0, 0, 8, 8] : [8, 8, 0, 0]} />
+                  ))}
+                </Bar>
+                <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={2} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        {/* 상세 테이블 */}
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
-          <h3 className="text-base font-black text-slate-800 mb-6">현장별 세부 실적 (P&L)</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 border-b">
-                <tr>
-                  <th className="px-6 py-4 text-[11px] font-black text-slate-400">현장명</th>
-                  <th className="px-6 py-4 text-[11px] font-black text-slate-400 text-right">매출액</th>
-                  <th className="px-6 py-4 text-[11px] font-black text-slate-400 text-right">투입원가</th>
-                  <th className="px-6 py-4 text-[11px] font-black text-slate-400 text-right">세전손익</th>
-                  <th className="px-6 py-4 text-[11px] font-black text-slate-400 text-center">이익률</th>
+        {/* 목록 */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+          <table className="w-full text-left min-w-[1000px]">
+            <thead>
+              <tr className="bg-slate-50 font-black text-[10px] text-slate-400 uppercase">
+                <th className="px-10 py-5">현장명</th>
+                <th className="px-6 py-5 text-right">총 도급액</th>
+                <th className="px-6 py-5 text-right font-sans">누적 투입원가</th>
+                <th className="px-6 py-5 text-right font-sans">공정률</th>
+                <th className="px-10 py-5 text-center font-sans">보고서</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {pnlData.map((site, idx) => (
+                <tr key={idx} onClick={() => handleSiteSelect(site)} className="hover:bg-blue-50/50 cursor-pointer transition-colors group">
+                  <td className="px-10 py-5 font-black text-slate-800 text-sm font-sans">{site.fullName}</td>
+                  <td className="px-6 py-5 text-right font-bold text-slate-400 text-sm font-sans">₩{site.budget.toLocaleString()}</td>
+                  <td className="px-6 py-5 text-right font-black text-rose-600 text-sm font-sans">₩{site.totalCost.toLocaleString()}</td>
+                  <td className="px-6 py-5 text-right font-bold text-slate-800 text-sm font-sans">{site.progress}%</td>
+                  <td className="px-10 py-5 text-center"><FileText size={18} className="inline text-slate-300 group-hover:text-blue-600 transition-all" /></td>
                 </tr>
-              </thead>
-              <tbody className="divide-y">
-                {pnlData.map((site, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-bold text-slate-800 text-sm">{site.name}</td>
-                    <td className="px-6 py-4 text-right font-mono text-sm">₩{site.revenue.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right font-mono text-sm text-rose-600">₩{site.totalExpense.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right font-mono text-sm text-emerald-600 font-bold">₩{site.profit.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`text-[10px] font-black px-2 py-1 rounded ${site.margin > 10 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {site.margin}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       </main>
+
+      {/* 🚀 현장 히스토리 모달 */}
+      {selectedSite && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col font-sans">
+            <div className="p-8 border-b flex justify-between items-center shrink-0">
+              <h2 className="text-xl font-black text-slate-900">{selectedSite.fullName} 투입 이력</h2>
+              <button onClick={() => setSelectedSite(null)} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8 space-y-4">
+              {historyLoading ? <div className="text-center py-20 font-bold text-slate-300">이력 로드 중...</div> : 
+                siteHistory.map((log, i) => (
+                  <div key={i} onClick={() => setSelectedReport(log)} className="flex justify-between items-center p-5 bg-slate-50 rounded-2xl hover:bg-blue-50 cursor-pointer transition-all border border-slate-100">
+                    <div>
+                      <span className="font-black text-blue-700 text-sm block">{log.report_date}</span>
+                      <span className="text-xs text-slate-500 font-bold">{log.content || '작업 요약 없음'}</span>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-300" />
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚀 [최종형] 금일 작업일보 서류 뷰어 (전체 화면 & 기입 데이터만) */}
+      {selectedReport && (
+        <div className="fixed inset-0 bg-white z-[70] flex flex-col font-sans overflow-y-auto">
+          {/* 상단 컨트롤 바 */}
+          <div className="sticky top-0 bg-white/80 backdrop-blur-md px-10 py-6 border-b flex justify-between items-center z-20">
+            <div className="flex items-center gap-4">
+                <div className="p-3 bg-slate-900 text-white rounded-2xl"><FileText size={24}/></div>
+                <div>
+                    <h3 className="text-2xl font-black text-slate-900">{selectedReport.report_date} 작업 보고서</h3>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedSite?.fullName}</p>
+                </div>
+            </div>
+            <div className="flex gap-3">
+                <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 rounded-xl font-black text-sm hover:bg-slate-200 transition-all"><Printer size={18}/> 출력하기</button>
+                <button onClick={() => setSelectedReport(null)} className="p-3 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-all"><X size={24}/></button>
+            </div>
+          </div>
+
+          <div className="max-w-5xl mx-auto w-full p-10 space-y-12 pb-20">
+            {/* 1. 기본 정보 (날씨/공정) */}
+            <div className="grid grid-cols-3 gap-6">
+                <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col items-center justify-center text-center">
+                    <Cloud className="text-blue-500 mb-2" size={32}/>
+                    <p className="text-[10px] font-black text-slate-400 mb-1 font-sans font-sans">현장 날씨</p>
+                    <p className="font-black text-slate-900 font-sans">{JSON.parse(selectedReport.notes || '{}').weather || '맑음'}</p>
+                </div>
+                <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col items-center justify-center text-center">
+                    <Construction className="text-emerald-500 mb-2" size={32}/>
+                    <p className="text-[10px] font-black text-slate-400 mb-1 font-sans">금일 식재 공정</p>
+                    <p className="font-black text-slate-900 font-sans">{JSON.parse(selectedReport.notes || '{}').progress_plant || 0}%</p>
+                </div>
+                <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col items-center justify-center text-center">
+                    <Activity className="text-amber-500 mb-2" size={32}/>
+                    <p className="text-[10px] font-black text-slate-400 mb-1 font-sans">금일 시설 공정</p>
+                    <p className="font-black text-slate-900 font-sans font-sans">{JSON.parse(selectedReport.notes || '{}').progress_facility || 0}%</p>
+                </div>
+            </div>
+
+            {/* 2. 금일 작업 내용 */}
+            <div className="space-y-4">
+                <h4 className="text-lg font-black text-slate-900 flex items-center gap-2"><div className="w-1.5 h-6 bg-blue-600 rounded-full"/> 금일 작업 내용</h4>
+                <div className="p-10 bg-white border-2 border-slate-100 rounded-[2.5rem] text-xl font-bold text-slate-700 leading-relaxed shadow-sm italic-none font-sans">
+                    {selectedReport.content || '상세 기록된 작업 내용이 없습니다.'}
+                </div>
+            </div>
+
+            {/* 3. 투입 내역 (데이터가 있는 항목만 필터링) */}
+            <div className="space-y-4 font-sans font-sans font-sans">
+                <h4 className="text-lg font-black text-slate-900 flex items-center gap-2"><div className="w-1.5 h-6 bg-rose-600 rounded-full"/> 금일 투입 원가 상세 (기입 내역)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {JSON.parse(selectedReport.notes || '{}').settlement_costs?.filter(s => Number(s.today) > 0).map((s, i) => (
+                        <div key={i} className="flex justify-between items-center p-6 bg-slate-50 rounded-2xl border border-slate-100 font-sans">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-white rounded-lg shadow-xs">{s.item.includes('노무') ? <Users size={16}/> : s.item.includes('장비') ? <Truck size={16}/> : <Wallet size={16}/>}</div>
+                                <span className="font-bold text-slate-700 font-sans">{s.item}</span>
+                            </div>
+                            <span className="font-black text-slate-900 text-lg font-sans">₩{Number(s.today).toLocaleString()}</span>
+                        </div>
+                    ))}
+                    {(!JSON.parse(selectedReport.notes || '{}').settlement_costs?.some(s => Number(s.today) > 0)) && (
+                        <div className="col-span-2 py-10 text-center text-slate-400 font-bold bg-slate-50 rounded-2xl border border-dashed font-sans">금일 투입된 원가 내역이 없습니다.</div>
+                    )}
+                </div>
+            </div>
+
+            {/* 4. 현장 전경 사진 */}
+            <div className="space-y-4">
+                <h4 className="text-lg font-black text-slate-900 flex items-center gap-2"><div className="w-1.5 h-6 bg-emerald-600 rounded-full"/> 금일 현장 전경</h4>
+                <div className="grid grid-cols-2 gap-6">
+                    {selectedReport.photos && selectedReport.photos.length > 0 ? selectedReport.photos.map((p, i) => (
+                        <div key={i} className="rounded-[2rem] overflow-hidden aspect-[4/3] shadow-lg border-4 border-white">
+                            <img src={p.url} alt="현장사진" className="w-full h-full object-cover" />
+                        </div>
+                    )) : (
+                        <div className="col-span-2 py-20 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200 text-center flex flex-col items-center justify-center font-sans">
+                            <Camera size={48} className="text-slate-200 mb-4"/>
+                            <p className="font-black text-slate-400 font-sans font-sans">등록된 현장 사진이 없습니다.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ title, value, icon: Icon, color }) {
+  return (
+    <div className="bg-white p-7 rounded-[2rem] border border-slate-200 shadow-sm flex items-center gap-5 transition-all hover:border-blue-200">
+      <div className="p-4 bg-slate-50 rounded-2xl font-sans"><Icon size={24} className={color} /></div>
+      <div className="font-sans">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 font-sans">{title}</p>
+        <h3 className={`text-xl font-black tracking-tight ${color} font-sans`}>{value}</h3>
+      </div>
     </div>
   );
 }

@@ -3,167 +3,100 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
-import { useEmployee } from '@/contexts/EmployeeContext';
-import { 
-  Plus, 
-  Search, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
-  ChevronRight,
-  Construction,
-  ShieldCheck,
-  Building2,
-  BarChart3,
-  Leaf,
-  Hammer
-} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Plus, Search, ShieldCheck, Leaf, Hammer } from 'lucide-react';
 
-// --- 현장 스타일의 로딩 스켈레톤 UI ---
-const SiteSkeleton = () => (
-    <div className="w-full h-20 bg-white border border-slate-100 rounded-2xl mb-4 animate-pulse shadow-sm flex items-center px-6">
-        <div className="w-10 h-10 bg-slate-100 rounded-xl mr-4"></div>
-        <div className="flex-1">
-            <div className="h-4 bg-slate-100 rounded w-1/4 mb-2"></div>
-            <div className="h-3 bg-slate-50 rounded w-1/3"></div>
-        </div>
-        <div className="w-32 h-2 bg-slate-100 rounded-full"></div>
-    </div>
-);
+// --- 최적화된 개별 현장 카드 컴포넌트 ---
+const SiteCard = ({ site }) => {
+  const start = site.start_date ? site.start_date.substring(2, 10).replace(/-/g, '.') : '미정';
+  const end = site.end_date ? site.end_date.substring(2, 10).replace(/-/g, '.') : '미정';
+  
+  const endDateObj = new Date(site.end_date);
+  const today = new Date();
+  const dDay = Math.ceil((endDateObj - today) / (1000 * 60 * 60 * 24));
+  
+  const budgetInOck = site.budget ? (Number(site.budget) / 100000000).toFixed(1) : '0.0';
+  const isCompleted = site.status === '완료';
+  const managerName = site.pm?.full_name || '미지정';
 
-// --- 상태별 섹션 컴포넌트 ---
-function StatusSection({ title, count, sites, statusColor, icon }) {
-  if (count === 0) return null;
-
-  const colorStyles = {
-    blue: { 
-        bg: "bg-blue-600", 
-        lightBg: "bg-blue-50/50", 
-        border: "border-blue-100", 
-        text: "text-blue-600", 
-        plantProgress: "bg-blue-500",
-        facilityProgress: "bg-cyan-500",
-        shadow: "shadow-blue-100"
-    },
-    orange: { 
-        bg: "bg-amber-500", 
-        lightBg: "bg-amber-50/50", 
-        border: "border-amber-100", 
-        text: "text-amber-600", 
-        plantProgress: "bg-amber-500",
-        facilityProgress: "bg-orange-400",
-        shadow: "shadow-amber-100"
-    },
-    green: { 
-        bg: "bg-emerald-500", 
-        lightBg: "bg-emerald-50/50", 
-        border: "border-emerald-100", 
-        text: "text-emerald-600", 
-        plantProgress: "bg-blue-600",
-        facilityProgress: "bg-teal-500",
-        shadow: "shadow-emerald-100"
-    }
-  };
-
-  const style = colorStyles[statusColor];
+  const isPlant = site.name.includes('식재');
+  const isFacility = site.name.includes('시설물');
 
   return (
-    <div className="mb-12 animate-in fade-in slide-in-from-bottom-2 duration-500 font-black">
-      <div className="flex items-center justify-between mb-5 px-1 font-black">
-        <div className="flex items-center gap-3 font-black">
-          <div className={`p-2 rounded-lg ${style.bg} text-white shadow-lg ${style.shadow}`}>
-            {icon}
-          </div>
-          <h3 className="text-[17px] font-black text-slate-800 tracking-tight">{title}</h3>
-          <span className={`ml-1 text-[11px] font-black px-2 py-0.5 rounded-full border ${style.border} ${style.text} bg-white shadow-sm font-black`}>
-            {count}
-          </span>
+    <Link href={`/sites/${site.id}`} className="group bg-white border border-slate-200 rounded-[1.2rem] p-5 hover:border-blue-600 hover:shadow-lg transition-all flex flex-col font-black shadow-sm h-[290px] w-full relative">
+      {/* 1. 상단 공종 태그 */}
+      <div className="flex gap-1 mb-2 shrink-0">
+        {isPlant && <span className="bg-blue-50 text-blue-600 text-[8px] px-2 py-0.5 rounded-full border border-blue-100 font-sans">식재공사</span>}
+        {isFacility && <span className="bg-emerald-50 text-emerald-600 text-[8px] px-2 py-0.5 rounded-full border border-emerald-100 font-sans">시설물공사</span>}
+        {!isPlant && !isFacility && <span className="bg-slate-50 text-slate-500 text-[8px] px-2 py-0.5 rounded-full border border-slate-100 font-sans">일반공사</span>}
+      </div>
+
+      {/* 2. 현장명 영역 (높이를 3줄 분량으로 늘려 끝까지 보이도록 조정) */}
+      <div className="h-[68px] mb-3 overflow-hidden">
+        <h3 className="text-[15px] font-black text-slate-950 leading-[1.4] break-keep line-clamp-3 font-sans italic-none">
+          {site.name}
+        </h3>
+      </div>
+
+      {/* 3. 정보 영역 */}
+      <div className="flex justify-between items-center border-y border-slate-50 py-3 mb-4 shrink-0 font-sans italic-none">
+        <div className="flex flex-col">
+          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">현장소장</span>
+          <span className="text-[13px] text-slate-800 font-black">{managerName}</span>
+        </div>
+        <div className="flex flex-col text-right">
+          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">계약금액</span>
+          <span className="text-[13px] text-slate-900 font-black">{budgetInOck}억</span>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden font-black">
-        <div className="overflow-x-auto font-black">
-            <table className="w-full text-left border-collapse min-w-[800px] font-black">
-            <thead className={`bg-slate-50/50 border-b border-slate-100 font-black`}>
-                <tr>
-                <th className="px-8 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest font-black">현장 정보</th>
-                <th className="px-8 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center font-black" colSpan={2}>공정률 현황 (실시간 연동)</th>
-                <th className="px-8 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right font-black">상세</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 font-black">
-                {sites.map((site) => {
-                  const activeCount = (site.is_plant_active !== false ? 1 : 0) + (site.is_facility_active !== false ? 1 : 0);
-                  
-                  return (
-                    <tr key={site.id} className="hover:bg-slate-50/50 transition-all group font-black">
-                        <td className="px-8 py-6 font-black">
-                        <Link href={`/sites/${site.id}`} className="flex items-center gap-4 font-black">
-                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-white group-hover:text-blue-600 transition-colors border border-slate-50 group-hover:border-blue-100 group-hover:shadow-sm">
-                                <Building2 size={20} />
-                            </div>
-                            <div className="font-black">
-                                <div className="font-black text-slate-800 group-hover:text-blue-600 transition-colors text-base tracking-tight font-black">
-                                {site.name}
-                                </div>
-                                {site.address && (
-                                <div className="text-[12px] text-slate-400 mt-0.5 font-black flex items-center gap-1">
-                                    <span className="w-1 h-1 bg-slate-300 rounded-full font-black"></span> {site.address}
-                                </div>
-                                )}
-                            </div>
-                        </Link>
-                        </td>
-
-                        {/* 식재 공정률 */}
-                        <td className={`px-4 py-6 font-black ${site.is_plant_active === false ? 'hidden' : ''}`}>
-                            <div className="flex flex-col items-center gap-1.5 min-w-[140px] max-w-[180px] mx-auto font-black">
-                                <div className="flex justify-between w-full text-[10px] font-black text-slate-400 px-1 tracking-tighter font-black">
-                                    <span className="flex items-center gap-1 font-black"><Leaf size={10} className="text-green-600" /> 식재</span>
-                                    <span className="text-green-600 font-black">{(site.progress_plant || 0).toFixed(1)}%</span>
-                                </div>
-                                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden p-[1px] font-black">
-                                    <div 
-                                        className={`h-full transition-all duration-1000 ease-out rounded-full bg-green-500 font-black`}
-                                        style={{ width: `${site.progress_plant || 0}%` }}
-                                    />
-                                </div>
-                            </div>
-                        </td>
-
-                        {/* 시설물 공정률 */}
-                        <td className={`px-4 py-6 font-black ${site.is_facility_active === false ? 'hidden' : ''}`}>
-                            <div className="flex flex-col items-center gap-1.5 min-w-[140px] max-w-[180px] mx-auto font-black">
-                                <div className="flex justify-between w-full text-[10px] font-black text-slate-400 px-1 tracking-tighter font-black">
-                                    <span className="flex items-center gap-1 font-black"><Hammer size={10} className="text-blue-600" /> 시설물</span>
-                                    <span className="text-blue-600 font-black">{(site.progress_facility || 0).toFixed(1)}%</span>
-                                </div>
-                                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden p-[1px] font-black">
-                                    <div 
-                                        className={`h-full transition-all duration-1000 ease-out rounded-full bg-blue-500 font-black`}
-                                        style={{ width: `${site.progress_facility || 0}%` }}
-                                    />
-                                </div>
-                            </div>
-                        </td>
-
-                        {activeCount === 0 && (
-                          <td className="px-4 py-6 text-center text-slate-300 text-[10px] font-black" colSpan={2}>
-                            활성화된 공종이 없습니다.
-                          </td>
-                        )}
-
-                        <td className="px-8 py-6 text-right font-black">
-                        <Link href={`/sites/${site.id}`} className="inline-flex items-center justify-center w-10 h-10 rounded-xl text-slate-300 bg-slate-50 group-hover:bg-blue-600 group-hover:text-white group-hover:shadow-lg group-hover:shadow-blue-200 transition-all active:scale-90 border border-slate-100 group-hover:border-blue-500 font-black">
-                            <ChevronRight size={20} />
-                        </Link>
-                        </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-            </table>
+      {/* 4. 공정률 게이지 ('진행률' -> '공정률' 수정) */}
+      <div className="mb-4 shrink-0 font-sans italic-none">
+        <div className={`px-3 py-2 rounded-xl border flex items-center justify-between ${isPlant ? 'bg-blue-50/30 border-blue-100' : 'bg-emerald-50/30 border-emerald-100'}`}>
+          <div className="flex items-center gap-1.5 text-[9px] font-black">
+            {isPlant ? <Leaf size={11} className="text-blue-600"/> : <Hammer size={11} className="text-emerald-600"/>}
+            <span className={isPlant ? "text-blue-600" : "text-emerald-600"}>공정률</span>
+          </div>
+          <p className={`text-[15px] font-black ${isPlant ? 'text-blue-700' : 'text-emerald-700'}`}>
+            {(isPlant ? (site.progress_plant || 0) : (site.progress_facility || 0)).toFixed(1)}%
+          </p>
         </div>
+      </div>
+
+      {/* 5. 하단 날짜 및 D-Day */}
+      <div className="mt-auto flex justify-between items-end font-sans italic-none">
+        <div className="text-[10px] text-slate-400 font-bold tracking-tighter">
+          {start} ~ {end}
+        </div>
+        {!isCompleted ? (
+          <span className={`text-[9px] font-black px-2 py-0.5 rounded-md ${dDay < 30 ? 'bg-rose-500 text-white' : 'bg-slate-900 text-white'}`}>
+            D{dDay >= 0 ? `-${dDay}` : `+${Math.abs(dDay)}`}
+          </span>
+        ) : (
+          <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 border border-slate-200 uppercase">
+            준공
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+};
+
+function StatusSection({ title, sites, statusType }) {
+  if (sites.length === 0) return null;
+  const colorMap = { ongoing: "bg-blue-600 text-blue-700", pending: "bg-amber-500 text-amber-600", completed: "bg-slate-400 text-slate-500" };
+  const [bgColor, textColor] = colorMap[statusType].split(' ');
+  
+  return (
+    <div className="mb-12 font-black italic-none font-sans">
+      <div className="flex items-center gap-2.5 mb-5 px-1">
+        <div className={`w-1 h-5 ${bgColor} rounded-full`} />
+        <h2 className={`text-[18px] font-black ${textColor}`}>{title}</h2>
+        <span className="text-slate-300 text-sm font-bold ml-1">{sites.length}</span>
+      </div>
+      {/* 🚀 한 줄에 4개 고정 배치 (lg:grid-cols-4로 조정) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {sites.map(site => <SiteCard key={site.id} site={site} />)}
       </div>
     </div>
   );
@@ -173,150 +106,76 @@ export default function SitesPage() {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const router = useRouter();
 
-  // 🚀 [실시간 연동] 각 현장별 최신 작업일보 데이터를 체크하여 공정률 업데이트
-  const syncAllSitesProgress = useCallback(async (siteList) => {
-    const updatedSites = await Promise.all(siteList.map(async (site) => {
-        try {
-            const { data } = await supabase
-                .from('daily_site_reports')
-                .select('notes')
-                .eq('site_id', site.id)
-                .order('report_date', { ascending: false })
-                .limit(1);
+  const fetchSites = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('construction_sites')
+        .select(`*, pm:profiles!pm_id (full_name)`)
+        .order('name', { ascending: true });
 
-            if (data?.[0]) {
-                const notes = JSON.parse(data[0].notes);
-                // 누계 공정률 계산 (전일누계 + 금일진행)
-                const plantAcc = Number(notes.progress_plant_prev || 0) + Number(notes.progress_plant || 0);
-                const facilityAcc = Number(notes.progress_facility_prev || 0) + Number(notes.progress_facility || 0);
-
-                return {
-                    ...site,
-                    progress_plant: plantAcc,
-                    progress_facility: facilityAcc,
-                    is_plant_active: notes.is_plant_active ?? site.is_plant_active,
-                    is_facility_active: notes.is_facility_active ?? site.is_facility_active
-                };
-            }
-        } catch (e) {
-            console.error(`${site.name} 데이터 연동 실패`);
-        }
-        return site;
-    }));
-    setSites(updatedSites);
+      if (error) throw error;
+      setSites(data || []);
+    } catch (e) {
+      console.error('데이터 로드 실패:', e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => {
-    const fetchSites = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('construction_sites')
-          .select('*')
-          .order('name', { ascending: true });
+  useEffect(() => { fetchSites(); }, [fetchSites]);
 
-        if (error) throw error;
-        
-        if (data) {
-            setSites(data);
-            await syncAllSitesProgress(data);
-        }
-      } catch (error) {
-        console.error('현장 목록 로드 실패:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSites();
-  }, [syncAllSitesProgress]);
-
-  // 🚀 [수정] 수정 폼의 '진행', '대기' 등 명칭과 완벽히 일치하도록 필터 로직 수정
-  const groupedSites = useMemo(() => {
-    const filtered = sites.filter(site => 
-      site.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    
+  const filtered = useMemo(() => {
+    const list = sites.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
     return {
-      // 🚩 기존 '진행중' -> '진행'으로 수정
-      ongoing: filtered.filter(s => s.status === '진행' || !s.status || s.status === '진행중'),
-      pending: filtered.filter(s => s.status === '대기' || s.status === '보류' || s.status === '중단'),
-      completed: filtered.filter(s => s.status === '완료')
+      ongoing: list.filter(s => s.status === '진행중' || s.status === '진행' || !s.status || s.status === ''),
+      pending: list.filter(s => s.status === '대기' || s.status === '보류'),
+      completed: list.filter(s => s.status === '완료')
     };
   }, [sites, searchTerm]);
 
   return (
-    <div className="p-6 sm:p-10 bg-[#f8fafc] min-h-screen font-black">
-      <header className="max-w-7xl mx-auto mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 font-black">
+    <div className="p-6 sm:p-8 bg-[#f8fafc] min-h-screen font-black italic-none font-sans">
+      <header className="max-w-[1600px] mx-auto mb-8 flex flex-col md:flex-row md:items-end justify-between gap-5 italic-none">
         <div>
-          <div className="flex items-center gap-2 text-blue-600 font-black text-[11px] tracking-widest uppercase mb-2">
-            <ShieldCheck size={14} /> 현장 관리 시스템
+          <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] tracking-[0.2em] uppercase mb-1 font-sans">
+            <ShieldCheck size={14} /> Intelligence Management
           </div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-            현장 관리 대장 <Construction className="text-blue-600" size={28} />
-          </h1>
-          <p className="text-slate-500 text-[14px] mt-2 font-black">작업일보를 통해 업데이트되는 실시간 공정률을 모니터링합니다.</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tighter">현장 관리 대장</h1>
         </div>
-        
-        <div className="flex items-center gap-3 font-black">
-          <div className="relative group font-black">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
+        <div className="flex items-center gap-3">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 font-black" size={15} />
             <input 
               type="text" 
               placeholder="현장명 검색..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 transition-all w-64 shadow-sm font-black"
+              className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-[13px] outline-none w-56 focus:border-blue-600 shadow-sm font-black transition-all"
             />
           </div>
-          <Link href="/sites/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95">
-            <Plus size={18} /> 
-            <span className="hidden sm:inline text-sm">새 현장 등록</span>
-          </Link>
+          <button 
+            onClick={() => router.push('/sites/new')}
+            className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[13px] font-black flex items-center gap-1.5 hover:bg-blue-700 transition-all shadow-md active:scale-95"
+          >
+            <Plus size={16} strokeWidth={3} /> 현장 등록
+          </button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto font-black">
+      <main className="max-w-[1600px] mx-auto italic-none">
         {loading ? (
-            <div className="space-y-4 font-black">
-                {Array.from({ length: 5 }).map((_, i) => <SiteSkeleton key={i} />)}
-            </div>
-        ) : sites.length > 0 ? (
-            <div className="space-y-2 font-black">
-                <StatusSection 
-                    title="진행 중 프로젝트" 
-                    count={groupedSites.ongoing.length} 
-                    sites={groupedSites.ongoing} 
-                    statusColor="blue" 
-                    icon={<Clock size={18} />}
-                />
-                
-                <StatusSection 
-                    title="착공 대기 및 보류 현장" 
-                    count={groupedSites.pending.length} 
-                    sites={groupedSites.pending} 
-                    statusColor="orange" 
-                    icon={<AlertCircle size={18} />}
-                />
-                
-                <StatusSection 
-                    title="준공 및 완료 현장" 
-                    count={groupedSites.completed.length} 
-                    sites={groupedSites.completed} 
-                    statusColor="green" 
-                    icon={<CheckCircle2 size={18} />}
-                />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => <div key={i} className="h-[290px] bg-white border border-slate-100 rounded-[1.2rem] animate-pulse" />)}
+          </div>
         ) : (
-            <div className="text-center py-32 bg-white rounded-3xl border border-slate-200 shadow-sm font-black">
-                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100 font-black">
-                    <Construction size={40} className="text-slate-200" />
-                </div>
-                <p className="text-slate-800 font-black text-xl tracking-tight">등록된 현장이 없습니다</p>
-                <Link href="/sites/new" className="inline-flex items-center gap-2 mt-8 px-6 py-3 bg-slate-800 text-white rounded-xl font-black hover:bg-black transition-all">
-                    첫 현장 등록하기 <Plus size={18} />
-                </Link>
-            </div>
+          <>
+            <StatusSection title="진행 중 프로젝트" sites={filtered.ongoing} statusType="ongoing" />
+            <StatusSection title="대기 및 보류" sites={filtered.pending} statusType="pending" />
+            <StatusSection title="준공 완료" sites={filtered.completed} statusType="completed" />
+          </>
         )}
       </main>
     </div>
