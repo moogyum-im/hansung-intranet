@@ -8,17 +8,16 @@ import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { Building2, Users, Calendar, BarChart3, ChevronLeft, ShieldCheck, Leaf, Hammer, ClipboardList } from 'lucide-react';
 
-// 🚀 [추가] useSearchParams 에러 해결을 위한 내부 컴포넌트 분리
 function NewSiteContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const siteId = searchParams.get('id'); // URL에서 수정할 현장 ID 추출
+    const siteId = searchParams.get('id');
     const { employee } = useEmployee();
 
     const [formData, setFormData] = useState({
         name: '', site_type: '조경', contract_type: '도급', address: '',
         client: '', budget: '', start_date: '', end_date: '',
-        description: '', pm_id: '', staff_id: '',
+        description: '', pm_id: '',
         status: '대기', 
         progress_plant: 0, progress_facility: 0,
         is_plant_active: true, is_facility_active: true
@@ -27,17 +26,14 @@ function NewSiteContent() {
     const [allUsers, setAllUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
 
-    // 🚀 수정: 페이지 로드 시 사용자 목록과 기존 현장 데이터 로드
     useEffect(() => {
         async function loadInitialData() {
-            // 1. 프로필 목록 가져오기
             const { data: profiles } = await supabase
                 .from('profiles')
                 .select('id, full_name, department, position')
                 .order('full_name', { ascending: true });
             if (profiles) setAllUsers(profiles);
 
-            // 2. 쿼리에 id가 있으면 기존 데이터 불러오기 (정보 수정 모드)
             if (siteId) {
                 const { data: siteData, error } = await supabase
                     .from('construction_sites')
@@ -99,14 +95,12 @@ function NewSiteContent() {
             let currentId = siteId;
 
             if (siteId) {
-                // 🚀 정보 수정 (Update)
                 const { error: updateError } = await supabase
                     .from('construction_sites')
                     .update(finalData)
                     .eq('id', siteId);
                 error = updateError;
             } else {
-                // 🚀 신규 등록 (Insert)
                 const { data: newSite, error: insertError } = await supabase
                     .from('construction_sites')
                     .insert([finalData])
@@ -118,10 +112,9 @@ function NewSiteContent() {
 
             if (error) throw error;
 
-            // 참여자 정보 갱신
+            // 참여자 정보 갱신 (PM만 등록되도록 수정)
             const uniqueUserIds = Array.from(new Set([
                 formData.pm_id, 
-                formData.staff_id, 
                 employee.id
             ].filter(id => id && id !== "")));
 
@@ -132,7 +125,6 @@ function NewSiteContent() {
             }));
 
             if (membersToInsert.length > 0) {
-                // upsert를 사용하여 기존 멤버 정보 갱신 및 추가
                 await supabase.from('site_members').upsert(membersToInsert, { onConflict: 'site_id, user_id' });
             }
 
@@ -164,7 +156,7 @@ function NewSiteContent() {
 
             <div className="max-w-5xl mx-auto px-8 py-12 font-sans">
                 <form onSubmit={handleSubmit} className="space-y-8 font-sans">
-                    
+                    {/* 기본 계약 정보 */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans">
                         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-slate-700 font-bold font-sans">
                             <Building2 size={18} />
@@ -204,6 +196,7 @@ function NewSiteContent() {
                         </div>
                     </div>
 
+                    {/* 공종 관리 */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans">
                         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-slate-700 font-bold font-sans">
                             <BarChart3 size={18} />
@@ -239,44 +232,40 @@ function NewSiteContent() {
                         </div>
                     </div>
 
+                    {/* 관리자 및 예산 설정 */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans">
                         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-slate-700 font-bold font-sans">
                             <Users size={18} />
-                            <span className="text-sm font-sans">관리자 및 실행 예산 설정</span>
+                            <span className="text-sm font-sans">관리자 및 예산 설정</span>
                         </div>
                         <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 font-sans">
-                            <div className="font-sans">
+                            <div className="md:col-span-2 font-sans">
                                 <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">현장 소장 (책임자)</label>
                                 <select name="pm_id" value={formData.pm_id} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans">
                                     <option value="">-- 소장 선택 --</option>
                                     {allUsers.map(user => <option key={user.id} value={user.id}>{user.full_name} ({user.department})</option>)}
                                 </select>
                             </div>
-                            <div className="font-sans">
-                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">현장 실무 담당자</label>
-                                <select name="staff_id" value={formData.staff_id} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans">
-                                    <option value="">-- 담당자 선택 --</option>
-                                    {allUsers.map(user => <option key={user.id} value={user.id}>{user.full_name} ({user.department})</option>)}
-                                </select>
-                            </div>
+                            {/* 담당자 선택 칸 삭제됨 */}
                             <div className="col-span-full font-sans">
-                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">총 도급액 (실행 예산 기준)</label>
+                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">총 도급액</label>
                                 <div className="relative font-sans">
                                     <input type="text" name="budget" value={formatPrice(formData.budget)} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-black outline-none" placeholder="0" />
                                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm uppercase">원 (KRW)</span>
                                 </div>
                             </div>
                             <div className="font-sans">
-                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">착공 예정일</label>
+                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">착공일</label>
                                 <input type="date" name="start_date" value={formData.start_date} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans" />
                             </div>
                             <div className="font-sans">
-                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">준공 예정일</label>
+                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">준공일</label>
                                 <input type="date" name="end_date" value={formData.end_date} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans" />
                             </div>
                         </div>
                     </div>
 
+                    {/* 공사 개요 */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans">
                         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-slate-700 font-bold font-sans">
                             <ClipboardList size={18} />
@@ -305,7 +294,6 @@ function NewSiteContent() {
     );
 }
 
-// 🚀 [수정] 메인 페이지 컴포넌트: 전체를 Suspense로 감싸서 빌드 오류 해결
 export default function NewSitePage() {
     return (
         <Suspense fallback={

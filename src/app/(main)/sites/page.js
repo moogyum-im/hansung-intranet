@@ -24,21 +24,18 @@ const SiteCard = ({ site }) => {
 
   return (
     <Link href={`/sites/${site.id}`} className="group bg-white border border-slate-200 rounded-[1.2rem] p-5 hover:border-blue-600 hover:shadow-lg transition-all flex flex-col font-black shadow-sm h-[290px] w-full relative">
-      {/* 1. 상단 공종 태그 */}
       <div className="flex gap-1 mb-2 shrink-0">
         {isPlant && <span className="bg-blue-50 text-blue-600 text-[8px] px-2 py-0.5 rounded-full border border-blue-100 font-sans">식재공사</span>}
         {isFacility && <span className="bg-emerald-50 text-emerald-600 text-[8px] px-2 py-0.5 rounded-full border border-emerald-100 font-sans">시설물공사</span>}
         {!isPlant && !isFacility && <span className="bg-slate-50 text-slate-500 text-[8px] px-2 py-0.5 rounded-full border border-slate-100 font-sans">일반공사</span>}
       </div>
 
-      {/* 2. 현장명 영역 (높이를 3줄 분량으로 늘려 끝까지 보이도록 조정) */}
       <div className="h-[68px] mb-3 overflow-hidden">
         <h3 className="text-[15px] font-black text-slate-950 leading-[1.4] break-keep line-clamp-3 font-sans italic-none">
           {site.name}
         </h3>
       </div>
 
-      {/* 3. 정보 영역 */}
       <div className="flex justify-between items-center border-y border-slate-50 py-3 mb-4 shrink-0 font-sans italic-none">
         <div className="flex flex-col">
           <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">현장소장</span>
@@ -50,7 +47,6 @@ const SiteCard = ({ site }) => {
         </div>
       </div>
 
-      {/* 4. 공정률 게이지 ('진행률' -> '공정률' 수정) */}
       <div className="mb-4 shrink-0 font-sans italic-none">
         <div className={`px-3 py-2 rounded-xl border flex items-center justify-between ${isPlant ? 'bg-blue-50/30 border-blue-100' : 'bg-emerald-50/30 border-emerald-100'}`}>
           <div className="flex items-center gap-1.5 text-[9px] font-black">
@@ -63,7 +59,6 @@ const SiteCard = ({ site }) => {
         </div>
       </div>
 
-      {/* 5. 하단 날짜 및 D-Day */}
       <div className="mt-auto flex justify-between items-end font-sans italic-none">
         <div className="text-[10px] text-slate-400 font-bold tracking-tighter">
           {start} ~ {end}
@@ -91,10 +86,8 @@ function StatusSection({ title, sites, statusType }) {
     <div className="mb-12 font-black italic-none font-sans">
       <div className="flex items-center gap-2.5 mb-5 px-1">
         <div className={`w-1 h-5 ${bgColor} rounded-full`} />
-        <h2 className={`text-[18px] font-black ${textColor}`}>{title}</h2>
-        <span className="text-slate-300 text-sm font-bold ml-1">{sites.length}</span>
+        <h2 className={`text-[18px] font-black ${textColor}`}>{title} {sites.length > 0 && <span className="text-slate-300 text-sm font-bold ml-1">{sites.length}</span>}</h2>
       </div>
-      {/* 🚀 한 줄에 4개 고정 배치 (lg:grid-cols-4로 조정) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {sites.map(site => <SiteCard key={site.id} site={site} />)}
       </div>
@@ -127,12 +120,27 @@ export default function SitesPage() {
 
   useEffect(() => { fetchSites(); }, [fetchSites]);
 
+  // 🚀 핵심 수정: 필터링 및 식재/시설물 정렬 로직
   const filtered = useMemo(() => {
+    // 1. 검색어 필터링
     const list = sites.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // 2. 식재가 시설물보다 앞에 오도록 커스텀 정렬 (동일 현장명 내 정렬)
+    const sortedList = [...list].sort((a, b) => {
+      const nameA = a.name.split(' 중 ')[0]; // 현장 본명 추출 (가정)
+      const nameB = b.name.split(' 중 ')[0];
+
+      if (nameA === nameB) {
+        if (a.name.includes('식재') && b.name.includes('시설물')) return -1;
+        if (a.name.includes('시설물') && b.name.includes('식재')) return 1;
+      }
+      return 0; // 기존 순서(가나다순) 유지
+    });
+
     return {
-      ongoing: list.filter(s => s.status === '진행중' || s.status === '진행' || !s.status || s.status === ''),
-      pending: list.filter(s => s.status === '대기' || s.status === '보류'),
-      completed: list.filter(s => s.status === '완료')
+      ongoing: sortedList.filter(s => s.status === '진행중' || s.status === '진행' || !s.status || s.status === ''),
+      pending: sortedList.filter(s => s.status === '대기' || s.status === '보류'),
+      completed: sortedList.filter(s => s.status === '완료')
     };
   }, [sites, searchTerm]);
 
