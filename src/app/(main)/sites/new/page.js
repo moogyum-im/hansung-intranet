@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '../../../../lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -8,7 +8,8 @@ import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { Building2, Users, Calendar, BarChart3, ChevronLeft, ShieldCheck, Leaf, Hammer, ClipboardList } from 'lucide-react';
 
-export default function NewSitePage() {
+// 🚀 [추가] useSearchParams 에러 해결을 위한 내부 컴포넌트 분리
+function NewSiteContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const siteId = searchParams.get('id'); // URL에서 수정할 현장 ID 추출
@@ -301,5 +302,18 @@ export default function NewSitePage() {
                 </form>
             </div>
         </div>
+    );
+}
+
+// 🚀 [수정] 메인 페이지 컴포넌트: 전체를 Suspense로 감싸서 빌드 오류 해결
+export default function NewSitePage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
+                <p className="text-slate-400 font-black text-xs uppercase tracking-widest">Loading System...</p>
+            </div>
+        }>
+            <NewSiteContent />
+        </Suspense>
     );
 }
