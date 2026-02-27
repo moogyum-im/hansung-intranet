@@ -9,7 +9,8 @@ import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut
 import { toast } from 'react-hot-toast';
 
 const formatNumber = (num) => {
-    if (num === null || num === undefined || num === "" || isNaN(num)) return "0";
+    // 🚀 수정: 값이 없거나 숫자 0인 경우 '-' 반환
+    if (num === null || num === undefined || num === "" || isNaN(num) || Number(num.toString().replace(/,/g, '')) === 0) return "-";
     return Math.round(Number(num.toString().replace(/,/g, ''))).toLocaleString();
 };
 
@@ -93,7 +94,6 @@ export default function DailyWorkPage() {
         load();
     }, [siteId, reportId, categoryType]);
 
-    // 🚀 실시간 정산 내역 전체 합계 계산 로직 추가
     const settlementTotals = useMemo(() => {
         if (!formData?.settlement_costs) return { prev: 0, today: 0, total: 0 };
         return formData.settlement_costs.reduce((acc, curr) => ({
@@ -235,8 +235,9 @@ export default function DailyWorkPage() {
     const contractAmt = parseNumber(formData?.total_contract_amount);
     const spendRate = contractAmt > 0 ? ((totalAccumSpend / contractAmt) * 100).toFixed(2) : "0.00";
 
-    const plantTotal = (parseNumber(formData?.progress_plant_prev) + parseNumber(formData?.progress_plant)).toFixed(4);
-    const facilityTotal = (parseNumber(formData?.progress_facility_prev) + parseNumber(formData?.progress_facility)).toFixed(4);
+    // 🚀 수정: 공정률 수치가 0일 때 '-' 표시
+    const plantTotal = parseNumber(formData?.progress_plant_prev) + parseNumber(formData?.progress_plant) === 0 ? "-" : (parseNumber(formData?.progress_plant_prev) + parseNumber(formData?.progress_plant)).toFixed(4);
+    const facilityTotal = parseNumber(formData?.progress_facility_prev) + parseNumber(formData?.progress_facility) === 0 ? "-" : (parseNumber(formData?.progress_facility_prev) + parseNumber(formData?.progress_facility)).toFixed(4);
 
     if (!formData) return null;
 
@@ -297,7 +298,6 @@ export default function DailyWorkPage() {
                 <div style={{ transformOrigin: 'top left', transform: `scale(${zoomLevel})`, width: `${100 / zoomLevel}%` }} className="pb-40 font-black ml-0 text-left items-start flex flex-col font-sans italic-none">
                     <div className="max-w-[1600px] w-full bg-white p-8 pt-4 border border-slate-200 shadow-sm font-black italic-none">
                         
-                        {/* 🚀 소장님들을 위한 일보 작성 설명서 (수정 모드에서만 노출) */}
                         {!isReadOnly && (
                             <div className="mb-6 p-4 bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl flex gap-4 items-start animate-in fade-in slide-in-from-top-2 duration-500">
                                 <div className="bg-slate-900 text-white p-2 rounded-xl shadow-lg shrink-0">
@@ -342,7 +342,7 @@ export default function DailyWorkPage() {
                                         <div key={k} className={`flex h-10 bg-blue-50 font-black font-sans italic-none ${i === 0 ? 'border-b border-slate-400' : ''}`}>
                                             <div className="bg-blue-50 px-2 flex items-center border-r border-slate-400 font-black uppercase font-sans text-[8px] w-20 font-black">{k==='plant'?'식재공정':'시설공정'}</div>
                                             <div className="flex divide-x divide-slate-400 bg-white font-sans flex-1 italic-none">
-                                                <div className="flex flex-col items-center justify-center flex-1 leading-tight"><span className="text-[6px] text-slate-400 font-sans">전일</span><span className="text-[11px] font-black font-sans">{formData?.[`progress_${k}_prev`] || '0.0000'}</span></div>
+                                                <div className="flex flex-col items-center justify-center flex-1 leading-tight"><span className="text-[6px] text-slate-400 font-sans">전일</span><span className="text-[11px] font-black font-sans">{formData?.[`progress_${k}_prev`] === '0.0000' ? '-' : formData?.[`progress_${k}_prev`]}</span></div>
                                                 <div className={`flex flex-col items-center justify-center flex-1 leading-tight ${!isActive ? 'bg-slate-100' : 'bg-blue-50/30'}`}><span className="text-[6px] text-blue-400 font-sans">금일(입력)</span><input className={`w-full text-center text-[12px] text-blue-700 outline-none font-black bg-transparent font-sans ${!isActive ? 'cursor-not-allowed' : ''}`} value={formData?.[`progress_${k}`]} readOnly={isReadOnly || !isActive} onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value})} /></div>
                                             </div>
                                         </div>
@@ -369,7 +369,6 @@ export default function DailyWorkPage() {
                                                 <td className="text-right px-2 text-red-600 font-bold font-sans">{formatNumber(row.total)}</td>
                                             </tr>
                                         ))}
-                                        {/* 🚀 실시간 정산 내역 합계 총 합계 행 추가 */}
                                         <tr className="bg-slate-100 border-t-2 border-slate-400 font-black">
                                             <td className="text-center p-1 border-r border-slate-200 font-sans">총 합계</td>
                                             <td className="text-right px-2 border-r border-slate-200 font-sans">{formatNumber(settlementTotals.prev)}</td>
