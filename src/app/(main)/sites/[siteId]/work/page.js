@@ -9,7 +9,6 @@ import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut
 import { toast } from 'react-hot-toast';
 
 const formatNumber = (num) => {
-    // 🚀 수정: 값이 없거나 숫자 0인 경우 '-' 반환
     if (num === null || num === undefined || num === "" || isNaN(num) || Number(num.toString().replace(/,/g, '')) === 0) return "-";
     return Math.round(Number(num.toString().replace(/,/g, ''))).toLocaleString();
 };
@@ -37,6 +36,9 @@ export default function DailyWorkPage() {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importDate, setImportDate] = useState("");
     const [selectedImage, setSelectedImage] = useState(null);
+
+    // 🚀 입력 중인 필드를 추적하기 위한 상태
+    const [focusedField, setFocusedField] = useState(null);
 
     const isReadOnly = view === 'detail';
 
@@ -203,20 +205,38 @@ export default function DailyWorkPage() {
                     <tbody>
                         {rows.map((row, i) => (
                             <tr key={i} className="border-b border-slate-200 hover:bg-slate-50">
-                                {config.fields.map((f, fIdx) => (
-                                    <td key={f} className="border-r border-slate-200 p-0 font-sans">
-                                        <input className="w-full p-1 text-right outline-none bg-transparent font-sans font-black"
-                                            value={['total','price','accum','count','prev_count'].includes(f) ? formatNumber(row[f]) : row[f]} 
-                                            readOnly={isReadOnly}
-                                            onChange={e => {
-                                                if (isReadOnly) return;
-                                                const updated = [...rows]; updated[i][f] = e.target.value.replace(/,/g, '');
-                                                if (['count', 'price', 'prev_count'].some(field => config.fields.includes(field))) {
-                                                    updated[i].accum = (parseNumber(updated[i].prev_count || 0) + parseNumber(updated[i].count || 0)).toString();
-                                                    updated[i].total = (parseNumber(updated[i].price) * parseNumber(updated[i].count)).toString(); 
-                                                }
-                                                setFormData({...formData, [key]: updated});
-                                            }} /></td>))}
+                                {config.fields.map((f, fIdx) => {
+                                    const isNumeric = ['total','price','accum','count','prev_count'].includes(f);
+                                    const fieldId = `${key}-${i}-${f}`;
+                                    // 🚀 포커스 상태에 따라 표시할 값 결정
+                                    const displayValue = isNumeric && focusedField !== fieldId 
+                                        ? formatNumber(row[f]) 
+                                        : (isNumeric && Number(row[f]) === 0 ? "" : row[f]);
+
+                                    return (
+                                        <td key={f} className="border-r border-slate-200 p-0 font-sans relative">
+                                            <input className="w-full p-1 text-right outline-none bg-transparent font-sans font-black"
+                                                value={displayValue}
+                                                readOnly={isReadOnly}
+                                                onFocus={() => isNumeric && setFocusedField(fieldId)}
+                                                onBlur={() => setFocusedField(null)}
+                                                placeholder={isNumeric && focusedField === fieldId ? "0" : ""}
+                                                onChange={e => {
+                                                    if (isReadOnly) return;
+                                                    const updated = [...rows]; 
+                                                    // 숫자와 소수점만 허용 (문자열 - 자동 제거됨)
+                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                    updated[i][f] = val;
+                                                    if (['count', 'price', 'prev_count'].some(field => config.fields.includes(field))) {
+                                                        updated[i].accum = (parseNumber(updated[i].prev_count || 0) + parseNumber(updated[i].count || 0)).toString();
+                                                        updated[i].total = (parseNumber(updated[i].price) * parseNumber(updated[i].count)).toString(); 
+                                                    }
+                                                    setFormData({...formData, [key]: updated});
+                                                }} 
+                                            />
+                                        </td>
+                                    );
+                                })}
                                 {!isReadOnly && <td className="text-center text-red-500 cursor-pointer" onClick={()=>setFormData(p=>({...p, [key]: rows.filter((_, idx)=>idx!==i)}))}>×</td>}
                             </tr>))}
                         <tr className="bg-slate-50 border-t border-slate-300 font-black">
@@ -235,7 +255,6 @@ export default function DailyWorkPage() {
     const contractAmt = parseNumber(formData?.total_contract_amount);
     const spendRate = contractAmt > 0 ? ((totalAccumSpend / contractAmt) * 100).toFixed(2) : "0.00";
 
-    // 🚀 수정: 공정률 수치가 0일 때 '-' 표시
     const plantTotal = parseNumber(formData?.progress_plant_prev) + parseNumber(formData?.progress_plant) === 0 ? "-" : (parseNumber(formData?.progress_plant_prev) + parseNumber(formData?.progress_plant)).toFixed(4);
     const facilityTotal = parseNumber(formData?.progress_facility_prev) + parseNumber(formData?.progress_facility) === 0 ? "-" : (parseNumber(formData?.progress_facility_prev) + parseNumber(formData?.progress_facility)).toFixed(4);
 
@@ -338,12 +357,28 @@ export default function DailyWorkPage() {
                                 </div>
                                 {['plant', 'facility'].map((k, i) => {
                                     const isActive = k === 'plant' ? siteData?.is_plant_active : siteData?.is_facility_active;
+                                    const fieldId = `progress-${k}`;
+                                    const isFocused = focusedField === fieldId;
+                                    const displayVal = !isFocused && parseNumber(formData?.[`progress_${k}`]) === 0 ? "" : formData?.[`progress_${k}`];
+
                                     return (
                                         <div key={k} className={`flex h-10 bg-blue-50 font-black font-sans italic-none ${i === 0 ? 'border-b border-slate-400' : ''}`}>
                                             <div className="bg-blue-50 px-2 flex items-center border-r border-slate-400 font-black uppercase font-sans text-[8px] w-20 font-black">{k==='plant'?'식재공정':'시설공정'}</div>
                                             <div className="flex divide-x divide-slate-400 bg-white font-sans flex-1 italic-none">
                                                 <div className="flex flex-col items-center justify-center flex-1 leading-tight"><span className="text-[6px] text-slate-400 font-sans">전일</span><span className="text-[11px] font-black font-sans">{formData?.[`progress_${k}_prev`] === '0.0000' ? '-' : formData?.[`progress_${k}_prev`]}</span></div>
-                                                <div className={`flex flex-col items-center justify-center flex-1 leading-tight ${!isActive ? 'bg-slate-100' : 'bg-blue-50/30'}`}><span className="text-[6px] text-blue-400 font-sans">금일(입력)</span><input className={`w-full text-center text-[12px] text-blue-700 outline-none font-black bg-transparent font-sans ${!isActive ? 'cursor-not-allowed' : ''}`} value={formData?.[`progress_${k}`]} readOnly={isReadOnly || !isActive} onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value})} /></div>
+                                                <div className={`flex flex-col items-center justify-center flex-1 leading-tight ${!isActive ? 'bg-slate-100' : 'bg-blue-50/30'}`}>
+                                                    <span className="text-[6px] text-blue-400 font-sans">금일(입력)</span>
+                                                    <div className="w-full relative">
+                                                        <input className={`w-full text-center text-[12px] text-blue-700 outline-none font-black bg-transparent font-sans ${!isActive ? 'cursor-not-allowed' : ''}`} 
+                                                            value={displayVal} 
+                                                            readOnly={isReadOnly || !isActive} 
+                                                            onFocus={() => setFocusedField(fieldId)}
+                                                            onBlur={() => setFocusedField(null)}
+                                                            placeholder={isFocused ? "0.0000" : "-"}
+                                                            onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value.replace(/[^0-9.]/g, '')})} 
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     );
