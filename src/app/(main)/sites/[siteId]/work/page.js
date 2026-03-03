@@ -157,12 +157,11 @@ export default function DailyWorkPage() {
             if (!match) return toast.error(`불러올 데이터가 없습니다.`);
             const importedData = JSON.parse(match.notes);
 
-            // 🚀 [수정] 전일 사진 불러오기 시 '전일 현황(tomorrow)' 칸으로 강제 배정
+            // 🚀 [수정] 전일 사진 불러오기 시 '전일 현황' 칸(우측)으로 배정
             if (match.photos && match.photos.length > 0) {
-                // 기존의 timeType과 상관없이 모두 'tomorrowPhotos'로 설정하여 화면 우측(전일현황)에 표시
                 const photosAsPrev = match.photos.map(p => ({ ...p, timeType: 'tomorrow' }));
                 setTomorrowPhotos(photosAsPrev);
-                setTodayPhotos([]); // 금일 현황은 비움
+                setTodayPhotos([]); 
             }
 
             const convertRows = (key) => (importedData[key] || []).map(row => {
@@ -222,7 +221,7 @@ export default function DailyWorkPage() {
 
                                     return (
                                         <td key={f} className="border-r border-slate-200 p-0 font-sans relative">
-                                            <input className="w-full p-1 text-right outline-none bg-transparent font-sans font-black rounded-none"
+                                            <input className={`w-full p-1 outline-none bg-transparent font-sans font-black rounded-none ${isNumeric ? 'text-right' : 'text-center'}`}
                                                 value={displayValue}
                                                 readOnly={isReadOnly}
                                                 onFocus={() => isNumeric && setFocusedField(fieldId)}
@@ -231,9 +230,10 @@ export default function DailyWorkPage() {
                                                 onChange={e => {
                                                     if (isReadOnly) return;
                                                     const updated = [...rows]; 
-                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                    // 🚀 [수정] 숫자인 필드만 필터링, 성명/품명 등은 한글 입력 허용
+                                                    const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
                                                     updated[i][f] = val;
-                                                    if (['count', 'price', 'prev_count'].some(field => config.fields.includes(field))) {
+                                                    if (isNumeric && ['count', 'price', 'prev_count'].some(field => config.fields.includes(field))) {
                                                         updated[i].accum = (parseNumber(updated[i].prev_count || 0) + parseNumber(updated[i].count || 0)).toString();
                                                         updated[i].total = (parseNumber(updated[i].price) * parseNumber(updated[i].count)).toString(); 
                                                     }
@@ -324,17 +324,14 @@ export default function DailyWorkPage() {
                     <div className="max-w-[1600px] w-full bg-white p-8 pt-4 border border-slate-200 shadow-sm font-black italic-none rounded-none">
                         
                         {!isReadOnly && (
-                            <div className="mb-6 p-4 bg-slate-50 border-2 border-dashed border-slate-300 rounded-none flex gap-4 items-start animate-in fade-in slide-in-from-top-2 duration-500">
-                                <div className="bg-slate-900 text-white p-2 rounded-none shadow-lg shrink-0">
-                                    <HelpCircle size={24} />
-                                </div>
+                            <div className="mb-6 p-4 bg-slate-50 border-2 border-dashed border-slate-300 rounded-none flex gap-4 items-start font-black">
+                                <div className="bg-slate-900 text-white p-2 rounded-none shadow-lg shrink-0"><HelpCircle size={24} /></div>
                                 <div className="space-y-1 text-slate-700">
                                     <h4 className="text-sm font-black flex items-center gap-2">💡 작업일보 작성 가이드</h4>
                                     <ul className="text-[11px] font-bold list-disc list-inside space-y-1 opacity-80">
                                         <li><span className="text-blue-600">공정률 입력:</span> 우측 상단 공정률 칸에 금일 진행분을 입력하면 전일 데이터와 합산되어 누계가 자동 계산됩니다.</li>
-                                        <li><span className="text-blue-600">데이터 불러오기:</span> 상단 [불러오기] 버튼을 통해 전일 작성한 내역(인원, 자재, 장비 등)을 그대로 가져올 수 있습니다.</li>
-                                        <li><span className="text-blue-600">섹션 관리:</span> 상단의 공종 버튼(노무, 자재 등)을 클릭하여 불필요한 테이블은 화면에서 가릴 수 있습니다.</li>
-                                        <li><span className="text-blue-600">수치 입력:</span> 단가와 수량을 입력하면 총 금액이 자동 산출됩니다. (세액 별도 산출 불가)</li>
+                                        <li><span className="text-blue-600">데이터 불러오기:</span> 상단 [불러오기] 버튼을 통해 전일 작성한 내역을 그대로 가져올 수 있습니다.</li>
+                                        <li><span className="text-blue-600">섹션 관리:</span> 상단의 공종 버튼을 클릭하여 불필요한 테이블은 화면에서 가릴 수 있습니다.</li>
                                     </ul>
                                 </div>
                             </div>
@@ -366,7 +363,6 @@ export default function DailyWorkPage() {
                                     const fieldId = `progress-${k}`;
                                     const isFocused = focusedField === fieldId;
                                     const displayVal = !isFocused && parseNumber(formData?.[`progress_${k}`]) === 0 ? "" : formData?.[`progress_${k}`];
-
                                     return (
                                         <div key={k} className={`flex h-10 bg-blue-50 font-black font-sans italic-none ${i === 0 ? 'border-b border-slate-400' : ''} rounded-none`}>
                                             <div className="bg-blue-50 px-2 flex items-center border-r border-slate-400 font-black uppercase font-sans text-[8px] w-20 font-black"> {k==='plant'?'식재공정':'시설공정'}</div>
@@ -374,16 +370,14 @@ export default function DailyWorkPage() {
                                                 <div className="flex flex-col items-center justify-center flex-1 leading-tight"><span className="text-[6px] text-slate-400 font-sans">전일</span><span className="text-[11px] font-black font-sans">{formData?.[`progress_${k}_prev`] === '0.0000' ? '-' : formData?.[`progress_${k}_prev`]}</span></div>
                                                 <div className={`flex flex-col items-center justify-center flex-1 leading-tight ${!isActive ? 'bg-slate-100' : 'bg-blue-50/30'}`}>
                                                     <span className="text-[6px] text-blue-400 font-sans">금일(입력)</span>
-                                                    <div className="w-full relative">
-                                                        <input className={`w-full text-center text-[12px] text-blue-700 outline-none font-black bg-transparent font-sans ${!isActive ? 'cursor-not-allowed' : ''} rounded-none`} 
-                                                            value={displayVal} 
-                                                            readOnly={isReadOnly || !isActive} 
-                                                            onFocus={() => setFocusedField(fieldId)}
-                                                            onBlur={() => setFocusedField(null)}
-                                                            placeholder={isFocused ? "0.0000" : "-"}
-                                                            onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value.replace(/[^0-9.]/g, '')})} 
-                                                        />
-                                                    </div>
+                                                    <input className={`w-full text-center text-[12px] text-blue-700 outline-none font-black bg-transparent font-sans ${!isActive ? 'cursor-not-allowed' : ''} rounded-none`} 
+                                                        value={displayVal} 
+                                                        readOnly={isReadOnly || !isActive} 
+                                                        onFocus={() => setFocusedField(fieldId)}
+                                                        onBlur={() => setFocusedField(null)}
+                                                        placeholder={isFocused ? "0.0000" : "-"}
+                                                        onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value.replace(/[^0-9.]/g, '')})} 
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
