@@ -57,7 +57,7 @@ export default function DailyWorkPage() {
     }, []);
 
     const FIELD_MAPS = {
-        labor_costs: { fields: ['name', 'price', 'count', 'type', 'accum', 'total'], labels: ['성명', '단가', '공수', '직종', '출력누계', '금액'], title: '현장출력현황', sums: ['count', 'accum', 'total'] },
+        labor_costs: { fields: ['name', 'price', 'count', 'type', 'prev_count', 'accum', 'total'], labels: ['성명', '단가', '공수', '직종', '전일누계', '출력누계', '금액'], title: '현장출력현황', sums: ['count', 'accum', 'total'] },
         material_costs: { fields: ['item', 'spec', 'price', 'prev_count', 'count', 'accum', 'vendor', 'total'], labels: ['품명', '규격', '단가', '전일누계', '금일수량', '전체누계', '거래처', '금액'], title: '주요자재반입현황', sums: ['prev_count', 'count', 'accum', 'total'] },
         equipment_costs: { fields: ['item', 'type', 'price', 'prev_count', 'count', 'accum', 'total'], labels: ['품명', '투입공종', '단가', '전일누계', '금일', '출력누계', '금액'], title: '장비사용현황', sums: ['prev_count', 'count', 'accum', 'total'] },
         tree_costs: { fields: ['item', 'spec', 'price', 'prev_count', 'count', 'accum', 'vendor', 'total'], labels: ['품명', '규격', '단가', '전일누계', '금일수량', '전체누계', '거래처', '금액'], title: '수목반입현황', sums: ['prev_count', 'count', 'accum', 'total'] },
@@ -157,7 +157,6 @@ export default function DailyWorkPage() {
             if (!match) return toast.error(`불러올 데이터가 없습니다.`);
             const importedData = JSON.parse(match.notes);
 
-            // 🚀 [수정] 전일 사진 불러오기 시 '전일 현황' 칸(우측)으로 배정
             if (match.photos && match.photos.length > 0) {
                 const photosAsPrev = match.photos.map(p => ({ ...p, timeType: 'tomorrow' }));
                 setTomorrowPhotos(photosAsPrev);
@@ -202,56 +201,69 @@ export default function DailyWorkPage() {
         const rows = formData?.[key] || [];
         const getColumnSum = (f) => rows.reduce((acc, cur) => acc + parseNumber(cur[f]), 0);
         return (
-            <div key={key} className="border border-slate-400 flex flex-col font-bold mb-1 w-full bg-white shadow-sm font-sans rounded-none">
-                <div className="bg-yellow-50 border-b border-slate-400 p-1 flex justify-between items-center font-black rounded-none">
+            <div key={key} className="border border-slate-400 flex flex-col font-bold mb-1 w-full bg-white shadow-sm font-sans rounded-none overflow-hidden">
+                <div className="bg-yellow-50 border-b border-slate-400 p-1 flex justify-between items-center font-black rounded-none sticky left-0">
                     <span className="text-[10px] uppercase">▣ {config.title}</span>
                     {!isReadOnly && <button onClick={()=>setFormData(p=>({...p, [key]: [...(p[key]||[]), config.fields.reduce((a,f)=>({...a,[f]:''}),{})]}))} className="bg-white border border-slate-400 px-1 text-[8px] font-bold shadow-sm rounded-none">+ 추가</button>}
                 </div>
-                <table className="w-full text-[9px] border-collapse font-bold rounded-none">
-                    <thead className="bg-slate-50 border-b border-slate-400 font-sans"><tr>{config.labels.map(l=><th key={l} className="border-r border-slate-300 p-1 uppercase">{l}</th>)}{!isReadOnly && <th className="w-4"></th>}</tr></thead>
-                    <tbody>
-                        {rows.map((row, i) => (
-                            <tr key={i} className="border-b border-slate-200 hover:bg-slate-50">
-                                {config.fields.map((f, fIdx) => {
-                                    const isNumeric = ['total','price','accum','count','prev_count'].includes(f);
-                                    const fieldId = `${key}-${i}-${f}`;
-                                    const displayValue = isNumeric && focusedField !== fieldId 
-                                        ? formatNumber(row[f]) 
-                                        : (isNumeric && Number(row[f]) === 0 ? "" : row[f]);
+                <div className="w-full overflow-x-auto">
+                    <table className="min-w-full text-[9px] border-collapse font-bold rounded-none">
+                        <thead className="bg-slate-50 border-b border-slate-400 font-sans">
+                            <tr>{config.labels.map(l=><th key={l} className="border-r border-slate-300 p-1 px-2 uppercase whitespace-nowrap">{l}</th>)}{!isReadOnly && <th className="w-4"></th>}</tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((row, i) => (
+                                <tr key={i} className="border-b border-slate-200 hover:bg-slate-50">
+                                    {config.fields.map((f, fIdx) => {
+                                        const isNumeric = ['total','price','accum','count','prev_count'].includes(f);
+                                        const fieldId = `${key}-${i}-${f}`;
+                                        const displayValue = isNumeric && focusedField !== fieldId 
+                                            ? formatNumber(row[f]) 
+                                            : (isNumeric && Number(row[f]) === 0 ? "" : row[f]);
 
-                                    return (
-                                        <td key={f} className="border-r border-slate-200 p-0 font-sans relative">
-                                            <input className={`w-full p-1 outline-none bg-transparent font-sans font-black rounded-none ${isNumeric ? 'text-right' : 'text-center'}`}
-                                                value={displayValue}
-                                                readOnly={isReadOnly}
-                                                onFocus={() => isNumeric && setFocusedField(fieldId)}
-                                                onBlur={() => setFocusedField(null)}
-                                                placeholder={isNumeric && focusedField === fieldId ? "0" : ""}
-                                                onChange={e => {
-                                                    if (isReadOnly) return;
-                                                    const updated = [...rows]; 
-                                                    // 🚀 [수정] 숫자인 필드만 필터링, 성명/품명 등은 한글 입력 허용
-                                                    const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
-                                                    updated[i][f] = val;
-                                                    if (isNumeric && ['count', 'price', 'prev_count'].some(field => config.fields.includes(field))) {
-                                                        updated[i].accum = (parseNumber(updated[i].prev_count || 0) + parseNumber(updated[i].count || 0)).toString();
-                                                        updated[i].total = (parseNumber(updated[i].price) * parseNumber(updated[i].count)).toString(); 
-                                                    }
-                                                    setFormData({...formData, [key]: updated});
-                                                }} 
-                                            />
-                                        </td>
-                                    );
-                                })}
-                                {!isReadOnly && <td className="text-center text-red-500 cursor-pointer" onClick={()=>setFormData(p=>({...p, [key]: rows.filter((_, idx)=>idx!==i)}))}>×</td>}
-                            </tr>))}
-                        <tr className="bg-slate-50 border-t border-slate-300 font-black">
-                            <td className="text-center p-1 border-r border-slate-200 font-sans">합계</td>
-                            {config.fields.slice(1).map((f, idx) => (<td key={idx} className="text-right px-1 border-r border-slate-200 text-blue-800 font-sans">{config.sums.includes(f) ? formatNumber(getColumnSum(f)) : ''}</td>))}
-                            {!isReadOnly && <td></td>}
-                        </tr>
-                    </tbody>
-                </table>
+                                        return (
+                                            <td key={f} className="border-r border-slate-200 p-0 font-sans relative">
+                                                <input className={`w-full p-1.5 outline-none bg-transparent font-sans font-black rounded-none whitespace-nowrap min-w-[60px] ${isNumeric ? 'text-right' : 'text-center'}`}
+                                                    value={displayValue}
+                                                    readOnly={isReadOnly}
+                                                    onFocus={() => isNumeric && setFocusedField(fieldId)}
+                                                    onBlur={() => setFocusedField(null)}
+                                                    placeholder={isNumeric && focusedField === fieldId ? "0" : ""}
+                                                    onChange={e => {
+                                                        if (isReadOnly) return;
+                                                        const updated = [...rows]; 
+                                                        const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
+                                                        updated[i][f] = val;
+                                                        
+                                                        if (isNumeric) {
+                                                            // 🚀 [수정] 모든 섹션에서 공수(count)나 전일누계(prev_count) 입력 시 출력누계(accum) 자동 합산 로직 복구
+                                                            if (f === 'count' || f === 'prev_count') {
+                                                                updated[i].accum = (parseNumber(updated[i].prev_count || 0) + parseNumber(updated[i].count || 0)).toString();
+                                                            }
+                                                            
+                                                            // 단가(price)나 공수(count) 변경 시 금액(total) 자동 산출
+                                                            if (f === 'price' || f === 'count') {
+                                                                updated[i].total = (parseNumber(updated[i].price) * parseNumber(updated[i].count)).toString();
+                                                            }
+                                                            
+                                                            // 사용자가 누계(accum)나 금액(total)을 직접 수정하면 그 값을 유지 (수기 입력 허용)
+                                                        }
+                                                        setFormData({...formData, [key]: updated});
+                                                    }} 
+                                                />
+                                            </td>
+                                        );
+                                    })}
+                                    {!isReadOnly && <td className="text-center text-red-500 cursor-pointer p-1" onClick={()=>setFormData(p=>({...p, [key]: rows.filter((_, idx)=>idx!==i)}))}>×</td>}
+                                </tr>))}
+                            <tr className="bg-slate-50 border-t border-slate-300 font-black">
+                                <td className="text-center p-1 border-r border-slate-200 font-sans whitespace-nowrap">합계</td>
+                                {config.fields.slice(1).map((f, idx) => (<td key={idx} className="text-right px-1 border-r border-slate-200 text-blue-800 font-sans whitespace-nowrap">{config.sums.includes(f) ? formatNumber(getColumnSum(f)) : ''}</td>))}
+                                {!isReadOnly && <td></td>}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         );
     };
@@ -293,7 +305,7 @@ export default function DailyWorkPage() {
                     {!isReadOnly && (
                         <div className="flex gap-1 border-l pl-4 border-slate-200 font-sans">
                             {Object.entries(FIELD_MAPS).map(([key, config]) => (
-                                <button key={key} onClick={() => setVisibleSections(p => ({...p, [key]: !visibleSections[key]}))} className={`px-2.5 py-1.5 text-[9px] transition-all font-black rounded-none ${visibleSections[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border border-slate-100'}`}>{config.title.split('(')[0]}</button>
+                                <button key={key} onClick={() => setVisibleSections(p => ({...p, [key]: !visibleSections[key]}))} className={`px-2.5 py-1.5 text-[9px] rounded-none transition-all font-black ${visibleSections[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border border-slate-100'}`}>{config.title.split('(')[0]}</button>
                             ))}
                         </div>
                     )}
@@ -322,29 +334,14 @@ export default function DailyWorkPage() {
             <div className="flex-1 overflow-auto p-6 bg-[#F8FAFC] font-black italic-none rounded-none">
                 <div style={{ transformOrigin: 'top left', transform: `scale(${zoomLevel})`, width: `${100 / zoomLevel}%` }} className="pb-40 font-black ml-0 text-left items-start flex flex-col font-sans italic-none rounded-none">
                     <div className="max-w-[1600px] w-full bg-white p-8 pt-4 border border-slate-200 shadow-sm font-black italic-none rounded-none">
-                        
-                        {!isReadOnly && (
-                            <div className="mb-6 p-4 bg-slate-50 border-2 border-dashed border-slate-300 rounded-none flex gap-4 items-start font-black">
-                                <div className="bg-slate-900 text-white p-2 rounded-none shadow-lg shrink-0"><HelpCircle size={24} /></div>
-                                <div className="space-y-1 text-slate-700">
-                                    <h4 className="text-sm font-black flex items-center gap-2">💡 작업일보 작성 가이드</h4>
-                                    <ul className="text-[11px] font-bold list-disc list-inside space-y-1 opacity-80">
-                                        <li><span className="text-blue-600">공정률 입력:</span> 우측 상단 공정률 칸에 금일 진행분을 입력하면 전일 데이터와 합산되어 누계가 자동 계산됩니다.</li>
-                                        <li><span className="text-blue-600">데이터 불러오기:</span> 상단 [불러오기] 버튼을 통해 전일 작성한 내역을 그대로 가져올 수 있습니다.</li>
-                                        <li><span className="text-blue-600">섹션 관리:</span> 상단의 공종 버튼을 클릭하여 불필요한 테이블은 화면에서 가릴 수 있습니다.</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        )}
-
                         <div className="flex justify-between items-end gap-8 mb-4 rounded-none">
                             <div className="flex flex-col gap-2 flex-1 font-black italic-none">
                                 <h1 className="text-5xl font-black uppercase tracking-[0.6em] text-left mt-[-30px] font-sans rounded-none">작 업 일 보</h1>
                                 <div className="flex gap-2 flex-wrap items-end font-sans italic-none font-black">
-                                    <div className="flex border border-slate-400 text-[9px] font-black h-8 shrink-0 shadow-sm items-center px-3 bg-slate-50 uppercase rounded-none">총 도급액: {formatNumber(formData?.total_contract_amount)}원</div>
-                                    <div className="flex border border-slate-400 text-[9px] font-black h-8 shrink-0 shadow-sm items-center px-3 text-blue-700 font-sans rounded-none">금일 사용: {formatNumber(totalTodaySpend)}원</div>
-                                    <div className="flex border border-slate-400 text-[11px] bg-red-50 font-black h-8 shrink-0 shadow-sm items-center px-4 text-red-600 font-sans rounded-none">누적 집행: {formatNumber(totalAccumSpend)}원 ({spendRate}%)</div>
-                                    <div className="flex border border-slate-400 text-[11px] bg-blue-50 font-black h-8 shrink-0 shadow-sm items-center px-4 text-blue-800 font-sans gap-4 rounded-none">
+                                    <div className="flex border border-slate-400 text-[9px] font-black h-8 shrink-0 shadow-sm items-center px-3 bg-slate-50 uppercase rounded-none whitespace-nowrap">총 도급액: {formatNumber(formData?.total_contract_amount)}원</div>
+                                    <div className="flex border border-slate-400 text-[9px] font-black h-8 shrink-0 shadow-sm items-center px-3 text-blue-700 font-sans rounded-none whitespace-nowrap">금일 사용: {formatNumber(totalTodaySpend)}원</div>
+                                    <div className="flex border border-slate-400 text-[11px] bg-red-50 font-black h-8 shrink-0 shadow-sm items-center px-4 text-red-600 font-sans rounded-none whitespace-nowrap">누적 집행: {formatNumber(totalAccumSpend)}원 ({spendRate}%)</div>
+                                    <div className="flex border border-slate-400 text-[11px] bg-blue-50 font-black h-8 shrink-0 shadow-sm items-center px-4 text-blue-800 font-sans gap-4 rounded-none whitespace-nowrap">
                                         <span>식재 공정률: {plantTotal}%</span>
                                         <div className="w-[1px] h-4 bg-blue-200" />
                                         <span>시설 공정률: {facilityTotal}%</span>
@@ -367,9 +364,9 @@ export default function DailyWorkPage() {
                                         <div key={k} className={`flex h-10 bg-blue-50 font-black font-sans italic-none ${i === 0 ? 'border-b border-slate-400' : ''} rounded-none`}>
                                             <div className="bg-blue-50 px-2 flex items-center border-r border-slate-400 font-black uppercase font-sans text-[8px] w-20 font-black"> {k==='plant'?'식재공정':'시설공정'}</div>
                                             <div className="flex divide-x divide-slate-400 bg-white font-sans flex-1 italic-none rounded-none">
-                                                <div className="flex flex-col items-center justify-center flex-1 leading-tight"><span className="text-[6px] text-slate-400 font-sans">전일</span><span className="text-[11px] font-black font-sans">{formData?.[`progress_${k}_prev`] === '0.0000' ? '-' : formData?.[`progress_${k}_prev`]}</span></div>
+                                                <div className="flex flex-col items-center justify-center flex-1 leading-tight"><span className="text-[6px] text-slate-400 font-sans whitespace-nowrap">전일</span><span className="text-[11px] font-black font-sans whitespace-nowrap">{formData?.[`progress_${k}_prev`] === '0.0000' ? '-' : formData?.[`progress_${k}_prev`]}</span></div>
                                                 <div className={`flex flex-col items-center justify-center flex-1 leading-tight ${!isActive ? 'bg-slate-100' : 'bg-blue-50/30'}`}>
-                                                    <span className="text-[6px] text-blue-400 font-sans">금일(입력)</span>
+                                                    <span className="text-[6px] text-blue-400 font-sans whitespace-nowrap">금일(입력)</span>
                                                     <input className={`w-full text-center text-[12px] text-blue-700 outline-none font-black bg-transparent font-sans ${!isActive ? 'cursor-not-allowed' : ''} rounded-none`} 
                                                         value={displayVal} 
                                                         readOnly={isReadOnly || !isActive} 
@@ -394,19 +391,19 @@ export default function DailyWorkPage() {
                             <div className="col-span-4 border border-slate-400 shadow-sm overflow-hidden font-sans flex flex-col h-full bg-white italic-none rounded-none">
                                 <div className="bg-slate-800 text-white p-1.5 text-center text-[10px] uppercase font-sans font-black rounded-none">실시간 정산 내역 합계</div>
                                 <table className="w-full text-[9px] border-collapse font-sans flex-1 rounded-none">
-                                    <thead className="bg-slate-50 border-b border-slate-400 font-bold font-sans italic-none rounded-none"><tr><th className="p-1 border-r border-slate-400 text-center uppercase">항목</th><th className="border-r border-slate-400 text-center uppercase">전일</th><th className="border-r border-slate-400 text-center text-blue-600 font-bold uppercase">금일</th><th className="text-center text-red-600 uppercase font-bold">누계</th></tr></thead>
-                                    <tbody className="h-full font-black rounded-none">
+                                    <thead className="bg-slate-50 border-b border-slate-400 font-bold font-sans italic-none rounded-none"><tr><th className="p-1 border-r border-slate-400 text-center uppercase whitespace-nowrap">항목</th><th className="border-r border-slate-400 text-center uppercase whitespace-nowrap">전일</th><th className="border-r border-slate-400 text-center text-blue-600 font-bold uppercase whitespace-nowrap">금일</th><th className="text-center text-red-600 uppercase font-bold whitespace-nowrap">누계</th></tr></thead>
+                                    <tbody className="h-full font-black">
                                         {(formData?.settlement_costs || []).map((row, idx) => (
                                             <tr key={idx} className="border-b border-slate-200">
-                                                <td className="bg-slate-50 border-r border-slate-200 text-center p-0.5 font-sans">{row.item}</td>
-                                                <td className="text-right px-2 border-r border-slate-200 font-sans">{formatNumber(row.prev)}</td>
-                                                <td className="text-right px-2 text-blue-700 border-r border-slate-200 font-sans font-black">{formatNumber(row.today)}</td>
-                                                <td className="text-right px-2 text-red-600 font-bold font-sans">{formatNumber(row.total)}</td>
+                                                <td className="bg-slate-50 border-r border-slate-200 text-center p-0.5 font-sans whitespace-nowrap">{row.item}</td>
+                                                <td className="text-right px-2 border-r border-slate-200 font-sans whitespace-nowrap">{formatNumber(row.prev)}</td>
+                                                <td className="text-right px-2 text-blue-700 border-r border-slate-200 font-sans font-black whitespace-nowrap">{formatNumber(row.today)}</td>
+                                                <td className="text-right px-2 text-red-600 font-bold font-sans whitespace-nowrap">{formatNumber(row.total)}</td>
                                             </tr>
                                         ))}
                                         <tr className="bg-slate-100 border-t-2 border-slate-400 font-black rounded-none">
-                                            <td className="text-center p-1 border-r border-slate-200 font-sans">총 합계</td>
-                                            <td className="text-right px-2 border-r border-slate-200 font-sans">{formatNumber(settlementTotals.prev)}</td>
+                                            <td className="text-center p-1 border-r border-slate-200 font-sans whitespace-nowrap">총 합계</td>
+                                            <td className="text-right px-2 border-r border-slate-200 font-sans whitespace-nowrap">{formatNumber(settlementTotals.prev)}</td>
                                             <td className="text-right px-2 text-blue-800 border-r border-slate-200 font-sans">{formatNumber(settlementTotals.today)}</td>
                                             <td className="text-right px-2 text-red-800 font-sans">{formatNumber(settlementTotals.total)}</td>
                                         </tr>
