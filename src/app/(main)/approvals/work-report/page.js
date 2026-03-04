@@ -44,23 +44,33 @@ export default function WorkReportPage() {
         issues: '',
         nextPlan: '',
         hourlyTasks: timeSlots.reduce((acc, time) => ({ ...acc, [time]: '' }), {}),
-        galleryItems: [] 
+        galleryItems: [] // 기본 빈 배열
     });
     const [loading, setLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
 
+    // 🚀 [수정] 데이터 복구 시 방어 로직 강화
     useEffect(() => {
         const saved = localStorage.getItem('work_report_draft_backup');
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                setFormData(parsed.formData || formData);
+                // 갤러리 아이템이 배열인지 확인하고, 아니면 빈 배열로 초기화 (에러 원인 차단)
+                const safeFormData = {
+                    ...parsed.formData,
+                    galleryItems: Array.isArray(parsed.formData?.galleryItems) ? parsed.formData.galleryItems : []
+                };
+                
+                setFormData(prev => ({ ...prev, ...safeFormData }));
                 setApprovers(parsed.approvers || []);
                 setReferrers(parsed.referrers || []);
                 setAttachments(parsed.attachments || []);
                 setVisibleSections(parsed.visibleSections || visibleSections);
-            } catch (e) { console.error("복구 실패", e); }
+            } catch (e) { 
+                console.error("복구 실패 - 데이터를 초기화합니다.", e);
+                localStorage.removeItem('work_report_draft_backup');
+            }
         }
     }, []);
 
@@ -226,7 +236,7 @@ export default function WorkReportPage() {
                     </div>
                 </div>
                 <button onClick={handleSubmit} disabled={loading || isUploading} className="px-6 py-2 bg-black text-white border border-black text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : <><CheckCircle size={14} /> 업무보고서 상신</>}
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : <><CheckCircle size={14} className="inline mr-2" /> 업무보고서 상신</>}
                 </button>
             </div>
 
@@ -308,14 +318,15 @@ export default function WorkReportPage() {
                                     <button type="button" onClick={addGalleryItem} className="text-[10px] bg-black text-white px-4 py-1.5 rounded-sm flex items-center gap-2 hover:bg-slate-800 transition-all font-black"><Plus size={14} /> 비교 행 추가</button>
                                 </div>
                                 <div className="space-y-6">
-                                    {formData.galleryItems.map((item, idx) => (
+                                    {Array.isArray(formData.galleryItems) && formData.galleryItems.map((item, idx) => (
                                         <div key={idx} className="border-2 border-black p-5 bg-white relative font-black">
                                             <button type="button" onClick={() => removeGalleryItem(idx)} className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1 shadow-lg z-20 no-print font-black"><X size={16}/></button>
+                                            
                                             <div className="grid grid-cols-2 gap-4 mb-4 font-black">
                                                 <div className="space-y-2 text-center relative group">
                                                     <p className="text-[9px] uppercase text-slate-400 font-black">BEFORE (작업 전)</p>
                                                     <div className="aspect-[4/3] bg-slate-50 border border-black rounded flex flex-col items-center justify-center relative overflow-hidden transition-all hover:bg-slate-100" onDrop={(e) => handleDrop(e, idx, 'before')} onDragOver={handleDragOver}>
-                                                        {item.before.url ? (
+                                                        {item.before?.url ? (
                                                             <>
                                                                 <img src={item.before.url} className="w-full h-full object-cover cursor-zoom-in" onClick={() => setSelectedImg(item.before.url)} />
                                                                 <button onClick={()=>{const n={...formData}; n.galleryItems[idx].before={url:''}; setFormData(n);}} className="absolute top-1 right-1 p-1 bg-white rounded-full text-rose-600 shadow-md opacity-0 group-hover:opacity-100 no-print transition-opacity"><Trash2 size={12}/></button>
@@ -323,7 +334,7 @@ export default function WorkReportPage() {
                                                         ) : (
                                                             <label className="cursor-pointer flex flex-col items-center hover:text-blue-600 transition-colors">
                                                                 <Camera size={24} className="text-slate-300 mb-1" />
-                                                                <span className="text-[8px] font-black uppercase text-slate-400">사진 촬영 또는 파일 끌어오기</span>
+                                                                <span className="text-[8px] font-black uppercase text-slate-400 text-center px-2">사진 촬영 또는 파일 끌어오기</span>
                                                                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e)=>handleGalleryCapture(idx, 'before', e.target.files[0])} />
                                                             </label>
                                                         )}
@@ -332,7 +343,7 @@ export default function WorkReportPage() {
                                                 <div className="space-y-2 text-center relative group">
                                                     <p className="text-[9px] uppercase text-blue-600 font-black">AFTER (작업 후)</p>
                                                     <div className="aspect-[4/3] bg-slate-50 border border-black rounded flex flex-col items-center justify-center relative overflow-hidden transition-all hover:bg-slate-100" onDrop={(e) => handleDrop(e, idx, 'after')} onDragOver={handleDragOver}>
-                                                        {item.after.url ? (
+                                                        {item.after?.url ? (
                                                             <>
                                                                 <img src={item.after.url} className="w-full h-full object-cover cursor-zoom-in" onClick={() => setSelectedImg(item.after.url)} />
                                                                 <button onClick={()=>{const n={...formData}; n.galleryItems[idx].after={url:''}; setFormData(n);}} className="absolute top-1 right-1 p-1 bg-white rounded-full text-rose-600 shadow-md opacity-0 group-hover:opacity-100 no-print transition-opacity"><Trash2 size={12}/></button>
@@ -340,7 +351,7 @@ export default function WorkReportPage() {
                                                         ) : (
                                                             <label className="cursor-pointer flex flex-col items-center hover:text-blue-600 transition-colors">
                                                                 <Camera size={24} className="text-slate-300 mb-1" />
-                                                                <span className="text-[8px] font-black uppercase text-slate-400">사진 촬영 또는 파일 끌어오기</span>
+                                                                <span className="text-[8px] font-black uppercase text-slate-400 text-center px-2">사진 촬영 또는 파일 끌어오기</span>
                                                                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e)=>handleGalleryCapture(idx, 'after', e.target.files[0])} />
                                                             </label>
                                                         )}
@@ -350,7 +361,7 @@ export default function WorkReportPage() {
                                             <textarea value={item.description} onChange={(e) => handleGalleryTextChange(idx, e.target.value)} className="w-full p-3 text-[11px] outline-none bg-slate-50 border border-black/10 resize-none min-h-[60px] font-black" placeholder="현장 전/후 상황 또는 조치 내역을 입력하십시오." />
                                         </div>
                                     ))}
-                                    {formData.galleryItems.length === 0 && <div className="border border-dashed border-slate-300 p-12 text-center text-slate-400 text-[11px] font-black">비교 항목이 없습니다. 상단의 '비교 행 추가'를 눌러 등록하십시오.</div>}
+                                    {(!formData.galleryItems || formData.galleryItems.length === 0) && <div className="border border-dashed border-slate-300 p-12 text-center text-slate-400 text-[11px] font-black">비교 항목이 없습니다. 상단의 '비교 행 추가'를 눌러 등록하십시오.</div>}
                                 </div>
                             </section>
                         )}
@@ -362,7 +373,7 @@ export default function WorkReportPage() {
                             </section>
                         )}
 
-                        {/* 🚀 [추가] 향후 계획 입력 섹션 */}
+                        {/* 🚀 향후 계획 섹션 반영 */}
                         {visibleSections.nextPlan && (
                             <section>
                                 <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black">06. 향후 업무 추진 계획</h2>
