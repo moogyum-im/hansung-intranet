@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { 
     Printer, FileText, CheckCircle, XCircle, Hash, 
-    UserCheck, Users, Loader2, Download, ChevronRight, Settings, Paperclip, ImageIcon, X
+    UserCheck, Users, Loader2, Download, ChevronRight, Settings, Paperclip, ImageIcon, X, MessageSquare
 } from 'lucide-react';
 
 export default function WorkReportView({ doc, employee, approvalHistory, referrerHistory }) {
@@ -144,7 +144,6 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                             </tbody>
                         </table>
 
-                        {/* 01. 시간별 업무 내역 */}
                         {isVisible('hourlyTasks') && formData.hourlyTasks && (
                             <section className="print-section">
                                 <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">01. 시간별 주요 업무 내역</h2>
@@ -161,7 +160,6 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                             </section>
                         )}
 
-                        {/* 02. 금일 계획 */}
                         {isVisible('todayPlan') && formData.todayPlan && (
                             <section className="print-section">
                                 <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">02. 금일 업무 계획</h2>
@@ -169,7 +167,6 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                             </section>
                         )}
 
-                        {/* 03. 상세 실적 */}
                         {isVisible('achievements') && formData.achievements && (
                             <section className="print-section">
                                 <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">03. 상세 업무 실적</h2>
@@ -177,7 +174,6 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                             </section>
                         )}
 
-                        {/* 🚀 04. 전/후 과정 비교 갤러리 */}
                         {isVisible('gallery') && formData.galleryItems && formData.galleryItems.length > 0 && (
                             <section className="print-section">
                                 <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">04. 전/후 과정 비교</h2>
@@ -211,7 +207,6 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                             </section>
                         )}
 
-                        {/* 05. 특이사항 */}
                         {isVisible('issues') && formData.issues && (
                             <section className="print-section">
                                 <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black text-red-600">05. 특이사항 및 문제점</h2>
@@ -219,7 +214,6 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                             </section>
                         )}
 
-                        {/* 06. 향후 계획 */}
                         {isVisible('nextPlan') && (formData.nextPlan || formData.futurePlan) && (
                             <section className="print-section">
                                 <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">06. 향후 업무 계획</h2>
@@ -242,7 +236,7 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                     {isReferrer && (
                         <div className="bg-white border border-black p-6 shadow-sm font-black text-black">
                             <div className="flex flex-col gap-2">
-                                <p className="text-[9px] text-slate-400 mb-1 font-black font-sans">※ 관리부 승인 후 공식 문서번호를 입력해 주십시오.</p>
+                                <p className="text-[9px] text-slate-400 mb-1 font-black font-sans uppercase">※ 관리부 승인 후 문서번호를 부여해 주십시오.</p>
                                 <div className="flex gap-2 font-black font-sans">
                                     <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} className="flex-1 border border-black px-3 py-1.5 text-[11px] outline-none font-black text-black focus:bg-slate-50" placeholder="관리부 추후 부여" />
                                     <button onClick={handleUpdateDocNumber} className="bg-black text-white px-4 py-1.5 text-[10px] font-black hover:bg-slate-800 transition-all font-black">반영</button>
@@ -255,17 +249,33 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                         <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 text-black">
                             <Users size={16} /><h2 className="text-[11px] uppercase font-black text-black">결재 프로세스</h2>
                         </div>
-                        <div className="space-y-2 mb-5">
+                        <div className="space-y-3 mb-5">
                             {approvalHistory?.map((step, idx) => (
-                                <div key={step.id} className={`p-3 rounded-xl border flex justify-between items-center ${step.status === '승인' || step.status === '완료' ? 'bg-slate-50 border-black font-black' : 'bg-white opacity-60'} font-black font-sans`}>
-                                    {/* 🚀 이름 옆 직함 표시 (step.approver.position 활용) */}
-                                    <div className="text-[12px] font-black">
-                                        {step.approver?.full_name} <span className="text-[10px] text-slate-500">{step.approver?.position}</span>
-                                        <span className="text-[9px] text-slate-400 ml-2">{idx + 1}차</span>
+                                <div key={step.id} className="space-y-1">
+                                    <div className={`p-3 rounded-xl border flex justify-between items-center ${step.status === '승인' || step.status === '완료' ? 'bg-slate-50 border-black font-black' : 'bg-white opacity-60'} font-black font-sans`}>
+                                        {/* 🚀 이름 옆 직함 표시 */}
+                                        <div className="text-[12px] font-black">
+                                            {step.approver?.full_name} <span className="text-[10px] text-slate-500">{step.approver?.position}</span>
+                                            <span className="text-[9px] text-slate-400 ml-2">{idx + 1}차</span>
+                                        </div>
+                                        <span className={`text-[8px] px-2 py-0.5 rounded-full font-black ${step.status === '승인' || step.status === '완료' ? 'bg-black text-white' : 'bg-amber-400 text-white'}`}>{step.status === 'pending' ? '대기' : step.status}</span>
                                     </div>
-                                    <span className={`text-[8px] px-2 py-0.5 rounded-full font-black ${step.status === '승인' || step.status === '완료' ? 'bg-black text-white' : 'bg-amber-400 text-white'}`}>{step.status === 'pending' ? '대기' : step.status}</span>
+                                    
+                                    {/* 🚀 [추가] 결재 의견 노출 영역 */}
+                                    {step.comment && (
+                                        <div className="flex gap-2 p-3 bg-slate-100/50 rounded-xl border border-slate-200 ml-2">
+                                            <MessageSquare size={12} className="text-slate-400 flex-shrink-0 mt-0.5" />
+                                            <p className="text-[11px] text-slate-600 leading-tight font-black">{step.comment}</p>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
+                        </div>
+                        <div className="pt-4 border-t border-dashed border-slate-200 font-black">
+                            <p className="text-[9px] uppercase mb-2 font-black text-blue-600 tracking-widest font-black">Official CC (참조)</p>
+                            <div className="text-[11px] font-black text-blue-900 bg-blue-50/50 p-3 rounded-xl leading-relaxed">
+                                {referrerHistory?.length > 0 ? referrerHistory.map(r => r.referrer?.full_name || r.referrer_name).join(', ') : '지정된 참조인 없음'}
+                            </div>
                         </div>
                     </div>
 

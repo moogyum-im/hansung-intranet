@@ -44,31 +44,58 @@ export default function WorkReportPage() {
         issues: '',
         nextPlan: '',
         hourlyTasks: timeSlots.reduce((acc, time) => ({ ...acc, [time]: '' }), {}),
-        galleryItems: [] // 기본 빈 배열
+        galleryItems: [] 
     });
     const [loading, setLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
 
-    // 🚀 [수정] 데이터 복구 시 방어 로직 강화
+    // 🚀 [추가] 부서별 직원 그룹화 및 정렬 로직 (재직자 대상)
+    const groupedEmployees = useMemo(() => {
+        const groups = allEmployees.reduce((acc, emp) => {
+            const dept = emp.department || '기타';
+            if (!acc[dept]) acc[dept] = [];
+            acc[dept].push(emp);
+            return acc;
+        }, {});
+
+        // 부서 정렬 우선순위 정의
+        const priority = {
+            '최고 경영진': 1,
+            '전략기획부': 2,
+            '공무부': 3,
+            '관리부': 4
+        };
+
+        return Object.keys(groups)
+            .sort((a, b) => {
+                const priorityA = priority[a] || 999;
+                const priorityB = priority[b] || 999;
+                if (priorityA !== priorityB) return priorityA - priorityB;
+                return a.localeCompare(b);
+            })
+            .reduce((acc, key) => {
+                acc[key] = groups[key];
+                return acc;
+            }, {});
+    }, [allEmployees]);
+
     useEffect(() => {
         const saved = localStorage.getItem('work_report_draft_backup');
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                // 갤러리 아이템이 배열인지 확인하고, 아니면 빈 배열로 초기화 (에러 원인 차단)
                 const safeFormData = {
                     ...parsed.formData,
                     galleryItems: Array.isArray(parsed.formData?.galleryItems) ? parsed.formData.galleryItems : []
                 };
-                
                 setFormData(prev => ({ ...prev, ...safeFormData }));
                 setApprovers(parsed.approvers || []);
                 setReferrers(parsed.referrers || []);
                 setAttachments(parsed.attachments || []);
                 setVisibleSections(parsed.visibleSections || visibleSections);
             } catch (e) { 
-                console.error("복구 실패 - 데이터를 초기화합니다.", e);
+                console.error("복구 실패", e);
                 localStorage.removeItem('work_report_draft_backup');
             }
         }
@@ -81,8 +108,13 @@ export default function WorkReportPage() {
 
     useEffect(() => {
         const fetchEmployees = async () => {
-            const { data } = await supabase.from('profiles').select('id, full_name, department, position');
-            setAllEmployees(data || []);
+            // 🚀 [수정] 퇴사자 제외 ('재직' 인원만)
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, full_name, department, position')
+                .eq('employment_status', '재직');
+            
+            if (data) setAllEmployees(data);
         };
         if (!employeeLoading && employee) { fetchEmployees(); }
     }, [employee, employeeLoading]);
@@ -155,10 +187,12 @@ export default function WorkReportPage() {
     }, []);
 
     const removeAttachment = (idx) => setAttachments(prev => prev.filter((_, i) => i !== idx));
+
     const addApprover = () => setApprovers([...approvers, { id: '' }]);
     const handleApproverChange = (index, id) => {
         const newApprovers = [...approvers];
-        newApprovers[index].id = id;
+        const emp = allEmployees.find(e => e.id === id);
+        newApprovers[index] = { id, full_name: emp?.full_name || '', position: emp?.position || '' };
         setApprovers(newApprovers);
     };
     const removeApprover = (index) => setApprovers(approvers.filter((_, i) => i !== index));
@@ -166,7 +200,8 @@ export default function WorkReportPage() {
     const addReferrer = () => setReferrers([...referrers, { id: '' }]);
     const handleReferrerChange = (index, id) => {
         const newReferrers = [...referrers];
-        newReferrers[index].id = id;
+        const emp = allEmployees.find(e => e.id === id);
+        newReferrers[index] = { id, full_name: emp?.full_name || '', position: emp?.position || '' };
         setReferrers(newReferrers);
     };
     const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
@@ -188,14 +223,8 @@ export default function WorkReportPage() {
                     requesterPosition: employee.position,
                 }),
                 document_type: 'work_report',
-                approver_ids: approvers.map(app => {
-                    const emp = allEmployees.find(e => e.id === app.id);
-                    return { id: app.id, full_name: emp?.full_name, position: emp?.position };
-                }),
-                referrer_ids: referrers.filter(r => r.id).map(ref => {
-                    const emp = allEmployees.find(e => e.id === ref.id);
-                    return { id: ref.id, full_name: emp?.full_name, position: emp?.position, department: emp?.department };
-                }),
+                approver_ids: approvers.map(app => ({ id: app.id, full_name: app.full_name, position: app.position })),
+                referrer_ids: referrers.filter(r => r.id).map(ref => ({ id: ref.id, full_name: ref.full_name, position: ref.position })),
                 attachments: attachments,
                 requester_id: employee.id,
                 requester_name: employee.full_name,
@@ -227,7 +256,7 @@ export default function WorkReportPage() {
                 </div>
             )}
 
-            <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2">
+            <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
                 <div className="flex items-center gap-4">
                     <button onClick={() => router.back()} className="text-black hover:bg-white/50 p-2 rounded-full transition-all"><ArrowLeft size={24}/></button>
                     <div className="flex items-center gap-2 text-slate-400">
@@ -235,8 +264,8 @@ export default function WorkReportPage() {
                         <span className="text-[10px] uppercase tracking-widest font-black text-black">HANSUNG ERP DOCUMENT SYSTEM</span>
                     </div>
                 </div>
-                <button onClick={handleSubmit} disabled={loading || isUploading} className="px-6 py-2 bg-black text-white border border-black text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : <><CheckCircle size={14} className="inline mr-2" /> 업무보고서 상신</>}
+                <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : <><CheckCircle size={14} /> 업무보고서 상신</>}
                 </button>
             </div>
 
@@ -373,7 +402,6 @@ export default function WorkReportPage() {
                             </section>
                         )}
 
-                        {/* 🚀 향후 계획 섹션 반영 */}
                         {visibleSections.nextPlan && (
                             <section>
                                 <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black">06. 향후 업무 추진 계획</h2>
@@ -384,16 +412,6 @@ export default function WorkReportPage() {
                         <section className="border-t border-black/5 pt-6 font-black">
                             <h2 className="text-[10px] mb-4 uppercase tracking-tighter font-black">07. 증빙 자료 첨부</h2>
                             <FileUploadDnd onUploadComplete={handleUploadComplete} onUploadingStateChange={setIsUploading} />
-                            {attachments.length > 0 && (
-                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 no-print">
-                                    {attachments.map((file, idx) => (
-                                        <div key={idx} className="flex items-center justify-between bg-slate-50 p-3 border border-black/10 rounded-lg group font-black">
-                                            <div className="flex items-center gap-2 text-[10px] font-black overflow-hidden text-black"><ImageIcon size={14} className="text-blue-600 flex-shrink-0" /><span className="truncate font-black">{file.name}</span></div>
-                                            <X size={16} className="cursor-pointer text-slate-300 hover:text-red-500 transition-colors" onClick={() => removeAttachment(idx)} />
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
                         </section>
 
                         <div className="pt-10 text-center font-black">
@@ -403,31 +421,43 @@ export default function WorkReportPage() {
                 </div>
 
                 <aside className="lg:col-span-4 space-y-4 no-print font-black">
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black font-black">
-                        <div className="flex items-center justify-between mb-4 border-b pb-2 font-black font-black font-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black font-black font-black font-black"><Users size={14}/> 결재선 지정</h2><button type="button" onClick={addApprover} className="text-[10px] border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-all font-black font-black">+ 추가</button></div>
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black">
+                        <div className="flex items-center justify-between mb-4 border-b pb-2 font-black text-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black"><Users size={14}/> 결재선 지정</h2><button type="button" onClick={addApprover} className="text-[10px] border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-all font-black">+ 추가</button></div>
                         <div className="space-y-2">
                             {approvers.map((app, i) => (
-                                <div key={i} className="flex items-center gap-2 font-black font-black font-black"><span className="text-[10px] text-slate-400 w-4 font-black font-black">{i+1}</span>
-                                    <select value={app.id} onChange={(e) => handleApproverChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-black font-black text-black font-black" required>
+                                <div key={i} className="flex items-center gap-2 font-black"><span className="text-[10px] text-slate-400 w-4 font-black">{i+1}</span>
+                                    <select value={app.id} onChange={(e) => handleApproverChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-black font-black text-black">
                                         <option value="">결재자 선택</option>
-                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>[{emp.department}] {emp.full_name} ({emp.position})</option>))}
+                                        {Object.entries(groupedEmployees).map(([dept, emps]) => (
+                                            <optgroup key={dept} label={dept}>
+                                                {emps.map(emp => (
+                                                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
                                     </select>
-                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black font-black font-black" onClick={() => removeApprover(i)} />
+                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black" onClick={() => removeApprover(i)} />
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black font-black font-black">
-                        <div className="flex items-center justify-between mb-4 border-b pb-2 text-blue-600 font-black font-black font-black font-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black text-black font-black font-black"><Users size={14}/> 참조인 지정</h2><button type="button" onClick={addReferrer} className="text-[10px] border border-blue-600 px-2 py-0.5 hover:bg-blue-600 hover:text-white transition-all font-black font-black font-black">+ 추가</button></div>
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black">
+                        <div className="flex items-center justify-between mb-4 border-b pb-2 text-blue-600 font-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black text-black"><Users size={14}/> 참조인 지정</h2><button type="button" onClick={addReferrer} className="text-[10px] border border-blue-600 px-2 py-0.5 hover:bg-blue-600 hover:text-white transition-all font-black">+ 추가</button></div>
                         <div className="space-y-2">
                             {referrers.map((ref, i) => (
-                                <div key={i} className="flex items-center gap-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
-                                    <select value={ref.id} onChange={(e) => handleReferrerChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-blue-600 font-black text-black font-black font-black">
+                                <div key={i} className="flex items-center gap-2 font-black">
+                                    <select value={ref.id} onChange={(e) => handleReferrerChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-blue-600 font-black text-black">
                                         <option value="">참조인 선택</option>
-                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>[{emp.department}] {emp.full_name} ({emp.position})</option>))}
+                                        {Object.entries(groupedEmployees).map(([dept, emps]) => (
+                                            <optgroup key={dept} label={dept}>
+                                                {emps.map(emp => (
+                                                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
                                     </select>
-                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black font-black font-black font-black font-black font-black" onClick={() => removeReferrer(i)} />
+                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black" onClick={() => removeReferrer(i)} />
                                 </div>
                             ))}
                         </div>

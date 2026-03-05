@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
-import { X, Plus, Loader2, Database, CheckCircle, FileIcon, ChevronRight, Users, Calendar, Wallet, ImageIcon, CreditCard, Hash } from 'lucide-react';
+import { X, Plus, Loader2, Database, CheckCircle, FileIcon, ChevronRight, Users, Calendar, Wallet, ImageIcon, CreditCard, Hash, Edit3 } from 'lucide-react';
 
 export default function ExpenseReportPage() {
     const { employee, loading: employeeLoading } = useEmployee();
@@ -15,21 +15,51 @@ export default function ExpenseReportPage() {
     const [allEmployees, setAllEmployees] = useState([]);
     const [formData, setFormData] = useState({
         title: '지출결의서',
+        subject: '', 
         expenseDate: new Date().toISOString().split('T')[0],
         accountType: '교통비',
         paymentMethod: '법인카드',
         amount: '',
         description: '',
         cardNumberLastFour: '',
-        document_number: '', // [추가] 문서 번호 필드
+        document_number: '', 
     });
     const [approvers, setApprovers] = useState([]);
-    const [referrers, setReferrers] = useState([]); // [복구] 참조인 상태
+    const [referrers, setReferrers] = useState([]); 
     const [loading, setLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false); 
     const [attachments, setAttachments] = useState([]);
 
-    // 1. [보존] 로컬 스토리지 데이터 복구
+    // 🚀 부서별 그룹화 및 지정된 순서로 정렬 로직
+    const groupedEmployees = useMemo(() => {
+        const groups = allEmployees.reduce((acc, emp) => {
+            const dept = emp.department || '기타';
+            if (!acc[dept]) acc[dept] = [];
+            acc[dept].push(emp);
+            return acc;
+        }, {});
+
+        // 부서 정렬 우선순위 정의
+        const priority = {
+            '최고 경영진': 1,
+            '전략기획부': 4,
+            '공무부': 2,
+            '관리부': 3
+        };
+
+        return Object.keys(groups)
+            .sort((a, b) => {
+                const priorityA = priority[a] || 999;
+                const priorityB = priority[b] || 999;
+                if (priorityA !== priorityB) return priorityA - priorityB;
+                return a.localeCompare(b); // 나머지는 가나다순
+            })
+            .reduce((acc, key) => {
+                acc[key] = groups[key];
+                return acc;
+            }, {});
+    }, [allEmployees]);
+
     useEffect(() => {
         const saved = localStorage.getItem('expense_write_backup');
         if (saved) {
@@ -43,7 +73,6 @@ export default function ExpenseReportPage() {
         }
     }, []);
 
-    // 2. [저장] 상태 변경 시마다 실시간 백업
     useEffect(() => {
         const dataToSave = { attachments, formData, approvers, referrers };
         localStorage.setItem('expense_write_backup', JSON.stringify(dataToSave));
@@ -51,7 +80,11 @@ export default function ExpenseReportPage() {
 
     useEffect(() => {
         const fetchEmployees = async () => {
-            const { data } = await supabase.from('profiles').select('id, full_name, department, position');
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, full_name, department, position')
+                .eq('employment_status', '재직'); 
+            
             if (data) setAllEmployees(data);
         };
         if (!employeeLoading && employee) {
@@ -102,7 +135,6 @@ export default function ExpenseReportPage() {
     };
     const removeApprover = (index) => setApprovers(approvers.filter((_, i) => i !== index));
 
-    // [복구] 참조인 추가/변경/삭제 로직
     const addReferrer = () => setReferrers([...referrers, { id: '' }]);
     const handleReferrerChange = (index, id) => {
         const newReferrers = [...referrers];
@@ -114,10 +146,8 @@ export default function ExpenseReportPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        if (formData.paymentMethod === '법인카드' && !formData.cardNumberLastFour) {
-            return toast.error("법인카드 번호(뒷 4자리)를 입력해주세요.");
-        }
+        if (!formData.subject.trim()) return toast.error("지출 제목을 입력해주세요.");
+        if (formData.paymentMethod === '법인카드' && !formData.cardNumberLastFour) return toast.error("법인카드 번호(뒷 4자리)를 입력해주세요.");
 
         let finalAttachments = attachments;
         if (finalAttachments.length === 0) {
@@ -132,8 +162,8 @@ export default function ExpenseReportPage() {
         setLoading(true);
         try {
             const submissionData = {
-                title: `지출결의서 (${employee?.full_name})`,
-                document_number: formData.document_number, // 문서번호 전송
+                title: `지출결의서-${formData.subject}`,
+                document_number: formData.document_number, 
                 content: JSON.stringify({
                     ...formData,
                     requesterName: employee.full_name,
@@ -157,22 +187,17 @@ export default function ExpenseReportPage() {
             });
 
             if (!response.ok) throw new Error('상신 실패');
-            
             localStorage.removeItem('expense_write_backup');
             localStorage.removeItem('expense_temp_attachments');
             toast.success("지출결의서가 상신되었습니다.");
             router.push('/mypage');
-        } catch (error) {
-            toast.error(error.message);
-        } finally {
-            setLoading(false);
-        }
+        } catch (error) { toast.error(error.message); } finally { setLoading(false); }
     };
 
-    if (employeeLoading) return <div className="p-10 text-black font-black text-xs h-screen flex items-center justify-center font-sans animate-pulse tracking-widest uppercase font-black">HANSUNG ERP SYNCING...</div>;
+    if (employeeLoading) return <div className="p-10 text-center text-black font-black text-xs h-screen flex items-center justify-center font-sans animate-pulse tracking-widest uppercase">HANSUNG ERP SYNCING...</div>;
 
     return (
-        <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none font-black">
+        <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none">
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
                 <div className="flex items-center gap-2 text-slate-400 font-black">
                     <Database size={14} className="text-black" />
@@ -193,23 +218,30 @@ export default function ExpenseReportPage() {
                     <div className="space-y-10 font-black">
                         <table className="w-full border-collapse border-t border-l border-black text-[11px] font-black">
                             <tbody>
+                                <tr className="border-b border-r border-black divide-x divide-black">
+                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase">지출 제목</th>
+                                    <td colSpan="3" className="p-0">
+                                        <input 
+                                            type="text" 
+                                            name="subject" 
+                                            value={formData.subject} 
+                                            onChange={handleChange} 
+                                            placeholder="지출 제목을 입력하십시오 (예: 2월 사무비품 구입)" 
+                                            className="w-full h-11 px-3 outline-none bg-transparent font-black text-sm tracking-tighter font-black"
+                                            required
+                                        />
+                                    </td>
+                                </tr>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black text-black">
-                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase">기안부서</th>
-                                    <td className="p-3 font-black text-black">{employee?.department}</td>
-                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase">기안자</th>
-                                    <td className="p-3 font-black text-black">{employee?.full_name} {employee?.position}</td>
+                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black">기안부서</th>
+                                    <td className="p-3 font-black text-black w-1/2">{employee?.department}</td>
+                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black">기안자</th>
+                                    <td className="p-3 font-black text-black w-1/2">{employee?.full_name} {employee?.position}</td>
                                 </tr>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black text-black">
                                     <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter">문서번호</th>
                                     <td className="p-3">
-                                        <input 
-                                            type="text" 
-                                            name="document_number" 
-                                            value={formData.document_number} 
-                                            onChange={handleChange} 
-                                            placeholder="문서번호 입력" 
-                                            className="w-full outline-none bg-transparent font-black font-mono" 
-                                        />
+                                        <input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="문서번호 입력" className="w-full outline-none bg-transparent font-black font-mono font-black" />
                                     </td>
                                     <th className="bg-slate-50 p-3 text-left border-black font-black uppercase">기안일자</th>
                                     <td className="p-3 font-mono font-black text-black">{new Date().toLocaleDateString('ko-KR')}</td>
@@ -229,7 +261,7 @@ export default function ExpenseReportPage() {
                                     </tr>
                                     <tr className="border-b border-r border-black divide-x divide-black font-black">
                                         <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black">계정과목</th>
-                                        <td className="p-3 font-black"><select name="accountType" value={formData.accountType} onChange={handleChange} className="w-full outline-none bg-transparent font-black text-black"><option>교통비</option><option>식비</option><option>비품구매</option><option>접대비</option><option>기타</option></select></td>
+                                        <td className="p-3 font-black"><select name="accountType" value={formData.accountType} onChange={handleChange} className="w-full outline-none bg-transparent font-black text-black font-black"><option>교통비</option><option>식비</option><option>비품구매</option><option>접대비</option><option>기타</option></select></td>
                                         <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black">결제수단</th>
                                         <td className="p-3 font-black">
                                             <div className="flex flex-col gap-2 font-black">
@@ -264,8 +296,8 @@ export default function ExpenseReportPage() {
                             <textarea name="description" value={formData.description} onChange={handleChange} className="w-full border border-black p-6 text-[12px] leading-relaxed min-h-[250px] outline-none focus:bg-slate-50 transition-all font-black text-black" placeholder="상세 사용 내역 기술" required />
                         </section>
 
-                        <section className="font-black border-t border-black/5 pt-6 font-black font-black">
-                            <h2 className="text-[10px] mb-4 uppercase tracking-tighter font-black font-black font-black">03. 증빙 자료 첨부 (EVIDENCE)</h2>
+                        <section className="font-black border-t border-black/5 pt-6 font-black">
+                            <h2 className="text-[10px] mb-4 uppercase tracking-tighter font-black font-black">03. 증빙 자료 첨부 (EVIDENCE)</h2>
                             <FileUploadDnd onUploadComplete={handleUploadComplete} onUploadingStateChange={setIsUploading} />
                             
                             {attachments.length > 0 && (
@@ -280,7 +312,7 @@ export default function ExpenseReportPage() {
                             )}
                         </section>
 
-                        <div className="pt-16 text-center space-y-8 font-black font-black">
+                        <div className="pt-16 text-center space-y-8 font-black">
                             <p className="text-[14px] font-black underline underline-offset-4 decoration-1 font-black text-black">{new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'})}</p>
                             <p className="text-xl font-black uppercase tracking-widest font-black text-black">기안자: {employee?.full_name} (인)</p>
                         </div>
@@ -288,14 +320,21 @@ export default function ExpenseReportPage() {
                 </div>
 
                 <aside className="lg:col-span-4 space-y-4 no-print font-black">
-                    {/* 결재선 지정 */}
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black font-black">
-                        <div className="flex items-center justify-between mb-4 border-b pb-2 font-black text-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black font-black font-black"><Users size={14}/> 결재선 지정</h2><button type="button" onClick={addApprover} className="text-[10px] border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-all font-black">+ 추가</button></div>
+                    {/* 결재선 지정 (부서 정렬 적용) */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black">
+                        <div className="flex items-center justify-between mb-4 border-b pb-2 font-black text-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black"><Users size={14}/> 결재선 지정</h2><button type="button" onClick={addApprover} className="text-[10px] border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-all font-black">+ 추가</button></div>
                         <div className="space-y-2 font-black">
                             {approvers.map((app, i) => (
-                                <div key={i} className="flex items-center gap-2 font-black font-black"><span className="text-[10px] text-slate-400 w-4 font-black">{i+1}</span>
-                                    <select value={app.id} onChange={(e) => handleApproverChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-black font-black text-black font-black"><option value="">결재자 선택</option>
-                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>[{emp.department}] {emp.full_name}</option>))}
+                                <div key={i} className="flex items-center gap-2 font-black"><span className="text-[10px] text-slate-400 w-4 font-black">{i+1}</span>
+                                    <select value={app.id} onChange={(e) => handleApproverChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-black font-black text-black">
+                                        <option value="">결재자 선택</option>
+                                        {Object.entries(groupedEmployees).map(([dept, emps]) => (
+                                            <optgroup key={dept} label={dept}>
+                                                {emps.map(emp => (
+                                                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
                                     </select>
                                     <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black" onClick={() => removeApprover(i)} />
                                 </div>
@@ -303,16 +342,23 @@ export default function ExpenseReportPage() {
                         </div>
                     </div>
 
-                    {/* [복구] 참조인 지정 */}
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black font-black">
-                        <div className="flex items-center justify-between mb-4 border-b pb-2 font-black text-blue-600"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black font-black font-black text-black font-black font-black"><Users size={14}/> 참조인 지정</h2><button type="button" onClick={addReferrer} className="text-[10px] border border-blue-600 px-2 py-0.5 hover:bg-blue-600 hover:text-white transition-all font-black">+ 추가</button></div>
+                    {/* 참조인 지정 (부서 정렬 적용) */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black">
+                        <div className="flex items-center justify-between mb-4 border-b pb-2 font-black text-blue-600 font-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black text-black"><Users size={14}/> 참조인 지정</h2><button type="button" onClick={addReferrer} className="text-[10px] border border-blue-600 px-2 py-0.5 hover:bg-blue-600 hover:text-white transition-all font-black">+ 추가</button></div>
                         <div className="space-y-2 font-black">
                             {referrers.map((ref, i) => (
-                                <div key={i} className="flex items-center gap-2 font-black font-black">
-                                    <select value={ref.id} onChange={(e) => handleReferrerChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-blue-600 font-black text-black font-black font-black"><option value="">참조인 선택</option>
-                                        {allEmployees.map(emp => (<option key={emp.id} value={emp.id}>[{emp.department}] {emp.full_name}</option>))}
+                                <div key={i} className="flex items-center gap-2 font-black">
+                                    <select value={ref.id} onChange={(e) => handleReferrerChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-blue-600 font-black text-black">
+                                        <option value="">참조인 선택</option>
+                                        {Object.entries(groupedEmployees).map(([dept, emps]) => (
+                                            <optgroup key={dept} label={dept}>
+                                                {emps.map(emp => (
+                                                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
                                     </select>
-                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black font-black" onClick={() => removeReferrer(i)} />
+                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black" onClick={() => removeReferrer(i)} />
                                 </div>
                             ))}
                         </div>
