@@ -188,6 +188,13 @@ export default function DailyWorkPage() {
         type === 'today' ? setTodayPhotos(prev => { const n = [...prev]; n[idx] = newPhoto; return n; }) : setTomorrowPhotos(prev => { const n = [...prev]; n[idx] = newPhoto; return n; });
     };
 
+    // 🚀 [추가] 사진 대지 행 삭제 함수
+    const handleRemovePhotoRow = (idx) => {
+        if (!confirm("해당 줄의 사진과 기록을 삭제하시겠습니까?")) return;
+        setTodayPhotos(prev => prev.filter((_, i) => i !== idx));
+        setTomorrowPhotos(prev => prev.filter((_, i) => i !== idx));
+    };
+
     useEffect(() => {
         if (!formData || view === 'detail') return;
         const getSum = (key) => (formData[key] || []).reduce((acc, cur) => acc + parseNumber(cur.total), 0);
@@ -422,7 +429,17 @@ export default function DailyWorkPage() {
                             <h4 className="text-lg font-black flex items-center gap-3 font-sans font-black italic-none rounded-none"><ImageIcon size={24} className="text-slate-900"/> 시공 사진 대지</h4>
                             <div className="grid grid-cols-4 gap-4 font-black font-sans rounded-none">
                                 {Array.from({ length: maxPhotoRows }).map((_, idx) => (
-                                    <div key={idx} className="grid grid-cols-2 gap-2 h-[260px] bg-white rounded-none">
+                                    <div key={idx} className="grid grid-cols-2 gap-2 h-[260px] bg-white rounded-none relative group">
+                                        {/* 🚀 행 삭제 버튼 추가 */}
+                                        {!isReadOnly && (
+                                            <button 
+                                                onClick={() => handleRemovePhotoRow(idx)}
+                                                className="absolute -top-2 -right-2 bg-red-600 text-white p-1 rounded-full shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                                                title="행 삭제"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
                                         {['tomorrow', 'today'].map(type => {
                                             const photo = (type === 'today' ? todayPhotos : tomorrowPhotos)[idx];
                                             const imgSrc = photo?.preview || photo?.url;
