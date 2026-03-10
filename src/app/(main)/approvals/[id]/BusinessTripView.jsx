@@ -22,6 +22,7 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
     const isReferrer = referrerHistory?.some(ref => ref.referrer_id === employee?.id || ref.referrer?.id === employee?.id);
     const isMyTurn = employee && currentStep && currentStep.approver?.id === employee.id && currentStep.status === '대기';
 
+    // 🚀 안전한 날짜 포맷팅 함수
     const formatDateShort = (dateString) => {
         if (!dateString) return "";
         const date = new Date(dateString);
@@ -132,57 +133,73 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                 }
             `}} />
             
-            <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
-                
-                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-black text-white hover:bg-slate-800 text-[11px] transition-all font-black shadow-lg">
+            <div className="w-full max-w-[1100px] mb-4 flex justify-end items-center no-print px-2 font-black">
+                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-black text-white hover:bg-slate-800 text-[11px] transition-all font-black shadow-lg font-black font-black">
                     <Printer size={14} /> 인쇄 및 PDF 저장
                 </button>
             </div>
 
-            <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">
-                <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative print-container text-black font-black">
-                    <div className="flex justify-between items-start mb-10 border-b-4 border-black pb-8 font-black">
-                        <div className="space-y-2">
-                            {/* 🚀 영문 문구 삭제 및 제목 간격 조정 */}
-                            <h1 className="text-4xl font-black tracking-tighter uppercase font-black">출 장 신 청 서</h1>
-                            <div className="flex flex-col text-[11px] mt-6 space-y-1 font-black">
+            <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black text-black font-black font-black">
+                <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative print-container text-black font-black font-black font-black">
+                    <div className="flex justify-between items-start mb-10 border-b-4 border-black pb-8 font-black font-black font-black font-black">
+                        <div className="space-y-2 font-black">
+                            <h1 className="text-4xl font-black tracking-tighter uppercase font-black">출 장 신 신청서</h1>
+                            <div className="flex flex-col text-[10px] space-y-1 font-black">
                                 <span>문서번호 : {doc.document_number || '관리부 추후 부여'}</span>
                                 <span>작성일자 : {doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR') : '-'}</span>
                             </div>
                         </div>
 
-                        <div className="flex font-black">
-                            <table className="approval-table border-collapse border border-black text-[11px] font-black">
+                        {/* 🚀 결재 스탬프 영역: 상태에 따른 이름 상시 노출 및 반려 날짜 적용 */}
+                        <div className="flex font-black font-black">
+                            <table className="approval-table border-collapse border border-black text-[11px] font-black font-black">
                                 <tbody>
                                     <tr className="font-black">
                                         <th rowSpan="3" className="w-8 bg-slate-50 border border-black p-2 font-black text-center leading-tight">결<br/>재</th>
                                         <th className="w-16 h-8 bg-slate-50 border border-black p-1 text-center font-black">기안</th>
                                         {approvalHistory?.map((step) => (
-                                            <th key={step.id} className="w-24 h-8 bg-slate-50 border border-black p-1 text-center font-black">
-                                                {step.approver?.position || '결재'}
+                                            <th key={step.id} className="w-24 h-8 bg-slate-50 border border-black p-1 text-center font-black font-black">
+                                                {step.approver?.position || '미지정'}
                                             </th>
                                         ))}
                                     </tr>
                                     <tr className="h-20 font-black">
+                                        {/* 기안자 (완료 상태) */}
                                         <td className="border border-black p-1 text-center relative align-middle font-black">
-                                            <div className="text-rose-600 font-black border-2 border-rose-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto opacity-70 rotate-[-15deg] text-[9px] leading-tight">
+                                            <div className="text-rose-600 font-black border-2 border-rose-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto opacity-70 rotate-[-15deg] text-[9px] leading-tight font-black">
                                                 서명완료<br/>{formatDateShort(doc.created_at)}
                                             </div>
-                                            <div className="mt-1 font-black text-[9px]">{doc.requester_name}</div>
+                                            <div className="mt-1 font-black text-[9px] font-black">{doc.requester_name}</div>
                                         </td>
+                                        {/* 결재자 리스트 */}
                                         {approvalHistory?.map((step) => (
                                             <td key={step.id} className="border border-black p-1 text-center relative align-middle font-black">
                                                 {step.status === '승인' || step.status === '완료' ? (
                                                     <>
-                                                        <div className="text-rose-600 font-black border-2 border-rose-600 rounded-full w-14 h-14 flex items-center justify-center mx-auto rotate-[-15deg] text-[10px] leading-tight">
+                                                        <div className="text-rose-600 font-black border-2 border-rose-600 rounded-full w-14 h-14 flex items-center justify-center mx-auto rotate-[-15deg] text-[10px] leading-tight font-black font-black">
                                                             서명완료<br/>{formatDateShort(step.approved_at)}
                                                         </div>
-                                                        <div className="mt-1 font-black text-[10px]">{step.approver?.full_name}</div>
+                                                        <div className="mt-1 font-black text-[10px] font-black font-black">{step.approver?.full_name}</div>
                                                     </>
                                                 ) : step.status === '반려' ? (
-                                                    <span className="text-red-500 font-black text-lg font-black">반려</span>
+                                                    <div className="flex flex-col items-center">
+                                                        {/* 🚀 반려 시 반려된 날짜 노출 */}
+                                                        <div className="text-rose-500 font-black border-2 border-dashed border-rose-500 rounded-full w-14 h-14 flex items-center justify-center mx-auto rotate-[-15deg] text-[10px] leading-tight font-black uppercase">
+                                                            반려됨<br/>{formatDateShort(step.approved_at)}
+                                                        </div>
+                                                        <div className="mt-1 font-black text-[10px] text-black font-black">
+                                                            {step.approver?.full_name}
+                                                        </div>
+                                                    </div>
                                                 ) : (
-                                                    <span className="text-slate-200 font-black italic font-black">대기</span>
+                                                    <div className="flex flex-col items-center">
+                                                        <div className="text-slate-200 font-black border-2 border-dashed border-slate-100 rounded-full w-14 h-14 flex items-center justify-center mx-auto text-[9px] leading-tight uppercase italic font-black">
+                                                            대기중
+                                                        </div>
+                                                        <div className="mt-1 font-black text-[10px] text-black font-black font-black">
+                                                            {step.approver?.full_name || '미지정'}
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </td>
                                         ))}
@@ -214,68 +231,72 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                             <h2 className="text-[11px] uppercase font-black tracking-widest border-l-8 border-black pl-3 font-black">01. 출장 세부 계획</h2>
                             <table className="w-full border-collapse border border-black text-[12px] font-black font-black">
                                 <tbody>
-                                    <tr className="border-b border-black font-black">
+                                    <tr className="border-b border-black font-black font-black">
                                         <th className="bg-slate-50 p-5 w-32 text-left border-r border-black font-black">출장기간</th>
-                                        <td className="p-5 font-mono font-black">{formData.startDate} ~ {formData.endDate} ({formData.duration}일간)</td>
+                                        <td className="p-5 font-mono font-black font-black">{formData.startDate} ~ {formData.endDate} ({formData.duration}일간)</td>
                                     </tr>
                                     <tr className="border-b border-black font-black">
-                                        <th className="bg-slate-50 p-5 w-32 text-left border-r border-black font-black">행선지</th>
-                                        <td className="p-5 font-black">{formData.destination} (비상연락처: {formData.contact})</td>
+                                        <th className="bg-slate-50 p-5 w-32 text-left border-r border-black font-black font-black font-black font-black">행선지</th>
+                                        <td className="p-5 font-black font-black font-black font-black font-black">{formData.destination} (비상연락처: {formData.contact})</td>
                                     </tr>
                                     <tr className="border-b border-black font-black">
-                                        <th className="bg-slate-50 p-5 w-32 text-left border-r border-black font-black">출장목적</th>
-                                        <td className="p-5 h-40 align-top whitespace-pre-wrap leading-relaxed font-black">{formData.purpose}</td>
+                                        <th className="bg-slate-50 p-5 w-32 text-left border-r border-black font-black font-black font-black font-black font-black">출장목적</th>
+                                        <td className="p-5 h-40 align-top whitespace-pre-wrap leading-relaxed font-black font-black font-black">{formData.purpose}</td>
                                     </tr>
-                                    <tr className="font-black">
-                                        <th className="bg-slate-50 p-5 w-32 text-left border-r border-black font-black">교통수단</th>
-                                        <td className="p-5 font-black">{formData.transportation} {formData.transportation === '차량' && ` (${formData.transportDetail}${formData.transportMemo ? `: ${formData.transportMemo}` : ''})`}</td>
+                                    <tr className="font-black font-black font-black">
+                                        <th className="bg-slate-50 p-5 w-32 text-left border-r border-black font-black font-black">교통수단</th>
+                                        <td className="p-5 font-black font-black">{formData.transportation} {formData.transportation === '차량' && ` (${formData.transportDetail}${formData.transportMemo ? `: ${formData.transportMemo}` : ''})`}</td>
                                     </tr>
                                 </tbody>
                             </table>
                         </section>
 
-                        <div className="py-24 text-center space-y-12 font-black">
+                        <div className="py-24 text-center space-y-12 font-black text-black">
                             <p className="text-[14px] font-black tracking-tight font-black">위와 같이 출장신청서를 제출하오니 승인하여 주시기 바랍니다.</p>
                             <div className="space-y-4 font-black">
-                                <p className="text-[18px] font-black underline underline-offset-8 decoration-2 font-mono font-black">
+                                <p className="text-[18px] font-black underline underline-offset-8 decoration-2 font-mono font-black font-black font-black">
                                     {doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'}) : '-'}
                                 </p>
-                                <p className="text-3xl font-black uppercase tracking-[0.5em] mt-10 font-black">신청인: {doc.requester_name}</p>
+                                <p className="text-3xl font-black uppercase tracking-[0.5em] mt-10 font-black font-black font-black font-black font-black">신청인: {doc.requester_name}</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <aside className="lg:col-span-4 space-y-5 no-print font-black">
+                <aside className="lg:col-span-4 space-y-5 no-print font-black font-black">
                     {isReferrer && (
-                        <div className="bg-white border-2 border-black p-6 shadow-sm font-black">
-                            <p className="text-[10px] text-slate-400 mb-3 font-black uppercase font-black">※ 관리자 전용: 문서번호 부여</p>
-                            <div className="flex gap-2 font-black">
-                                <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} className="flex-1 border-2 border-black px-4 py-2 text-[12px] outline-none font-black focus:bg-slate-50 font-black" placeholder="문서번호 입력" />
-                                <button onClick={handleUpdateDocNumber} className="bg-black text-white px-6 py-2 text-[11px] font-black hover:bg-slate-800 transition-all uppercase font-black">Apply</button>
+                        <div className="bg-white border border-black p-6 shadow-sm font-black font-black font-black font-black text-black">
+                            <p className="text-[10px] text-slate-400 mb-3 font-black uppercase font-black font-black font-black font-black">※ 관리자 전용: 문서번호 부여</p>
+                            <div className="flex gap-2 font-black font-black font-black font-black">
+                                <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} className="flex-1 border border-black px-4 py-2 text-[12px] outline-none font-black text-black focus:bg-slate-50 font-black" placeholder="문서번호 입력" />
+                                <button onClick={handleUpdateDocNumber} className="bg-black text-white px-6 py-2 text-[11px] font-black hover:bg-slate-800 transition-all font-black font-black font-black font-black font-black font-black font-black">Apply</button>
                             </div>
                         </div>
                     )}
 
-                    <div className="bg-white border-2 border-slate-200 rounded-3xl p-8 shadow-sm font-black">
-                        <div className="flex items-center gap-2 mb-6 border-b-2 border-slate-100 pb-4 font-black font-black">
-                            <Users size={20} /><h2 className="text-[13px] uppercase font-black tracking-widest font-black">결재 의견 현황</h2>
+                    <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm text-black font-black font-black font-black font-black">
+                        <div className="flex items-center gap-2 mb-6 border-b-2 border-slate-100 pb-4 font-black font-black font-black font-black font-black">
+                            <Users size={20} /><h2 className="text-[13px] uppercase font-black tracking-widest font-black font-black font-black font-black font-black">결재 의견 및 참조인</h2>
                         </div>
-                        <div className="space-y-4 font-black">
+                        <div className="space-y-4 font-black font-black font-black font-black">
                             {approvalHistory?.map((step) => step.comment && (
-                                <div key={step.id} className="flex gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 font-black font-black font-black">
+                                <div key={step.id} className="flex gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 font-black font-black font-black font-black font-black font-black font-black">
                                     <MessageSquare size={16} className="text-slate-400 flex-shrink-0 mt-1 font-black" />
                                     <div className="font-black">
-                                        <p className="text-[10px] text-slate-400 font-black mb-1">{step.approver?.full_name} {step.approver?.position}</p>
-                                        <p className="text-[12px] text-slate-700 leading-snug font-black">{step.comment}</p>
+                                        <p className="text-[10px] text-slate-400 font-black mb-1 font-black font-black font-black font-black font-black font-black font-black">{step.approver?.full_name} {step.approver?.position}</p>
+                                        <p className="text-[12px] text-slate-700 leading-snug font-black font-black font-black font-black font-black font-black font-black font-black">{step.comment}</p>
                                     </div>
                                 </div>
                             ))}
                             {referrerHistory?.length > 0 && (
-                                <div className="pt-4 border-t border-dashed border-slate-200 mt-4 font-black font-black">
-                                    <p className="text-[10px] uppercase mb-2 font-black text-blue-600 tracking-widest font-black">Official CC (참조)</p>
-                                    <div className="text-[11px] font-black text-blue-900 bg-blue-50/50 p-4 rounded-2xl leading-relaxed font-black">
-                                        {referrerHistory.map(r => r.referrer?.full_name || r.referrer_name).join(', ')}
+                                <div className="pt-4 border-t border-dashed border-slate-200 mt-4 font-black font-black font-black font-black font-black">
+                                    <p className="text-[10px] uppercase mb-2 font-black text-blue-600 tracking-widest font-black font-black font-black font-black font-black">참조인</p>
+                                    <div className="text-[11px] font-black text-blue-900 bg-blue-50/50 p-4 rounded-2xl leading-relaxed font-black font-black font-black font-black font-black">
+                                        {referrerHistory.map((r, i) => (
+                                            <span key={i} className="block mb-1 last:mb-0 font-black font-black font-black font-black">
+                                                [{r.referrer?.department || '소속미정'}] {r.referrer?.full_name || r.referrer_name} {r.referrer?.position || ''}
+                                            </span>
+                                        ))}
                                     </div>
                                 </div>
                             )}
@@ -283,46 +304,46 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                     </div>
 
                     {isMyTurn && (
-                        <div className="bg-slate-900 border-2 border-black rounded-3xl p-8 shadow-2xl text-white font-black font-black">
-                            <h3 className="text-[13px] uppercase mb-6 font-black tracking-widest text-slate-400 font-black">결재 처리 요청</h3>
-                            <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} className="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl p-5 text-[13px] font-black outline-none mb-6 h-32 focus:border-white transition-all text-white placeholder-slate-500 font-black" placeholder="결재 의견을 입력하십시오." />
-                            <div className="grid grid-cols-2 gap-4 font-black font-black">
-                                <button onClick={() => handleApprovalAction('승인')} className="bg-white text-black py-4 rounded-2xl text-[12px] font-black hover:bg-slate-200 transition-all flex items-center justify-center gap-2 shadow-lg font-black font-black"><CheckCircle size={18}/> 승인 처리</button>
-                                <button onClick={() => handleApprovalAction('반려')} className="bg-rose-600 text-white py-4 rounded-2xl text-[12px] font-black hover:bg-rose-700 transition-all flex items-center justify-center gap-2 shadow-lg font-black font-black font-black font-black font-black"><XCircle size={18}/> 반려 처리</button>
+                        <div className="bg-slate-900 border border-black rounded-3xl p-8 shadow-2xl text-white font-black font-black font-black font-black font-black font-black">
+                            <h3 className="text-[13px] uppercase mb-6 font-black tracking-widest text-slate-400 font-black font-black font-black font-black font-black">결재 처리 요청</h3>
+                            <textarea value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} className="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl p-5 text-[13px] font-black outline-none mb-6 h-32 focus:border-white transition-all text-white placeholder-slate-500 font-black font-black font-black font-black font-black" placeholder="결재 의견을 입력하십시오." />
+                            <div className="grid grid-cols-2 gap-4 font-black font-black font-black font-black font-black font-black font-black">
+                                <button onClick={() => handleApprovalAction('승인')} className="bg-white text-black py-4 rounded-2xl text-[12px] font-black hover:bg-slate-200 transition-all flex items-center justify-center gap-2 shadow-lg font-black font-black font-black font-black font-black"><CheckCircle size={18}/> 승인 처리</button>
+                                <button onClick={() => handleApprovalAction('반려')} className="bg-rose-600 text-white py-4 rounded-2xl text-[12px] font-black hover:bg-rose-700 transition-all flex items-center justify-center gap-2 shadow-lg font-black font-black font-black font-black font-black font-black"><XCircle size={18}/> 반려 처리</button>
                             </div>
                         </div>
                     )}
 
-                    <div className="bg-white border-2 border-slate-200 rounded-3xl p-8 shadow-sm font-black font-black font-black">
-                        <div className="flex items-center justify-between mb-6 border-b-2 border-slate-100 pb-4 font-black font-black">
-                            <h2 className="text-[13px] uppercase font-black tracking-widest flex items-center gap-2 font-black font-black"><Paperclip size={20} /> 첨부 증빙 서류</h2>
-                            <span className="text-[12px] text-slate-400 font-black">{attachmentSignedUrls.length}</span>
+                    <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm font-black font-black font-black font-black font-black">
+                        <div className="flex items-center justify-between mb-6 border-b-2 border-slate-100 pb-4 font-black font-black font-black font-black font-black font-black">
+                            <h2 className="text-[13px] uppercase font-black tracking-widest flex items-center gap-2 font-black font-black font-black font-black font-black font-black font-black"><Paperclip size={20} /> 첨부 증빙 서류</h2>
+                            <span className="text-[12px] text-slate-400 font-black font-black font-black font-black font-black font-black font-black">{attachmentSignedUrls.length}</span>
                         </div>
                         {attachmentSignedUrls.length > 0 ? (
-                            <div className="grid grid-cols-1 gap-3 font-black font-black">
+                            <div className="grid grid-cols-1 gap-3 font-black font-black font-black font-black font-black">
                                 {attachmentSignedUrls.map((file, i) => (
-                                    <div key={i} className="flex flex-col border-2 border-slate-50 rounded-2xl overflow-hidden bg-slate-50/50 shadow-sm font-black font-black font-black">
-                                        <div className="flex items-center justify-between p-4 bg-white border-b-2 border-slate-50 font-black">
-                                            <div className="flex items-center gap-3 flex-1 truncate font-black">
-                                                {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? <ImageIcon size={18} className="text-blue-500" /> : <FileText size={18} className="text-slate-400" />}
-                                                <span className="text-[12px] font-black truncate">{file.name}</span>
+                                    <div key={i} className="flex flex-col border border-slate-100 rounded-2xl overflow-hidden bg-slate-50 shadow-sm font-black font-black font-black font-black font-black">
+                                        <div className="flex items-center justify-between p-4 bg-white border-b border-slate-100 font-black font-black font-black font-black font-black">
+                                            <div className="flex items-center gap-3 flex-1 truncate font-black font-black font-black font-black font-black font-black">
+                                                {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? <ImageIcon size={18} className="text-blue-500 font-black font-black font-black" /> : <FileText size={18} className="text-slate-400 font-black font-black font-black font-black" />}
+                                                <span className="text-[12px] font-black truncate font-black font-black font-black font-black font-black font-black">{file.name}</span>
                                             </div>
-                                            <a href={file.url} download={file.name} target="_blank" rel="noreferrer" className="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-xl transition-colors shadow-sm font-black font-black">
+                                            <a href={file.url} download={file.name} target="_blank" rel="noreferrer" className="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-xl transition-colors shadow-sm font-black font-black font-black font-black font-black font-black">
                                                 <Download size={18} />
                                             </a>
                                         </div>
                                         {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
-                                            <div className="p-4 flex justify-center bg-slate-50 font-black font-black font-black font-black">
-                                                <img src={file.url} alt={file.name} className="max-w-full h-auto rounded-xl border-4 border-white shadow-md font-black font-black font-black" />
+                                            <div className="p-4 flex justify-center bg-slate-50 font-black font-black font-black font-black font-black font-black font-black">
+                                                <img src={file.url} alt={file.name} className="max-w-full h-auto rounded-xl border-4 border-white shadow-md font-black font-black font-black font-black font-black" />
                                             </div>
                                         )}
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="py-16 text-center border-2 border-dashed border-slate-100 rounded-3xl font-black font-black">
-                                <Paperclip size={32} className="mx-auto text-slate-200 mb-3 font-black font-black" />
-                                <p className="text-[12px] text-slate-300 font-black italic uppercase font-black font-black">No Attachments</p>
+                            <div className="py-16 text-center border-2 border-dashed border-slate-100 rounded-3xl font-black font-black font-black font-black font-black font-black font-black">
+                                <Paperclip size={32} className="mx-auto text-slate-200 mb-3 font-black font-black font-black font-black font-black font-black font-black font-black font-black" />
+                                <p className="text-[12px] text-slate-300 font-black italic uppercase font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">No Attachments</p>
                             </div>
                         )}
                     </div>

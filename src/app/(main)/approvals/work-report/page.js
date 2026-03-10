@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
 import 'react-quill/dist/quill.snow.css';
 import FileUploadDnd from '@/components/FileUploadDnd';
-import { X, Plus, Loader2, Database, CheckCircle, ChevronRight, Users, Calendar, Camera, Trash2, ArrowLeft, ImageIcon } from 'lucide-react';
+import { X, Plus, Loader2, Database, CheckCircle, ChevronRight, Users, Calendar, Camera, Trash2, ArrowLeft, ImageIcon, Info } from 'lucide-react';
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
@@ -50,7 +50,7 @@ export default function WorkReportPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
 
-    // 🚀 [추가] 부서별 직원 그룹화 및 정렬 로직 (재직자 대상)
+    // 🚀 부서별 직원 그룹화 및 정렬 로직 (재직자 대상)
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
             const dept = emp.department || '기타';
@@ -59,25 +59,16 @@ export default function WorkReportPage() {
             return acc;
         }, {});
 
-        // 부서 정렬 우선순위 정의
         const priority = {
             '최고 경영진': 1,
-            '전략기획부': 2,
-            '공무부': 3,
-            '관리부': 4
+            '전략기획부': 4,
+            '공무부': 2,
+            '관리부': 3
         };
 
         return Object.keys(groups)
-            .sort((a, b) => {
-                const priorityA = priority[a] || 999;
-                const priorityB = priority[b] || 999;
-                if (priorityA !== priorityB) return priorityA - priorityB;
-                return a.localeCompare(b);
-            })
-            .reduce((acc, key) => {
-                acc[key] = groups[key];
-                return acc;
-            }, {});
+            .sort((a, b) => (priority[a] || 999) - (priority[b] || 999) || a.localeCompare(b))
+            .reduce((acc, key) => { acc[key] = groups[key]; return acc; }, {});
     }, [allEmployees]);
 
     useEffect(() => {
@@ -108,11 +99,10 @@ export default function WorkReportPage() {
 
     useEffect(() => {
         const fetchEmployees = async () => {
-            // 🚀 [수정] 퇴사자 제외 ('재직' 인원만)
             const { data } = await supabase
                 .from('profiles')
                 .select('id, full_name, department, position')
-                .eq('employment_status', '재직');
+                .eq('employment_status', '재직'); // 🚀 퇴사자 제외
             
             if (data) setAllEmployees(data);
         };
@@ -153,7 +143,6 @@ export default function WorkReportPage() {
     };
 
     const handleDragOver = (e) => e.preventDefault();
-
     const handleVisibilityChange = (section) => setVisibleSections(prev => ({ ...prev, [section]: !prev[section] }));
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     const handleHourlyChange = (time, value) => setFormData(prev => ({ ...prev, hourlyTasks: { ...prev.hourlyTasks, [time]: value } }));
@@ -188,7 +177,11 @@ export default function WorkReportPage() {
 
     const removeAttachment = (idx) => setAttachments(prev => prev.filter((_, i) => i !== idx));
 
-    const addApprover = () => setApprovers([...approvers, { id: '' }]);
+    const addApprover = () => {
+        if (approvers.length >= 4) return toast.error("결재선은 최대 4명까지 가능합니다.");
+        setApprovers([...approvers, { id: '', full_name: '', position: '' }]);
+    };
+
     const handleApproverChange = (index, id) => {
         const newApprovers = [...approvers];
         const emp = allEmployees.find(e => e.id === id);
@@ -197,7 +190,7 @@ export default function WorkReportPage() {
     };
     const removeApprover = (index) => setApprovers(approvers.filter((_, i) => i !== index));
 
-    const addReferrer = () => setReferrers([...referrers, { id: '' }]);
+    const addReferrer = () => setReferrers([...referrers, { id: '', full_name: '', position: '' }]);
     const handleReferrerChange = (index, id) => {
         const newReferrers = [...referrers];
         const emp = allEmployees.find(e => e.id === id);
@@ -223,8 +216,8 @@ export default function WorkReportPage() {
                     requesterPosition: employee.position,
                 }),
                 document_type: 'work_report',
-                approver_ids: approvers.map(app => ({ id: app.id, full_name: app.full_name, position: app.position })),
-                referrer_ids: referrers.filter(r => r.id).map(ref => ({ id: ref.id, full_name: ref.full_name, position: ref.position })),
+                approver_ids: approvers,
+                referrer_ids: referrers.filter(r => r.id),
                 attachments: attachments,
                 requester_id: employee.id,
                 requester_name: employee.full_name,
@@ -240,84 +233,121 @@ export default function WorkReportPage() {
             if (!response.ok) throw new Error('상신 실패');
             
             localStorage.removeItem('work_report_draft_backup');
-            toast.success("업무보고서 상신 완료!");
+            toast.success("상신 완료");
             router.push('/mypage');
         } catch (error) { toast.error(error.message); } finally { setLoading(false); }
     };
 
+    const HelpTooltip = ({ text }) => (
+        <div className="group relative inline-block ml-1.5 align-middle">
+            <Info size={14} className="text-slate-300 hover:text-blue-500 cursor-help transition-colors" />
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 font-medium leading-relaxed font-black">
+                {text}
+                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-800 font-black"></div>
+            </div>
+        </div>
+    );
+
     if (employeeLoading) return <div className="p-10 text-black font-black text-xs h-screen flex items-center justify-center animate-pulse font-sans">HANSUNG ERP SYNCING...</div>;
 
     return (
-        <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none relative">
+        <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none relative font-black">
             {selectedImg && (
                 <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 cursor-zoom-out no-print" onClick={() => setSelectedImg(null)}>
                     <img src={selectedImg} alt="zoom" className="max-w-full max-h-full object-contain" />
-                    <button className="absolute top-10 right-10 text-white"><X size={40}/></button>
+                    <button className="absolute top-10 right-10 text-white font-black"><X size={40}/></button>
                 </div>
             )}
 
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className="text-black hover:bg-white/50 p-2 rounded-full transition-all"><ArrowLeft size={24}/></button>
-                    <div className="flex items-center gap-2 text-slate-400">
-                        <Database size={14} className="text-black" />
-                        <span className="text-[10px] uppercase tracking-widest font-black text-black">HANSUNG ERP DOCUMENT SYSTEM</span>
-                    </div>
+                    <button onClick={() => router.back()} className="text-black hover:bg-white/50 p-2 rounded-full transition-all font-black"><ArrowLeft size={24}/></button>
                 </div>
                 <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : <><CheckCircle size={14} /> 업무보고서 상신</>}
+                    {loading ? <Loader2 size={14} className="animate-spin font-black" /> : <><CheckCircle size={14} /> 업무보고서 상신</>}
                 </button>
             </div>
 
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">
-                <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative font-black font-sans">
-                    <header className="mb-10 border-b-4 border-black pb-6 font-black">
-                        <p className="text-[9px] tracking-widest text-slate-400 uppercase font-black">Hansung Landscape & Construction</p>
-                        <h1 className="text-3xl tracking-tighter uppercase font-black">업 무 보 고 서 작 성</h1>
-                    </header>
+                <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative font-black">
+                    
+                    {/* 🚀 상단 헤더 및 실시간 결재 박스 UI */}
+                    <div className="flex justify-between items-start mb-10 border-b-4 border-black pb-8 font-black font-black">
+                        <div className="space-y-4 font-black">
+                            <h1 className="text-4xl font-black tracking-tighter uppercase font-black font-black">업 무 보 고 서</h1>
+                            <div className="flex flex-col text-[11px] space-y-1 font-black">
+                                <span>기안부서 : {employee?.department}</span>
+                                <span>기안자 : {employee?.full_name} {employee?.position}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex font-black font-black">
+                            <table className="border-collapse border border-black text-[11px] font-black font-black">
+                                <tbody>
+                                    <tr className="font-black">
+                                        <th rowSpan="2" className="w-8 bg-slate-50 border border-black p-2 font-black text-center leading-tight">결<br/>재</th>
+                                        <th className="w-16 h-8 bg-slate-50 border border-black p-1 text-center font-black">기안</th>
+                                        {approvers.map((app, i) => (
+                                            <th key={i} className="w-24 h-8 bg-slate-50 border border-black p-1 text-center font-black font-black">
+                                                {app.position || '결재'}
+                                            </th>
+                                        ))}
+                                        {approvers.length < 1 && <th className="w-24 h-8 bg-slate-50 border border-dashed border-slate-200 font-black font-black"></th>}
+                                    </tr>
+                                    <tr className="h-20 font-black text-black">
+                                        <td className="border border-black p-1 text-center align-middle font-black font-black">
+                                            <div className="text-slate-300 font-black border-2 border-slate-200 rounded-full w-10 h-10 flex items-center justify-center mx-auto text-[7px] leading-tight uppercase font-black">Draft</div>
+                                            <div className="mt-1 font-black text-[9px] font-black">{employee?.full_name}</div>
+                                        </td>
+                                        {approvers.map((app, i) => (
+                                            <td key={i} className="border border-black p-1 text-center align-middle font-black font-black">
+                                                <div className="text-slate-100 font-black border-2 border-slate-100 border-dashed rounded-full w-14 h-14 flex items-center justify-center mx-auto text-[9px] leading-tight uppercase italic font-black font-black">Sign</div>
+                                                <div className="mt-1 font-black text-[10px] font-black">{app.full_name || '미지정'}</div>
+                                            </td>
+                                        ))}
+                                        {approvers.length < 1 && <td className="border border-dashed border-slate-100 font-black font-black"></td>}
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
                     <div className="mb-8 p-5 bg-slate-50 border border-black font-black">
-                        <p className="text-[10px] font-black text-slate-400 mb-4 uppercase">REPORT SECTION CONFIGURATION</p>
-                        <div className="flex flex-wrap gap-6">
+                        <p className="text-[10px] font-black text-slate-400 mb-4 uppercase font-black">REPORT SECTION CONFIGURATION</p>
+                        <div className="flex flex-wrap gap-6 font-black font-black">
                             {['hourlyTasks', 'todayPlan', 'achievements', 'gallery', 'issues', 'nextPlan'].map((id) => (
-                                <label key={id} className="flex items-center gap-2 cursor-pointer">
+                                <label key={id} className="flex items-center gap-2 cursor-pointer font-black font-black">
                                     <input type="checkbox" checked={visibleSections[id]} onChange={() => handleVisibilityChange(id)} className="accent-black" />
-                                    <span className="text-[11px] font-black uppercase">
-                                        {id === 'hourlyTasks' ? '시간별 내역' : id === 'todayPlan' ? '금일 계획' : id === 'achievements' ? '상세 실적' : id === 'gallery' ? '전/후 과정 비교' : id === 'issues' ? '특이사항' : '향후 계획'}
+                                    <span className="text-[11px] font-black uppercase font-black">
+                                        {id === 'hourlyTasks' ? '시간별 내역' : id === 'todayPlan' ? '금일 계획' : id === 'achievements' ? '상세 실적' : id === 'gallery' ? '전/후 비교' : id === 'issues' ? '특이사항' : '향후 계획'}
                                     </span>
                                 </label>
                             ))}
                         </div>
                     </div>
 
-                    <div className="space-y-10 text-black font-black font-sans">
-                        <table className="w-full border-collapse border-t border-l border-black text-[11px]">
+                    <div className="space-y-10 text-black font-black">
+                        <table className="w-full border-collapse border-t border-l border-black text-[11px] font-black font-black">
                             <tbody>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black">
-                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase">기안부서</th>
-                                    <td className="p-3">{employee?.department}</td>
-                                    <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase">기안자</th>
-                                    <td className="p-3">{employee?.full_name} {employee?.position}</td>
-                                </tr>
-                                <tr className="border-b border-r border-black divide-x divide-black font-black">
-                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase">보고유형</th>
-                                    <td className="p-3">
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black font-black">보고유형 <HelpTooltip text="보고서의 성격(일일/주간/월간)을 선택하십시오." /></th>
+                                    <td className="p-3 font-black">
                                         <select name="reportType" value={formData.reportType} onChange={handleChange} className="w-full bg-transparent outline-none font-black"><option>일일보고</option><option>주간보고</option><option>월간보고</option><option>기타</option></select>
                                     </td>
-                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase">보고일자</th>
-                                    <td className="p-3 font-mono"><input type="date" name="reportDate" value={formData.reportDate} onChange={handleChange} className="w-full bg-transparent outline-none font-black" /></td>
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black font-black">보고일자</th>
+                                    <td className="p-3 font-mono font-black font-black"><input type="date" name="reportDate" value={formData.reportDate} onChange={handleChange} className="w-full bg-transparent outline-none font-black" /></td>
                                 </tr>
                             </tbody>
                         </table>
 
                         {visibleSections.hourlyTasks && (
-                            <section>
-                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black">01. 시간별 주요 업무 내역</h2>
-                                <div className="border border-black">
+                            <section className="font-black font-black font-black">
+                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black">01. 시간별 주요 업무 내역 <HelpTooltip text="시간대별로 진행한 업무의 핵심 내용을 기재하십시오." /></h2>
+                                <div className="border border-black font-black">
                                     {timeSlots.map(time => (
-                                        <div key={time} className="flex border-b border-black last:border-0 divide-x divide-black font-black">
+                                        <div key={time} className="flex border-b border-black last:border-0 divide-x divide-black font-black font-black">
                                             <div className="bg-slate-50 w-32 p-2 text-center text-[10px] font-mono font-black">{time}</div>
-                                            <input type="text" value={formData.hourlyTasks[time]} onChange={(e) => handleHourlyChange(time, e.target.value)} className="flex-1 px-4 py-2 outline-none text-[11px] font-black bg-transparent" placeholder="업무 내용을 입력하십시오." />
+                                            <input type="text" value={formData.hourlyTasks[time]} onChange={(e) => handleHourlyChange(time, e.target.value)} className="flex-1 px-4 py-2 outline-none text-[11px] font-black bg-transparent font-black font-black" placeholder="업무 내용 입력" />
                                         </div>
                                     ))}
                                 </div>
@@ -325,139 +355,134 @@ export default function WorkReportPage() {
                         )}
 
                         {visibleSections.todayPlan && (
-                            <section>
-                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black">02. 금일 주요 업무 계획</h2>
-                                <textarea name="todayPlan" value={formData.todayPlan} onChange={handleChange} className="w-full border border-black p-5 text-[12px] leading-relaxed min-h-[100px] outline-none font-black bg-transparent" placeholder="금일 진행 예정인 업무를 입력하십시오." />
+                            <section className="font-black font-black">
+                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black">02. 금일 주요 업무 계획</h2>
+                                <textarea name="todayPlan" value={formData.todayPlan} onChange={handleChange} className="w-full border border-black p-5 text-[12px] leading-relaxed min-h-[100px] outline-none font-black bg-transparent font-black font-black" placeholder="금일 주요 추진 업무 계획" />
                             </section>
                         )}
 
                         {visibleSections.achievements && (
-                            <section>
-                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black">03. 상세 업무 진행 실적</h2>
-                                <div className="border border-black">
-                                    <ReactQuill theme="snow" value={formData.achievements} onChange={handleQuillChange} className="h-64 mb-10 font-black font-sans" />
+                            <section className="font-black font-black font-black font-black">
+                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black">03. 상세 업무 진행 실적 <HelpTooltip text="수치, 결과물 등 구체적인 업무 성과를 기술하십시오." /></h2>
+                                <div className="border border-black font-black font-black font-black font-black">
+                                    <ReactQuill theme="snow" value={formData.achievements} onChange={handleQuillChange} className="h-64 mb-10 font-black font-black font-black" />
                                 </div>
                             </section>
                         )}
 
                         {visibleSections.gallery && (
-                            <section>
-                                <div className="flex justify-between items-center mb-3">
-                                    <h2 className="text-[10px] uppercase tracking-tighter flex items-center gap-2 font-black"><Camera size={14} /> 04. 전/후 과정 비교</h2>
-                                    <button type="button" onClick={addGalleryItem} className="text-[10px] bg-black text-white px-4 py-1.5 rounded-sm flex items-center gap-2 hover:bg-slate-800 transition-all font-black"><Plus size={14} /> 비교 행 추가</button>
+                            <section className="font-black font-black">
+                                <div className="flex justify-between items-center mb-3 font-black">
+                                    <h2 className="text-[10px] uppercase tracking-tighter flex items-center gap-2 font-black font-black font-black"><Camera size={14} /> 04. 전/후 과정 비교 <HelpTooltip text="현장의 변화 과정이나 조치 전후를 사진으로 기록하십시오." /></h2>
+                                    <button type="button" onClick={addGalleryItem} className="text-[10px] bg-black text-white px-4 py-1.5 rounded-sm flex items-center gap-2 hover:bg-slate-800 transition-all font-black font-black font-black font-black"><Plus size={14} /> 행 추가</button>
                                 </div>
-                                <div className="space-y-6">
-                                    {Array.isArray(formData.galleryItems) && formData.galleryItems.map((item, idx) => (
+                                <div className="space-y-6 font-black font-black font-black font-black">
+                                    {formData.galleryItems.map((item, idx) => (
                                         <div key={idx} className="border-2 border-black p-5 bg-white relative font-black">
-                                            <button type="button" onClick={() => removeGalleryItem(idx)} className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1 shadow-lg z-20 no-print font-black"><X size={16}/></button>
-                                            
+                                            <button type="button" onClick={() => removeGalleryItem(idx)} className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1 shadow-lg z-20 no-print font-black font-black"><X size={16}/></button>
                                             <div className="grid grid-cols-2 gap-4 mb-4 font-black">
-                                                <div className="space-y-2 text-center relative group">
-                                                    <p className="text-[9px] uppercase text-slate-400 font-black">BEFORE (작업 전)</p>
-                                                    <div className="aspect-[4/3] bg-slate-50 border border-black rounded flex flex-col items-center justify-center relative overflow-hidden transition-all hover:bg-slate-100" onDrop={(e) => handleDrop(e, idx, 'before')} onDragOver={handleDragOver}>
+                                                <div className="space-y-2 text-center relative group font-black font-black font-black">
+                                                    <p className="text-[9px] uppercase text-slate-400 font-black">BEFORE</p>
+                                                    <div className="aspect-[4/3] bg-slate-50 border border-black rounded flex flex-col items-center justify-center relative overflow-hidden transition-all hover:bg-slate-100 font-black" onDrop={(e) => handleDrop(e, idx, 'before')} onDragOver={handleDragOver}>
                                                         {item.before?.url ? (
-                                                            <>
-                                                                <img src={item.before.url} className="w-full h-full object-cover cursor-zoom-in" onClick={() => setSelectedImg(item.before.url)} />
-                                                                <button onClick={()=>{const n={...formData}; n.galleryItems[idx].before={url:''}; setFormData(n);}} className="absolute top-1 right-1 p-1 bg-white rounded-full text-rose-600 shadow-md opacity-0 group-hover:opacity-100 no-print transition-opacity"><Trash2 size={12}/></button>
-                                                            </>
+                                                            <img src={item.before.url} className="w-full h-full object-cover cursor-zoom-in font-black" onClick={() => setSelectedImg(item.before.url)} />
                                                         ) : (
-                                                            <label className="cursor-pointer flex flex-col items-center hover:text-blue-600 transition-colors">
-                                                                <Camera size={24} className="text-slate-300 mb-1" />
-                                                                <span className="text-[8px] font-black uppercase text-slate-400 text-center px-2">사진 촬영 또는 파일 끌어오기</span>
-                                                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e)=>handleGalleryCapture(idx, 'before', e.target.files[0])} />
+                                                            <label className="cursor-pointer flex flex-col items-center hover:text-blue-600 transition-colors font-black">
+                                                                <Camera size={24} className="text-slate-300 mb-1 font-black" />
+                                                                <span className="text-[8px] font-black uppercase text-slate-400 font-black">UPLOAD</span>
+                                                                <input type="file" accept="image/*" className="hidden" onChange={(e)=>handleGalleryCapture(idx, 'before', e.target.files[0])} />
                                                             </label>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="space-y-2 text-center relative group">
-                                                    <p className="text-[9px] uppercase text-blue-600 font-black">AFTER (작업 후)</p>
-                                                    <div className="aspect-[4/3] bg-slate-50 border border-black rounded flex flex-col items-center justify-center relative overflow-hidden transition-all hover:bg-slate-100" onDrop={(e) => handleDrop(e, idx, 'after')} onDragOver={handleDragOver}>
+                                                <div className="space-y-2 text-center relative group font-black font-black font-black">
+                                                    <p className="text-[9px] uppercase text-blue-600 font-black font-black font-black">AFTER</p>
+                                                    <div className="aspect-[4/3] bg-slate-50 border border-black rounded flex flex-col items-center justify-center relative overflow-hidden transition-all hover:bg-slate-100 font-black" onDrop={(e) => handleDrop(e, idx, 'after')} onDragOver={handleDragOver}>
                                                         {item.after?.url ? (
-                                                            <>
-                                                                <img src={item.after.url} className="w-full h-full object-cover cursor-zoom-in" onClick={() => setSelectedImg(item.after.url)} />
-                                                                <button onClick={()=>{const n={...formData}; n.galleryItems[idx].after={url:''}; setFormData(n);}} className="absolute top-1 right-1 p-1 bg-white rounded-full text-rose-600 shadow-md opacity-0 group-hover:opacity-100 no-print transition-opacity"><Trash2 size={12}/></button>
-                                                            </>
+                                                            <img src={item.after.url} className="w-full h-full object-cover cursor-zoom-in font-black font-black font-black font-black font-black" onClick={() => setSelectedImg(item.after.url)} />
                                                         ) : (
-                                                            <label className="cursor-pointer flex flex-col items-center hover:text-blue-600 transition-colors">
-                                                                <Camera size={24} className="text-slate-300 mb-1" />
-                                                                <span className="text-[8px] font-black uppercase text-slate-400 text-center px-2">사진 촬영 또는 파일 끌어오기</span>
-                                                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e)=>handleGalleryCapture(idx, 'after', e.target.files[0])} />
+                                                            <label className="cursor-pointer flex flex-col items-center hover:text-blue-600 transition-colors font-black font-black font-black">
+                                                                <Camera size={24} className="text-slate-300 mb-1 font-black font-black font-black" />
+                                                                <span className="text-[8px] font-black uppercase text-slate-400 font-black font-black">UPLOAD</span>
+                                                                <input type="file" accept="image/*" className="hidden" onChange={(e)=>handleGalleryCapture(idx, 'after', e.target.files[0])} />
                                                             </label>
                                                         )}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <textarea value={item.description} onChange={(e) => handleGalleryTextChange(idx, e.target.value)} className="w-full p-3 text-[11px] outline-none bg-slate-50 border border-black/10 resize-none min-h-[60px] font-black" placeholder="현장 전/후 상황 또는 조치 내역을 입력하십시오." />
+                                            <textarea value={item.description} onChange={(e) => handleGalleryTextChange(idx, e.target.value)} className="w-full p-3 text-[11px] outline-none bg-slate-50 border border-black/10 resize-none min-h-[60px] font-black font-black font-black" placeholder="현장 조치 내역 입력" />
                                         </div>
                                     ))}
-                                    {(!formData.galleryItems || formData.galleryItems.length === 0) && <div className="border border-dashed border-slate-300 p-12 text-center text-slate-400 text-[11px] font-black">비교 항목이 없습니다. 상단의 '비교 행 추가'를 눌러 등록하십시오.</div>}
                                 </div>
                             </section>
                         )}
 
                         {visibleSections.issues && (
-                            <section>
-                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black text-red-600">05. 특이사항 및 문제점</h2>
-                                <textarea name="issues" value={formData.issues} onChange={handleChange} className="w-full border border-black p-5 text-[12px] leading-relaxed min-h-[100px] outline-none bg-red-50/5 font-black font-black" placeholder="특이사항을 기술하십시오." />
+                            <section className="font-black font-black font-black font-black">
+                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black text-red-600">05. 특이사항 및 문제점</h2>
+                                <textarea name="issues" value={formData.issues} onChange={handleChange} className="w-full border border-black p-5 text-[12px] leading-relaxed min-h-[100px] outline-none bg-red-50/5 font-black font-black font-black" placeholder="문제점 및 건의사항 입력" />
                             </section>
                         )}
 
                         {visibleSections.nextPlan && (
-                            <section>
-                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black">06. 향후 업무 추진 계획</h2>
-                                <textarea name="nextPlan" value={formData.nextPlan} onChange={handleChange} className="w-full border border-black p-5 text-[12px] leading-relaxed min-h-[100px] outline-none font-black bg-transparent" placeholder="다음 업무 추진 계획 및 예정 사항을 입력하십시오." />
+                            <section className="font-black font-black font-black font-black">
+                                <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black">06. 향후 업무 추진 계획</h2>
+                                <textarea name="nextPlan" value={formData.nextPlan} onChange={handleChange} className="w-full border border-black p-5 text-[12px] leading-relaxed min-h-[100px] outline-none font-black bg-transparent font-black font-black font-black" placeholder="명일 또는 차주 업무 계획 입력" />
                             </section>
                         )}
 
-                        <section className="border-t border-black/5 pt-6 font-black">
-                            <h2 className="text-[10px] mb-4 uppercase tracking-tighter font-black">07. 증빙 자료 첨부</h2>
+                        <section className="border-t border-black/5 pt-6 font-black font-black">
+                            <h2 className="text-[10px] mb-4 uppercase tracking-tighter font-black font-black font-black font-black font-black font-black">07. 증빙 자료 첨부 <HelpTooltip text="보고 내용과 관련된 영수증, 공문, 도면 등을 첨부하십시오." /></h2>
                             <FileUploadDnd onUploadComplete={handleUploadComplete} onUploadingStateChange={setIsUploading} />
                         </section>
 
-                        <div className="pt-10 text-center font-black">
-                            <p className="text-xl font-black uppercase tracking-widest font-black">보고인: {employee?.full_name} (인)</p>
+                        <div className="pt-10 text-center font-black font-black font-black font-black font-black">
+                            <p className="text-xl font-black uppercase tracking-widest font-black font-black font-black font-black font-black font-black">보고인: {employee?.full_name} (인)</p>
                         </div>
                     </div>
                 </div>
 
-                <aside className="lg:col-span-4 space-y-4 no-print font-black">
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black">
-                        <div className="flex items-center justify-between mb-4 border-b pb-2 font-black text-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black"><Users size={14}/> 결재선 지정</h2><button type="button" onClick={addApprover} className="text-[10px] border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-all font-black">+ 추가</button></div>
-                        <div className="space-y-2">
+                <aside className="lg:col-span-4 space-y-4 no-print font-black font-black font-black font-black font-black">
+                    <div className="bg-white border-2 border-black rounded-2xl p-6 shadow-sm font-black text-black">
+                        <div className="flex items-center justify-between mb-4 border-b-2 border-black/5 pb-2 font-black">
+                            <h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black font-black font-black font-black font-black"><Users size={14}/> 결재선 지정</h2>
+                            <button type="button" onClick={addApprover} className="text-[10px] border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-all font-black font-black font-black font-black font-black font-black">+ 추가</button>
+                        </div>
+                        <div className="space-y-3 font-black">
                             {approvers.map((app, i) => (
-                                <div key={i} className="flex items-center gap-2 font-black"><span className="text-[10px] text-slate-400 w-4 font-black">{i+1}</span>
-                                    <select value={app.id} onChange={(e) => handleApproverChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-black font-black text-black">
+                                <div key={i} className="flex items-center gap-2 font-black font-black font-black font-black">
+                                    <span className="text-[10px] text-slate-400 w-4 font-black font-black">{i+1}</span>
+                                    <select value={app.id} onChange={(e) => handleApproverChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-black font-black text-black font-black font-black font-black font-black" required>
                                         <option value="">결재자 선택</option>
                                         {Object.entries(groupedEmployees).map(([dept, emps]) => (
                                             <optgroup key={dept} label={dept}>
-                                                {emps.map(emp => (
-                                                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>
-                                                ))}
+                                                {emps.map(e => <option key={e.id} value={e.id}>{e.full_name} ({e.position})</option>)}
                                             </optgroup>
                                         ))}
                                     </select>
-                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black" onClick={() => removeApprover(i)} />
+                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-red-500 font-black font-black font-black font-black font-black font-black" onClick={() => removeApprover(i)} />
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm font-black">
-                        <div className="flex items-center justify-between mb-4 border-b pb-2 text-blue-600 font-black"><h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black text-black"><Users size={14}/> 참조인 지정</h2><button type="button" onClick={addReferrer} className="text-[10px] border border-blue-600 px-2 py-0.5 hover:bg-blue-600 hover:text-white transition-all font-black">+ 추가</button></div>
-                        <div className="space-y-2">
+                    <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm font-black text-black font-black font-black font-black">
+                        <div className="flex items-center justify-between mb-4 border-b pb-2 text-blue-600 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                            <h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black"><Users size={14}/> 참조인 지정</h2>
+                            <button type="button" onClick={addReferrer} className="text-[10px] border border-blue-600 px-2 py-0.5 hover:bg-blue-600 hover:text-white transition-all font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">+ 추가</button>
+                        </div>
+                        <div className="space-y-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
                             {referrers.map((ref, i) => (
-                                <div key={i} className="flex items-center gap-2 font-black">
-                                    <select value={ref.id} onChange={(e) => handleReferrerChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-blue-600 font-black text-black">
+                                <div key={i} className="flex items-center gap-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                                    <select value={ref.id} onChange={(e) => handleReferrerChange(i, e.target.value)} className="flex-1 p-2 border border-slate-200 rounded text-[11px] outline-none focus:border-blue-600 font-black text-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
                                         <option value="">참조인 선택</option>
                                         {Object.entries(groupedEmployees).map(([dept, emps]) => (
                                             <optgroup key={dept} label={dept}>
-                                                {emps.map(emp => (
-                                                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.position})</option>
-                                                ))}
+                                                {emps.map(e => <option key={e.id} value={e.id}>{e.full_name} ({e.position})</option>)}
                                             </optgroup>
                                         ))}
                                     </select>
-                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black" onClick={() => removeReferrer(i)} />
+                                    <X size={14} className="cursor-pointer text-slate-300 hover:text-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black" onClick={() => removeReferrer(i)} />
                                 </div>
                             ))}
                         </div>
