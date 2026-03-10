@@ -133,26 +133,24 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
             `}} />
             
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
-                <span className="text-[10px] uppercase tracking-[0.2em] font-black text-slate-500">Document Management System</span>
+                
                 <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-black text-white hover:bg-slate-800 text-[11px] transition-all font-black shadow-lg">
                     <Printer size={14} /> 인쇄 및 PDF 저장
                 </button>
             </div>
 
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">
-                {/* 🚀 기존 8:4 배열 복구: 본문 영역 */}
                 <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative print-container text-black font-black">
                     <div className="flex justify-between items-start mb-10 border-b-4 border-black pb-8 font-black">
                         <div className="space-y-2">
-                            <p className="text-[10px] tracking-[0.3em] text-slate-400 font-black uppercase">Hansung Landscape & Construction</p>
+                            {/* 🚀 영문 문구 삭제 및 제목 간격 조정 */}
                             <h1 className="text-4xl font-black tracking-tighter uppercase font-black">출 장 신 청 서</h1>
-                            <div className="flex flex-col text-[11px] mt-4 space-y-1 font-black">
+                            <div className="flex flex-col text-[11px] mt-6 space-y-1 font-black">
                                 <span>문서번호 : {doc.document_number || '관리부 추후 부여'}</span>
                                 <span>작성일자 : {doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR') : '-'}</span>
                             </div>
                         </div>
 
-                        {/* 🚀 결재인 박스: 기안 영역 가로폭 축소 */}
                         <div className="flex font-black">
                             <table className="approval-table border-collapse border border-black text-[11px] font-black">
                                 <tbody>
@@ -248,7 +246,6 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                     </div>
                 </div>
 
-                {/* 🚀 기존 8:4 배열 복구: 사이드바 영역 */}
                 <aside className="lg:col-span-4 space-y-5 no-print font-black">
                     {isReferrer && (
                         <div className="bg-white border-2 border-black p-6 shadow-sm font-black">
@@ -277,7 +274,7 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                             {referrerHistory?.length > 0 && (
                                 <div className="pt-4 border-t border-dashed border-slate-200 mt-4 font-black font-black">
                                     <p className="text-[10px] uppercase mb-2 font-black text-blue-600 tracking-widest font-black">Official CC (참조)</p>
-                                    <div className="text-[12px] font-black text-blue-900 bg-blue-50/50 p-4 rounded-2xl leading-relaxed font-black">
+                                    <div className="text-[11px] font-black text-blue-900 bg-blue-50/50 p-4 rounded-2xl leading-relaxed font-black">
                                         {referrerHistory.map(r => r.referrer?.full_name || r.referrer_name).join(', ')}
                                     </div>
                                 </div>
@@ -307,7 +304,7 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                                     <div key={i} className="flex flex-col border-2 border-slate-50 rounded-2xl overflow-hidden bg-slate-50/50 shadow-sm font-black font-black font-black">
                                         <div className="flex items-center justify-between p-4 bg-white border-b-2 border-slate-50 font-black">
                                             <div className="flex items-center gap-3 flex-1 truncate font-black">
-                                                {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? <ImageIcon size={18} className="text-blue-500" /> : <FileText size={18} className="text-slate-400 font-black font-black" />}
+                                                {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? <ImageIcon size={18} className="text-blue-500" /> : <FileText size={18} className="text-slate-400" />}
                                                 <span className="text-[12px] font-black truncate">{file.name}</span>
                                             </div>
                                             <a href={file.url} download={file.name} target="_blank" rel="noreferrer" className="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-xl transition-colors shadow-sm font-black font-black">
