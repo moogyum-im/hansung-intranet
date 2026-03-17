@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { useSearchParams, useRouter, useParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut, X, Plus, Edit3, Trash2, HelpCircle } from 'lucide-react';
+import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut, X, Plus, Edit3, Trash2, ChevronDown, ChevronUp, MousePointerClick, RotateCcw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const formatNumber = (num) => {
@@ -30,13 +30,13 @@ export default function DailyWorkPage() {
     const { employee: currentUser } = useEmployee();
     const [view, setView] = useState(reportId ? 'detail' : 'write');
     const [formData, setFormData] = useState(null);
+    const [originalData, setOriginalData] = useState(null); // 🚀 [추가] 되돌리기용 원본 데이터 저장
     const [siteData, setSiteData] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [zoomLevel, setZoomLevel] = useState(1.0); 
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importDate, setImportDate] = useState("");
     const [selectedImage, setSelectedImage] = useState(null);
-
     const [focusedField, setFocusedField] = useState(null);
 
     const isReadOnly = view === 'detail';
@@ -45,6 +45,12 @@ export default function DailyWorkPage() {
         labor_costs: true, material_costs: true, equipment_costs: true, 
         tree_costs: true, transport_costs: true, subcontract_costs: true, etc_costs: true
     });
+
+    const [collapsedSections, setCollapsedSections] = useState({});
+
+    const toggleSection = (key) => {
+        setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
+    };
 
     const [todayPhotos, setTodayPhotos] = useState([]);
     const [tomorrowPhotos, setTomorrowPhotos] = useState([]);
@@ -73,15 +79,14 @@ export default function DailyWorkPage() {
             if (reportId) {
                 const { data: rep } = await supabase.from('daily_site_reports').select('*').eq('id', reportId).single();
                 const notes = typeof rep.notes === 'string' ? JSON.parse(rep.notes) : rep.notes;
-                setFormData({
-                    ...notes,
-                    total_contract_amount: site?.budget || 0
-                });
+                const fullData = { ...notes, total_contract_amount: site?.budget || 0 };
+                setFormData(fullData);
+                setOriginalData(fullData); // 🚀 원본 보관
                 if (notes.savedVisibleSections) setVisibleSections(notes.savedVisibleSections);
                 setTodayPhotos(rep.photos?.filter(p => p.timeType === 'today') || []);
                 setTomorrowPhotos(rep.photos?.filter(p => p.timeType === 'tomorrow') || []);
             } else {
-                setFormData({
+                const initialData = {
                     report_date: new Date().toISOString().split('T')[0],
                     weather: '맑음', report_category: categoryType, 
                     total_contract_amount: site?.budget || 0,
@@ -89,11 +94,20 @@ export default function DailyWorkPage() {
                     progress_plant: '0.0000', progress_facility: '0.0000',
                     settlement_costs: [{ item: '수목', prev: 0, today: 0, total: 0 }, { item: '자재납품 및 시공(외주)', prev: 0, today: 0, total: 0 }, { item: '자재비', prev: 0, today: 0, total: 0 }, { item: '장비대', prev: 0, today: 0, total: 0 }, { item: '노무비', prev: 0, today: 0, total: 0 }, { item: '운반비', prev: 0, today: 0, total: 0 }, { item: '기타경비', prev: 0, today: 0, total: 0 }],
                     labor_costs: [], material_costs: [], equipment_costs: [], tree_costs: [], transport_costs: [], subcontract_costs: [], etc_costs: []
-                });
+                };
+                setFormData(initialData);
+                setOriginalData(initialData); // 🚀 초기 작성 시에도 원본 보관
             }
         };
         load();
     }, [siteId, reportId, categoryType]);
+
+    // 🚀 [추가] 되돌리기 함수
+    const handleReset = () => {
+        if (!confirm("수정 중인 내용을 모두 취소하고 마지막 저장(또는 불러온) 상태로 되돌리시겠습니까?")) return;
+        setFormData(JSON.parse(JSON.stringify(originalData)));
+        toast.success("초기화되었습니다.");
+    };
 
     const settlementTotals = useMemo(() => {
         if (!formData?.settlement_costs) return { prev: 0, today: 0, total: 0 };
@@ -106,14 +120,25 @@ export default function DailyWorkPage() {
 
     const handleSave = async () => {
         if (isSaving) return;
+        
+        // 🚀 [추가] 중복 날짜 체크 로직
         setIsSaving(true);
         try {
-            const { data: existingRecord } = await supabase
+            const { data: duplicateCheck } = await supabase
                 .from('daily_site_reports')
-                .select('*')
+                .select('id, notes')
                 .eq('site_id', siteId)
-                .eq('report_date', formData.report_date)
-                .maybeSingle();
+                .eq('report_date', formData.report_date);
+
+            const existingRecord = duplicateCheck?.find(r => (JSON.parse(r.notes)?.report_category || 'plant') === categoryType);
+
+            // 신규 작성인데 기존 데이터가 있거나, 수정 중인데 다른 날짜로 바꿔서 중복이 생기는 경우
+            if (existingRecord && existingRecord.id !== reportId) {
+                if (!confirm(`[주의] ${formData.report_date} 날짜에 이미 작성된 보고서가 존재합니다. 덮어쓰시겠습니까?`)) {
+                    setIsSaving(false);
+                    return;
+                }
+            }
 
             let mergedNotes = existingRecord 
                 ? { ...JSON.parse(existingRecord.notes), ...formData, report_category: categoryType }
@@ -134,7 +159,9 @@ export default function DailyWorkPage() {
                 content: formData.today_work || '작업일보 기록'
             };
 
-            const { error } = await supabase.from('daily_site_reports').upsert(existingRecord ? { id: existingRecord.id, ...payload } : payload);
+            const targetId = existingRecord ? existingRecord.id : (reportId || null);
+            const { error } = await supabase.from('daily_site_reports').upsert(targetId ? { id: targetId, ...payload } : payload);
+            
             if (error) throw error;
             toast.success("저장되었습니다.");
             router.push(`/sites/${siteId}`);
@@ -188,7 +215,6 @@ export default function DailyWorkPage() {
         type === 'today' ? setTodayPhotos(prev => { const n = [...prev]; n[idx] = newPhoto; return n; }) : setTomorrowPhotos(prev => { const n = [...prev]; n[idx] = newPhoto; return n; });
     };
 
-    // 🚀 [추가] 사진 대지 행 삭제 함수
     const handleRemovePhotoRow = (idx) => {
         if (!confirm("해당 줄의 사진과 기록을 삭제하시겠습니까?")) return;
         setTodayPhotos(prev => prev.filter((_, i) => i !== idx));
@@ -206,71 +232,87 @@ export default function DailyWorkPage() {
         if (!visibleSections[key]) return null;
         const config = FIELD_MAPS[key];
         const rows = formData?.[key] || [];
+        const isCollapsed = collapsedSections[key];
         const getColumnSum = (f) => rows.reduce((acc, cur) => acc + parseNumber(cur[f]), 0);
-        return (
-            <div key={key} className="border border-slate-400 flex flex-col font-bold mb-1 w-full bg-white shadow-sm font-sans rounded-none overflow-hidden">
-                <div className="bg-yellow-50 border-b border-slate-400 p-1 flex justify-between items-center font-black rounded-none sticky left-0">
-                    <span className="text-[10px] uppercase">▣ {config.title}</span>
-                    {!isReadOnly && <button onClick={()=>setFormData(p=>({...p, [key]: [...(p[key]||[]), config.fields.reduce((a,f)=>({...a,[f]:''}),{})]}))} className="bg-white border border-slate-400 px-1 text-[8px] font-bold shadow-sm rounded-none">+ 추가</button>}
-                </div>
-                <div className="w-full overflow-x-auto">
-                    <table className="min-w-full text-[9px] border-collapse font-bold rounded-none">
-                        <thead className="bg-slate-50 border-b border-slate-400 font-sans">
-                            <tr>{config.labels.map(l=><th key={l} className="border-r border-slate-300 p-1 px-2 uppercase whitespace-nowrap">{l}</th>)}{!isReadOnly && <th className="w-4"></th>}</tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((row, i) => (
-                                <tr key={i} className="border-b border-slate-200 hover:bg-slate-50">
-                                    {config.fields.map((f, fIdx) => {
-                                        const isNumeric = ['total','price','accum','count','prev_count'].includes(f);
-                                        const fieldId = `${key}-${i}-${f}`;
-                                        const displayValue = isNumeric && focusedField !== fieldId 
-                                            ? formatNumber(row[f]) 
-                                            : (isNumeric && Number(row[f]) === 0 ? "" : row[f]);
 
-                                        return (
-                                            <td key={f} className="border-r border-slate-200 p-0 font-sans relative">
-                                                <input className={`w-full p-1.5 outline-none bg-transparent font-sans font-black rounded-none whitespace-nowrap min-w-[60px] ${isNumeric ? 'text-right' : 'text-center'}`}
-                                                    value={displayValue}
-                                                    readOnly={isReadOnly}
-                                                    onFocus={() => isNumeric && setFocusedField(fieldId)}
-                                                    onBlur={() => setFocusedField(null)}
-                                                    placeholder={isNumeric && focusedField === fieldId ? "0" : ""}
-                                                    onChange={e => {
-                                                        if (isReadOnly) return;
-                                                        const updated = [...rows]; 
-                                                        const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
-                                                        updated[i][f] = val;
-                                                        
-                                                        if (isNumeric) {
-                                                            // 🚀 [수정] 모든 섹션에서 공수(count)나 전일누계(prev_count) 입력 시 출력누계(accum) 자동 합산 로직 복구
-                                                            if (f === 'count' || f === 'prev_count') {
-                                                                updated[i].accum = (parseNumber(updated[i].prev_count || 0) + parseNumber(updated[i].count || 0)).toString();
-                                                            }
-                                                            
-                                                            // 단가(price)나 공수(count) 변경 시 금액(total) 자동 산출
-                                                            if (f === 'price' || f === 'count') {
-                                                                updated[i].total = (parseNumber(updated[i].price) * parseNumber(updated[i].count)).toString();
-                                                            }
-                                                            
-                                                            // 사용자가 누계(accum)나 금액(total)을 직접 수정하면 그 값을 유지 (수기 입력 허용)
-                                                        }
-                                                        setFormData({...formData, [key]: updated});
-                                                    }} 
-                                                />
-                                            </td>
-                                        );
-                                    })}
-                                    {!isReadOnly && <td className="text-center text-red-500 cursor-pointer p-1" onClick={()=>setFormData(p=>({...p, [key]: rows.filter((_, idx)=>idx!==i)}))}>×</td>}
-                                </tr>))}
-                            <tr className="bg-slate-50 border-t border-slate-300 font-black">
-                                <td className="text-center p-1 border-r border-slate-200 font-sans whitespace-nowrap">합계</td>
-                                {config.fields.slice(1).map((f, idx) => (<td key={idx} className="text-right px-1 border-r border-slate-200 text-blue-800 font-sans whitespace-nowrap">{config.sums.includes(f) ? formatNumber(getColumnSum(f)) : ''}</td>))}
-                                {!isReadOnly && <td></td>}
-                            </tr>
-                        </tbody>
-                    </table>
+        return (
+            <div key={key} className="border border-slate-400 flex flex-col font-bold mb-3 w-full bg-white shadow-sm font-sans rounded-none overflow-hidden">
+                <div 
+                    onClick={() => toggleSection(key)} 
+                    className="bg-yellow-50 border-b border-slate-400 p-1 flex justify-between items-center font-black rounded-none sticky left-0 cursor-pointer hover:bg-yellow-100 transition-colors"
+                >
+                    <div className="flex items-center gap-1">
+                        {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                        <span className="text-[10px] uppercase">▣ {config.title} ({rows.length})</span>
+                    </div>
+                    {!isReadOnly && (
+                        <button 
+                            onClick={(e)=>{
+                                e.stopPropagation();
+                                setFormData(p=>({...p, [key]: [...(p[key]||[]), config.fields.reduce((a,f)=>({...a,[f]:''}),{})]}))
+                            }} 
+                            className="bg-white border border-slate-400 px-2 py-0.5 text-[10px] font-black shadow-sm rounded-none hover:bg-slate-50 transition-all"
+                        >
+                            + 추가
+                        </button>
+                    )}
                 </div>
+                
+                {!isCollapsed && (
+                    <div className="w-full overflow-x-auto">
+                        <table className="min-w-full text-[9px] border-collapse font-bold rounded-none table-fixed">
+                            <thead className="bg-slate-50 border-b border-slate-400 font-sans">
+                                <tr>{config.labels.map(l=><th key={l} className="border-r border-slate-300 p-1 uppercase whitespace-nowrap overflow-hidden">{l}</th>)}{!isReadOnly && <th className="w-6"></th>}</tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((row, i) => (
+                                    <tr key={i} className="border-b border-slate-200 hover:bg-slate-50">
+                                        {config.fields.map((f, fIdx) => {
+                                            const isNumeric = ['total','price','accum','count','prev_count'].includes(f);
+                                            const fieldId = `${key}-${i}-${f}`;
+                                            const displayValue = isNumeric && focusedField !== fieldId 
+                                                ? formatNumber(row[f]) 
+                                                : (isNumeric && Number(row[f]) === 0 ? "" : row[f]);
+
+                                            return (
+                                                <td key={f} className="border-r border-slate-200 p-0 font-sans relative overflow-hidden">
+                                                    <input className={`w-full p-1 outline-none bg-transparent font-sans font-black rounded-none text-[8.5px] ${isNumeric ? 'text-right pr-1.5' : 'text-center px-1'}`}
+                                                        value={displayValue}
+                                                        readOnly={isReadOnly}
+                                                        onFocus={() => isNumeric && setFocusedField(fieldId)}
+                                                        onBlur={() => setFocusedField(null)}
+                                                        placeholder={isNumeric && focusedField === fieldId ? "0" : ""}
+                                                        onChange={e => {
+                                                            if (isReadOnly) return;
+                                                            const updated = [...rows]; 
+                                                            const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
+                                                            updated[i][f] = val;
+                                                            
+                                                            if (isNumeric) {
+                                                                if (f === 'count' || f === 'prev_count') {
+                                                                    updated[i].accum = (parseNumber(updated[i].prev_count || 0) + parseNumber(updated[i].count || 0)).toString();
+                                                                }
+                                                                if (f === 'price' || f === 'count') {
+                                                                    updated[i].total = (parseNumber(updated[i].price) * parseNumber(updated[i].count)).toString();
+                                                                }
+                                                            }
+                                                            setFormData({...formData, [key]: updated});
+                                                        }} 
+                                                    />
+                                                </td>
+                                            );
+                                        })}
+                                        {!isReadOnly && <td className="text-center text-red-500 cursor-pointer p-0 text-xs font-black" onClick={()=>setFormData(p=>({...p, [key]: rows.filter((_, idx)=>idx!==i)}))}>×</td>}
+                                    </tr>))}
+                                <tr className="bg-slate-50 border-t border-slate-300 font-black">
+                                    <td className="text-center p-1 border-r border-slate-200 font-sans whitespace-nowrap overflow-hidden">합계</td>
+                                    {config.fields.slice(1).map((f, idx) => (<td key={idx} className="text-right pr-1.5 border-r border-slate-200 text-blue-800 font-sans text-[8.5px] overflow-hidden">{config.sums.includes(f) ? formatNumber(getColumnSum(f)) : ''}</td>))}
+                                    {!isReadOnly && <td></td>}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
         );
     };
@@ -310,10 +352,16 @@ export default function DailyWorkPage() {
                 <div className="flex items-center gap-4">
                     <button onClick={() => router.back()} className="text-slate-600 font-black flex items-center gap-2 hover:bg-slate-50 p-2 rounded-none transition-all font-sans italic-none"><ArrowLeft size={18}/> 현장목록</button>
                     {!isReadOnly && (
-                        <div className="flex gap-1 border-l pl-4 border-slate-200 font-sans">
-                            {Object.entries(FIELD_MAPS).map(([key, config]) => (
-                                <button key={key} onClick={() => setVisibleSections(p => ({...p, [key]: !visibleSections[key]}))} className={`px-2.5 py-1.5 text-[9px] rounded-none transition-all font-black ${visibleSections[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border border-slate-100'}`}>{config.title.split('(')[0]}</button>
-                            ))}
+                        <div className="flex flex-col gap-1 border-l pl-4 border-slate-200">
+                            <div className="flex items-center gap-1.5 text-blue-600 mb-0.5 animate-pulse">
+                                <MousePointerClick size={12} />
+                                <span className="text-[10px] font-black uppercase tracking-tight">버튼을 눌러 보고서 항목을 활성화하십시오.</span>
+                            </div>
+                            <div className="flex gap-1 font-sans">
+                                {Object.entries(FIELD_MAPS).map(([key, config]) => (
+                                    <button key={key} onClick={() => setVisibleSections(p => ({...p, [key]: !visibleSections[key]}))} className={`px-2.5 py-1.5 text-[9px] rounded-none transition-all font-black border ${visibleSections[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border-slate-100 hover:border-slate-300'}`}>{config.title.split('(')[0]}</button>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -331,6 +379,8 @@ export default function DailyWorkPage() {
                         </div>
                     ) : (
                         <div className="flex gap-2">
+                             {/* 🚀 되돌리기 버튼 추가 */}
+                             <button onClick={handleReset} className="bg-white text-slate-900 border border-slate-900 px-5 py-2 rounded-none font-black text-[11px] shadow-sm hover:bg-slate-50 flex items-center gap-2 transition-all font-sans italic-none"><RotateCcw size={14}/> 되돌리기</button>
                              <button onClick={() => setIsImportModalOpen(true)} className="bg-amber-500 text-white px-5 py-2 rounded-none font-black text-[11px] shadow-sm hover:bg-amber-600 flex items-center gap-2 transition-all font-sans italic-none"><RefreshCw size={14}/> 불러오기</button>
                              <button onClick={handleSave} disabled={isSaving} className="bg-blue-600 text-white px-8 py-2 rounded-none font-black text-[11px] shadow-sm hover:bg-blue-700 transition-all flex items-center gap-2 font-sans italic-none">{isSaving ? <Loader2 className="animate-spin" size={14}/> : <Save size={14}/>} 일보 저장</button>
                         </div>
@@ -343,7 +393,7 @@ export default function DailyWorkPage() {
                     <div className="max-w-[1600px] w-full bg-white p-8 pt-4 border border-slate-200 shadow-sm font-black italic-none rounded-none">
                         <div className="flex justify-between items-end gap-8 mb-4 rounded-none">
                             <div className="flex flex-col gap-2 flex-1 font-black italic-none">
-                                <h1 className="text-5xl font-black uppercase tracking-[0.6em] text-left mt-[-30px] font-sans rounded-none">작 업 일 보</h1>
+                                <h1 className="text-5xl font-black uppercase tracking-[1em] text-left mt-2 mb-4 font-sans rounded-none">작 업 일 보</h1>
                                 <div className="flex gap-2 flex-wrap items-end font-sans italic-none font-black">
                                     <div className="flex border border-slate-400 text-[9px] font-black h-8 shrink-0 shadow-sm items-center px-3 bg-slate-50 uppercase rounded-none whitespace-nowrap">총 도급액: {formatNumber(formData?.total_contract_amount)}원</div>
                                     <div className="flex border border-slate-400 text-[9px] font-black h-8 shrink-0 shadow-sm items-center px-3 text-blue-700 font-sans rounded-none whitespace-nowrap">금일 사용: {formatNumber(totalTodaySpend)}원</div>
@@ -356,7 +406,7 @@ export default function DailyWorkPage() {
                                 </div>
                             </div>
                             <div className="flex flex-col gap-0 w-[350px] font-black shrink-0 border border-slate-400 shadow-sm bg-white font-sans italic-none rounded-none">
-                                <div className="flex border-b border-slate-400 h-8 font-black italic-none">
+                                <div className="flex border-b border-slate-400 h-8 font-black italic-none rounded-none">
                                     <div className="bg-slate-50 px-2 flex items-center border-r border-slate-400 text-[9px] w-20 font-black font-sans rounded-none">현장명</div>
                                     <div className="px-2 flex items-center text-[10px] font-black font-sans overflow-hidden whitespace-nowrap flex-1 rounded-none">{siteData?.name}</div>
                                     <div className="bg-slate-50 px-2 flex items-center border-l border-r border-slate-400 text-[9px] w-20 font-black font-sans rounded-none">작업 일시</div>
@@ -419,10 +469,14 @@ export default function DailyWorkPage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3 items-start font-black italic-none font-sans rounded-none">
-                            <div className="space-y-3 rounded-none">{renderTable('labor_costs')}</div>
-                            <div className="space-y-3 rounded-none">{renderTable('material_costs')}{renderTable('equipment_costs')}{renderTable('tree_costs')}</div>
-                            <div className="space-y-3 rounded-none">{renderTable('transport_costs')}{renderTable('subcontract_costs')}{renderTable('etc_costs')}</div>
+                        <div className="columns-1 md:columns-2 lg:columns-3 gap-3 space-y-3 font-black italic-none font-sans rounded-none">
+                            <div className="break-inside-avoid">{renderTable('labor_costs')}</div>
+                            <div className="break-inside-avoid">{renderTable('material_costs')}</div>
+                            <div className="break-inside-avoid">{renderTable('equipment_costs')}</div>
+                            <div className="break-inside-avoid">{renderTable('tree_costs')}</div>
+                            <div className="break-inside-avoid">{renderTable('transport_costs')}</div>
+                            <div className="break-inside-avoid">{renderTable('subcontract_costs')}</div>
+                            <div className="break-inside-avoid">{renderTable('etc_costs')}</div>
                         </div>
 
                         <div className="pt-8 space-y-6 font-black border-t-2 border-slate-400 mt-4 italic-none rounded-none">
@@ -430,7 +484,6 @@ export default function DailyWorkPage() {
                             <div className="grid grid-cols-4 gap-4 font-black font-sans rounded-none">
                                 {Array.from({ length: maxPhotoRows }).map((_, idx) => (
                                     <div key={idx} className="grid grid-cols-2 gap-2 h-[260px] bg-white rounded-none relative group">
-                                        {/* 🚀 행 삭제 버튼 추가 */}
                                         {!isReadOnly && (
                                             <button 
                                                 onClick={() => handleRemovePhotoRow(idx)}
