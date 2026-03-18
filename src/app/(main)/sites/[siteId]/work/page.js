@@ -10,7 +10,10 @@ import { toast } from 'react-hot-toast';
 
 const formatNumber = (num) => {
     if (num === null || num === undefined || num === "" || isNaN(num) || Number(num.toString().replace(/,/g, '')) === 0) return "-";
-    return Math.round(Number(num.toString().replace(/,/g, ''))).toLocaleString();
+    // 소수점이 있는 경우 그대로 유지, 없는 경우 반올림 처리
+    const n = Number(num.toString().replace(/,/g, ''));
+    if (n % 1 !== 0) return n.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 4 });
+    return Math.round(n).toLocaleString();
 };
 
 const parseNumber = (str) => {
@@ -30,7 +33,7 @@ export default function DailyWorkPage() {
     const { employee: currentUser } = useEmployee();
     const [view, setView] = useState(reportId ? 'detail' : 'write');
     const [formData, setFormData] = useState(null);
-    const [originalData, setOriginalData] = useState(null); // 🚀 [추가] 되돌리기용 원본 데이터 저장
+    const [originalData, setOriginalData] = useState(null); 
     const [siteData, setSiteData] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [zoomLevel, setZoomLevel] = useState(1.0); 
@@ -81,7 +84,7 @@ export default function DailyWorkPage() {
                 const notes = typeof rep.notes === 'string' ? JSON.parse(rep.notes) : rep.notes;
                 const fullData = { ...notes, total_contract_amount: site?.budget || 0 };
                 setFormData(fullData);
-                setOriginalData(fullData); // 🚀 원본 보관
+                setOriginalData(fullData); 
                 if (notes.savedVisibleSections) setVisibleSections(notes.savedVisibleSections);
                 setTodayPhotos(rep.photos?.filter(p => p.timeType === 'today') || []);
                 setTomorrowPhotos(rep.photos?.filter(p => p.timeType === 'tomorrow') || []);
@@ -96,13 +99,12 @@ export default function DailyWorkPage() {
                     labor_costs: [], material_costs: [], equipment_costs: [], tree_costs: [], transport_costs: [], subcontract_costs: [], etc_costs: []
                 };
                 setFormData(initialData);
-                setOriginalData(initialData); // 🚀 초기 작성 시에도 원본 보관
+                setOriginalData(initialData);
             }
         };
         load();
     }, [siteId, reportId, categoryType]);
 
-    // 🚀 [추가] 되돌리기 함수
     const handleReset = () => {
         if (!confirm("수정 중인 내용을 모두 취소하고 마지막 저장(또는 불러온) 상태로 되돌리시겠습니까?")) return;
         setFormData(JSON.parse(JSON.stringify(originalData)));
@@ -120,8 +122,6 @@ export default function DailyWorkPage() {
 
     const handleSave = async () => {
         if (isSaving) return;
-        
-        // 🚀 [추가] 중복 날짜 체크 로직
         setIsSaving(true);
         try {
             const { data: duplicateCheck } = await supabase
@@ -132,7 +132,6 @@ export default function DailyWorkPage() {
 
             const existingRecord = duplicateCheck?.find(r => (JSON.parse(r.notes)?.report_category || 'plant') === categoryType);
 
-            // 신규 작성인데 기존 데이터가 있거나, 수정 중인데 다른 날짜로 바꿔서 중복이 생기는 경우
             if (existingRecord && existingRecord.id !== reportId) {
                 if (!confirm(`[주의] ${formData.report_date} 날짜에 이미 작성된 보고서가 존재합니다. 덮어쓰시겠습니까?`)) {
                     setIsSaving(false);
@@ -272,7 +271,7 @@ export default function DailyWorkPage() {
                                             const fieldId = `${key}-${i}-${f}`;
                                             const displayValue = isNumeric && focusedField !== fieldId 
                                                 ? formatNumber(row[f]) 
-                                                : (isNumeric && Number(row[f]) === 0 ? "" : row[f]);
+                                                : (isNumeric && (row[f] === "0" || row[f] === 0) ? "" : row[f]);
 
                                             return (
                                                 <td key={f} className="border-r border-slate-200 p-0 font-sans relative overflow-hidden">
@@ -286,7 +285,13 @@ export default function DailyWorkPage() {
                                                             if (isReadOnly) return;
                                                             const updated = [...rows]; 
                                                             const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
-                                                            updated[i][f] = val;
+                                                            
+                                                            // 🚀 소수점 입력 유지를 위한 처리
+                                                            if (isNumeric && (val.endsWith('.') || (val.includes('.') && val.endsWith('0')))) {
+                                                                updated[i][f] = val;
+                                                            } else {
+                                                                updated[i][f] = val;
+                                                            }
                                                             
                                                             if (isNumeric) {
                                                                 if (f === 'count' || f === 'prev_count') {
@@ -359,7 +364,7 @@ export default function DailyWorkPage() {
                             </div>
                             <div className="flex gap-1 font-sans">
                                 {Object.entries(FIELD_MAPS).map(([key, config]) => (
-                                    <button key={key} onClick={() => setVisibleSections(p => ({...p, [key]: !visibleSections[key]}))} className={`px-2.5 py-1.5 text-[9px] rounded-none transition-all font-black border ${visibleSections[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border-slate-100 hover:border-slate-300'}`}>{config.title.split('(')[0]}</button>
+                                    <button key={key} onClick={() => setVisibleSections(p => ({...p, [key]: !visibleSections[key]}))} className={`px-2.5 py-1.5 text-[9px] rounded-none transition-all font-black border ${visibleSections[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border border-slate-100 hover:border-slate-300'}`}>{config.title.split('(')[0]}</button>
                                 ))}
                             </div>
                         </div>
@@ -379,7 +384,6 @@ export default function DailyWorkPage() {
                         </div>
                     ) : (
                         <div className="flex gap-2">
-                             {/* 🚀 되돌리기 버튼 추가 */}
                              <button onClick={handleReset} className="bg-white text-slate-900 border border-slate-900 px-5 py-2 rounded-none font-black text-[11px] shadow-sm hover:bg-slate-50 flex items-center gap-2 transition-all font-sans italic-none"><RotateCcw size={14}/> 되돌리기</button>
                              <button onClick={() => setIsImportModalOpen(true)} className="bg-amber-500 text-white px-5 py-2 rounded-none font-black text-[11px] shadow-sm hover:bg-amber-600 flex items-center gap-2 transition-all font-sans italic-none"><RefreshCw size={14}/> 불러오기</button>
                              <button onClick={handleSave} disabled={isSaving} className="bg-blue-600 text-white px-8 py-2 rounded-none font-black text-[11px] shadow-sm hover:bg-blue-700 transition-all flex items-center gap-2 font-sans italic-none">{isSaving ? <Loader2 className="animate-spin" size={14}/> : <Save size={14}/>} 일보 저장</button>
