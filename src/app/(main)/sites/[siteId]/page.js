@@ -187,9 +187,7 @@ export default function SiteDetailPage() {
                                     </table>
                                 </div>
 
-                                {/* 🚀 공정률 섹션: 활성화 상태에 따른 유동적 UI 처리 */}
                                 <div className="grid grid-cols-2 gap-4">
-                                    {/* 식재 공정률 */}
                                     <div className={`bg-white border border-slate-200 rounded-lg p-5 shadow-sm transition-all ${!site?.is_plant_active ? 'opacity-40 grayscale' : ''}`}>
                                         <div className="flex justify-between items-center mb-3">
                                             <div className="flex items-center gap-2">
@@ -207,7 +205,6 @@ export default function SiteDetailPage() {
                                         </div>
                                     </div>
 
-                                    {/* 시설물 공정률 */}
                                     <div className={`bg-white border border-slate-200 rounded-lg p-5 shadow-sm transition-all ${!site?.is_facility_active ? 'opacity-40 grayscale' : ''}`}>
                                         <div className="flex justify-between items-center mb-3">
                                             <div className="flex items-center gap-2">
@@ -259,18 +256,23 @@ export default function SiteDetailPage() {
                                 <span className="bg-blue-50 text-blue-600 text-[8px] px-2 py-0.5 rounded-full animate-pulse font-black">LIVE</span>
                             </div>
                             <div className="space-y-5 font-black">
-                                {accessLogs.length > 0 ? accessLogs.map((log) => (
-                                    <div key={log.id} className="flex gap-4 group">
-                                        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-500 border border-slate-200 uppercase">{log.user_name?.substring(0, 1)}</div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between gap-2 mb-0.5">
-                                                <span className="text-[12px] text-slate-800 truncate">{log.user_name}</span>
-                                                <span className="text-[9px] text-slate-400 font-bold whitespace-nowrap"><Clock size={10} className="inline mr-1" />{log.log_time?.split(' ').slice(3).join(' ')}</span>
+                                {accessLogs.length > 0 ? accessLogs.map((log) => {
+                                    // 🚀 [수정] 회장님(임철수) 성함 익명화 처리
+                                    const displayName = log.user_name === '임철수' ? 'L.C.S' : log.user_name;
+                                    
+                                    return (
+                                        <div key={log.id} className="flex gap-4 group">
+                                            <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-500 border border-slate-200 uppercase">{displayName?.substring(0, 1)}</div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-2 mb-0.5">
+                                                    <span className="text-[12px] text-slate-800 truncate">{displayName}</span>
+                                                    <span className="text-[9px] text-slate-400 font-bold whitespace-nowrap"><Clock size={10} className="inline mr-1" />{log.log_time?.split(' ').slice(3).join(' ')}</span>
+                                                </div>
+                                                <p className="text-[10px] text-slate-500 font-bold leading-tight line-clamp-2">{log.content}</p>
                                             </div>
-                                            <p className="text-[10px] text-slate-500 font-bold leading-tight line-clamp-2">{log.content}</p>
                                         </div>
-                                    </div>
-                                )) : (
+                                    );
+                                }) : (
                                     <div className="py-10 text-center text-[10px] text-slate-300 font-black uppercase">활동 내역이 없습니다.</div>
                                 )}
                             </div>
