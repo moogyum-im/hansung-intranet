@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { useSearchParams, useRouter, useParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut, X, Plus, Edit3, Trash2, ChevronDown, ChevronUp, MousePointerClick, RotateCcw, AlertCircle } from 'lucide-react';
+import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut, X, Plus, Edit3, Trash2, ChevronDown, ChevronUp, MousePointerClick, RotateCcw, AlertCircle, ListFilter, ListMinus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const formatNumber = (num) => {
@@ -41,8 +41,9 @@ export default function DailyWorkPage() {
     const [selectedImage, setSelectedImage] = useState(null);
     const [focusedField, setFocusedField] = useState(null);
 
-    // 열 너비 상태 (DB 저장 및 복구용)
+    // [상태] 열 너비 및 스마트 폴딩(펼쳐보기) 관리
     const [columnWidths, setColumnWidths] = useState({});
+    const [expandedSections, setExpandedSections] = useState({});
 
     const isReadOnly = view === 'detail';
 
@@ -69,47 +70,41 @@ export default function DailyWorkPage() {
 
     const FIELD_MAPS = {
         labor_costs: { fields: ['name', 'price', 'count', 'type', 'prev_count', 'accum', 'total'], labels: ['성명', '단가', '공수', '직종', '전일누계', '출력누계', '금액'], title: '현장출력현황', sums: ['count', 'accum', 'total'] },
-        material_costs: { fields: ['item', 'spec', 'price', 'prev_count', 'count', 'accum', 'vendor', 'total'], labels: ['품명', '규격', '단가', '전일누계', '금일수량', '전체누계', '거래처', '금액'], title: '주요자재반입현황', sums: ['prev_count', 'count', 'accum', 'total'] },
-        equipment_costs: { fields: ['item', 'type', 'price', 'prev_count', 'count', 'accum', 'total'], labels: ['품명', '투입공종', '단가', '전일누계', '금일', '출력누계', '금액'], title: '장비사용현황', sums: ['prev_count', 'count', 'accum', 'total'] },
+        material_costs: { fields: ['item', 'spec', 'price', 'prev_count', 'count', 'accum', 'total'], labels: ['품명', '규격', '단가', '전일누계', '금일수량', '전체누계', '금액'], title: '주요자재반입현황', sums: ['prev_count', 'count', 'accum', 'total'] },
+        equipment_costs: { fields: ['item', 'price', 'prev_count', 'count', 'accum', 'total'], labels: ['품명', '단가', '전일누계', '금일', '출력누계', '금액'], title: '장비사용현황', sums: ['prev_count', 'count', 'accum', 'total'] },
         tree_costs: { fields: ['item', 'spec', 'price', 'design_count', 'prev_count', 'count', 'accum', 'vendor', 'total'], labels: ['품명', '규격', '단가', '설계수량', '전일누계', '금일수량', '전체누계', '거래처', '금액'], title: '수목반입현황', sums: ['design_count', 'prev_count', 'count', 'accum', 'total'] },
         transport_costs: { fields: ['item', 'spec', 'count', 'price', 'vendor', 'total'], labels: ['품명', '규격', '수량', '단가', '거래처', '금액'], title: '운반비투입현황', sums: ['count', 'total'] },
         subcontract_costs: { fields: ['item', 'spec', 'price', 'count', 'vendor', 'total'], labels: ['품명', '규격', '단가', '수량', '거래처', '금액'], title: '자재납품 및 시공(외주)', sums: ['count', 'total'] },
         etc_costs: { fields: ['category', 'content', 'usage', 'total'], labels: ['계정', '내용', '사용처', '금액'], title: '기타경비', sums: ['total'] }
     };
 
+    // 열 너비 조절 로직
     const onResizeStart = (tableKey, colIndex, e) => {
         if (isReadOnly) return;
         const startX = e.pageX;
         const startWidth = e.target.parentElement.offsetWidth;
-
         const onMouseMove = (moveEvent) => {
             const currentWidth = startWidth + (moveEvent.pageX - startX);
             setColumnWidths(prev => ({
                 ...prev,
-                [tableKey]: {
-                    ...prev[tableKey],
-                    [colIndex]: Math.max(40, currentWidth)
-                }
+                [tableKey]: { ...prev[tableKey], [colIndex]: Math.max(40, currentWidth) }
             }));
         };
-
         const onMouseUp = () => {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
         };
-
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     };
 
+    // 🚀 역대 데이터를 합산하여 실시간 보정하는 함수
     const syncWithAllPastData = useCallback(async (currentData) => {
         if (!currentData?.report_date) return currentData;
         const { data: pastReports } = await supabase.from('daily_site_reports').select('notes').eq('site_id', siteId).lt('report_date', currentData.report_date);
         if (!pastReports) return currentData;
-        const historicalDataMap = {}; 
-        const historicalProgress = { plant: 0, facility: 0 };
-        const historicalSettlement = {};
 
+        const historicalDataMap = {}; const historicalProgress = { plant: 0, facility: 0 }; const historicalSettlement = {};
         pastReports.forEach(report => {
             const notes = typeof report.notes === 'string' ? JSON.parse(report.notes) : report.notes;
             historicalProgress.plant += parseNumber(notes.progress_plant);
@@ -118,34 +113,28 @@ export default function DailyWorkPage() {
                 if (!historicalDataMap[key]) historicalDataMap[key] = {};
                 if (notes[key]) {
                     notes[key].forEach(row => {
-                        const id = row.item || row.name;
-                        if (!id) return;
-                        if (!historicalDataMap[key][id]) {
-                            historicalDataMap[key][id] = { ...row, count: 0, total: 0, prev_count: 0, accum: 0 }; 
-                        }
+                        const id = row.item || row.name; if (!id) return;
+                        if (!historicalDataMap[key][id]) { historicalDataMap[key][id] = { ...row, count: 0, total: 0, prev_count: 0, accum: 0 }; }
                         historicalDataMap[key][id].prev_count += parseNumber(row.count);
                     });
                 }
             });
             if (notes.settlement_costs) {
-                notes.settlement_costs.forEach(item => {
-                    historicalSettlement[item.item] = (historicalSettlement[item.item] || 0) + parseNumber(item.today);
-                });
+                notes.settlement_costs.forEach(item => { historicalSettlement[item.item] = (historicalSettlement[item.item] || 0) + parseNumber(item.today); });
             }
         });
 
         const updatedData = { ...currentData };
         updatedData.progress_plant_prev = historicalProgress.plant.toFixed(4);
         updatedData.progress_facility_prev = historicalProgress.facility.toFixed(4);
+
         ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs'].forEach(key => {
             const currentRows = updatedData[key] || [];
             const pastItems = historicalDataMap[key] || {};
             const processedRows = currentRows.map(row => {
-                const id = row.item || row.name;
-                const pastInfo = pastItems[id];
+                const id = row.item || row.name; const pastInfo = pastItems[id];
                 if (pastInfo) {
-                    const newPrev = pastInfo.prev_count;
-                    delete pastItems[id];
+                    const newPrev = pastInfo.prev_count; delete pastItems[id];
                     return { ...row, prev_count: newPrev.toString(), accum: (newPrev + parseNumber(row.count)).toString() };
                 }
                 return { ...row, prev_count: "0", accum: row.count };
@@ -153,6 +142,7 @@ export default function DailyWorkPage() {
             const missingRows = Object.values(pastItems).map(pastRow => ({ ...pastRow, prev_count: pastRow.prev_count.toString(), count: "0", accum: pastRow.prev_count.toString(), total: "0" }));
             updatedData[key] = [...processedRows, ...missingRows];
         });
+
         if (updatedData.settlement_costs) {
             updatedData.settlement_costs = updatedData.settlement_costs.map(item => {
                 const totalPast = historicalSettlement[item.item] || 0;
@@ -169,27 +159,20 @@ export default function DailyWorkPage() {
             if (reportId) {
                 const { data: rep } = await supabase.from('daily_site_reports').select('*').eq('id', reportId).single();
                 const notes = typeof rep.notes === 'string' ? JSON.parse(rep.notes) : rep.notes;
-                let fullData = { ...notes, total_contract_amount: site?.budget || 0 };
-                fullData = await syncWithAllPastData(fullData);
-                setFormData(fullData);
-                setOriginalData(fullData); 
+                let fullData = await syncWithAllPastData({ ...notes, total_contract_amount: site?.budget || 0 });
+                setFormData(fullData); setOriginalData(fullData); 
                 if (notes.savedColumnWidths) setColumnWidths(notes.savedColumnWidths);
                 if (notes.savedVisibleSections) setVisibleSections(notes.savedVisibleSections);
                 setTodayPhotos(rep.photos?.filter(p => p.timeType === 'today') || []);
                 setTomorrowPhotos(rep.photos?.filter(p => p.timeType === 'tomorrow') || []);
             } else {
                 const initialData = {
-                    report_date: new Date().toISOString().split('T')[0],
-                    weather: '맑음', report_category: categoryType, 
-                    total_contract_amount: site?.budget || 0,
-                    progress_plant_prev: '0.0000', progress_facility_prev: '0.0000',
-                    progress_plant: '0.0000', progress_facility: '0.0000',
+                    report_date: new Date().toISOString().split('T')[0], weather: '맑음', report_category: categoryType, total_contract_amount: site?.budget || 0,
+                    progress_plant_prev: '0.0000', progress_facility_prev: '0.0000', progress_plant: '0.0000', progress_facility: '0.0000',
                     settlement_costs: [{ item: '수목', prev: 0, today: 0, total: 0 }, { item: '자재납품 및 시공(외주)', prev: 0, today: 0, total: 0 }, { item: '자재비', prev: 0, today: 0, total: 0 }, { item: '장비대', prev: 0, today: 0, total: 0 }, { item: '노무비', prev: 0, today: 0, total: 0 }, { item: '운반비', prev: 0, today: 0, total: 0 }, { item: '기타경비', prev: 0, today: 0, total: 0 }],
                     labor_costs: [], material_costs: [], equipment_costs: [], tree_costs: [], transport_costs: [], subcontract_costs: [], etc_costs: []
                 };
-                const syncedInitial = await syncWithAllPastData(initialData);
-                setFormData(syncedInitial);
-                setOriginalData(syncedInitial);
+                const synced = await syncWithAllPastData(initialData); setFormData(synced); setOriginalData(synced);
             }
         };
         load();
@@ -210,14 +193,8 @@ export default function DailyWorkPage() {
     }, [formData?.settlement_costs]);
 
     const handleSave = async () => {
-        if (isSaving) return;
-        setIsSaving(true);
+        if (isSaving) return; setIsSaving(true);
         try {
-            const { data: duplicateCheck } = await supabase.from('daily_site_reports').select('id, notes').eq('site_id', siteId).eq('report_date', formData.report_date);
-            const existingRecord = duplicateCheck?.find(r => (JSON.parse(r.notes)?.report_category || 'plant') === categoryType);
-            if (existingRecord && existingRecord.id !== reportId) {
-                if (!confirm(`[주의] ${formData.report_date} 날짜에 이미 작성된 보고서가 존재합니다. 덮어쓰시겠습니까?`)) { setIsSaving(false); return; }
-            }
             const uploadedCurrentPhotos = await Promise.all([...todayPhotos, ...tomorrowPhotos].map(async (p) => {
                 if (!p || p.url) return p;
                 const path = `${siteId}/${uuidv4()}.jpg`;
@@ -225,25 +202,23 @@ export default function DailyWorkPage() {
                 const { data } = supabase.storage.from('daily_reports').getPublicUrl(path);
                 return { id: p.id, url: data.publicUrl, timeType: p.timeType, description: p.description };
             }));
+
             const payload = { 
                 site_id: siteId, report_date: formData.report_date, author_id: currentUser.id, photos: uploadedCurrentPhotos.filter(v => v !== null), 
-                notes: JSON.stringify({ ...formData, savedVisibleSections: visibleSections, savedColumnWidths: columnWidths }), 
-                content: formData.today_work || '작업일보 기록'
+                notes: JSON.stringify({ ...formData, savedVisibleSections: visibleSections, savedColumnWidths: columnWidths }), content: formData.today_work || '작업일보 기록'
             };
-            const targetId = existingRecord ? existingRecord.id : (reportId || null);
-            const { error } = await supabase.from('daily_site_reports').upsert(targetId ? { id: targetId, ...payload } : payload);
-            if (error) throw error;
-            toast.success("저장되었습니다.");
-            router.push(`/sites/${siteId}`);
-        } catch (e) { console.error(e); toast.error("저장 오류 발생"); } finally { setIsSaving(false); }
+            const { data: existing } = await supabase.from('daily_site_reports').select('id, notes').eq('site_id', siteId).eq('report_date', formData.report_date);
+            const targetId = existing?.find(r => (JSON.parse(r.notes)?.report_category || 'plant') === categoryType)?.id || reportId;
+            await supabase.from('daily_site_reports').upsert(targetId ? { id: targetId, ...payload } : payload);
+            toast.success("저장되었습니다."); router.push(`/sites/${siteId}`);
+        } catch (e) { toast.error("저장 오류 발생"); } finally { setIsSaving(false); }
     };
 
     const handleDelete = async () => {
         if (!confirm("정말 이 보고서를 삭제하시겠습니까?")) return;
         try {
             await supabase.from('daily_site_reports').delete().eq('id', reportId);
-            toast.success("삭제되었습니다.");
-            router.back();
+            toast.success("삭제되었습니다."); router.back();
         } catch (e) { toast.error("삭제 실패"); }
     };
 
@@ -251,29 +226,16 @@ export default function DailyWorkPage() {
         try {
             const { data: allReports } = await supabase.from('daily_site_reports').select('*').eq('site_id', siteId).eq('report_date', importDate);
             const match = allReports?.find(r => (JSON.parse(r.notes)?.report_category || 'plant') === categoryType);
-            if (!match) return toast.error(`불러올 데이터가 없습니다.`);
+            if (!match) return toast.error(`데이터가 없습니다.`);
             const importedData = JSON.parse(match.notes);
-            if (match.photos && match.photos.length > 0) { setTomorrowPhotos(match.photos.map(p => ({ ...p, timeType: 'tomorrow' }))); setTodayPhotos([]); }
-            const baseDataForSync = {
-                ...formData, ...importedData, report_date: formData.report_date, report_category: categoryType, prev_work: importedData.today_work, today_work: '', progress_plant: '0.0000', progress_facility: '0.0000',
-                labor_costs: (importedData.labor_costs || []).map(r => ({...r, count: '0', total: '0'})),
-                material_costs: (importedData.material_costs || []).map(r => ({...r, count: '0', total: '0'})),
-                equipment_costs: (importedData.equipment_costs || []).map(r => ({...r, count: '0', total: '0'})),
-                tree_costs: (importedData.tree_costs || []).map(r => ({...r, count: '0', total: '0'})),
-                transport_costs: (importedData.transport_costs || []).map(r => ({...r, count: '0', total: '0'})),
-                subcontract_costs: (importedData.subcontract_costs || []).map(r => ({...r, count: '0', total: '0'})),
-                etc_costs: (importedData.etc_costs || []).map(r => ({...r, total: 0}))
-            };
-            const correctedData = await syncWithAllPastData(baseDataForSync);
-            setFormData(correctedData);
-            setIsImportModalOpen(false);
-            toast.success("전체 이력 기반 동기화 완료");
+            if (match.photos?.length > 0) { setTomorrowPhotos(match.photos.map(p => ({ ...p, timeType: 'tomorrow' }))); setTodayPhotos([]); }
+            const base = { ...formData, ...importedData, report_date: formData.report_date, report_category: categoryType, prev_work: importedData.today_work, today_work: '' };
+            setFormData(await syncWithAllPastData(base)); setIsImportModalOpen(false);
         } catch (e) { toast.error("불러오기 실패"); }
     };
 
     const handlePhotoUpload = (e, type, idx) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const file = e.target.files[0]; if (!file) return;
         const newPhoto = { id: uuidv4(), file, preview: URL.createObjectURL(file), timeType: type, description: "" };
         type === 'today' ? setTodayPhotos(prev => { const n = [...prev]; n[idx] = newPhoto; return n; }) : setTomorrowPhotos(prev => { const n = [...prev]; n[idx] = newPhoto; return n; });
     };
@@ -284,19 +246,34 @@ export default function DailyWorkPage() {
         setTomorrowPhotos(prev => prev.filter((_, i) => i !== idx));
     };
 
+    // 실시간 금액 계산 로직
+    useEffect(() => {
+        if (!formData || view === 'detail') return;
+        const getSum = (key) => (formData[key] || []).reduce((acc, cur) => acc + parseNumber(cur.total), 0);
+        const sums = { '수목': getSum('tree_costs'), '자재납품 및 시공(외주)': getSum('subcontract_costs'), '자재비': getSum('material_costs'), '장비대': getSum('equipment_costs'), '노무비': getSum('labor_costs'), '운반비': getSum('transport_costs'), '기타경비': getSum('etc_costs') };
+        const nextSettlement = (formData.settlement_costs || []).map(s => ({ ...s, today: sums[s.item] || 0, total: parseNumber(s.prev) + (sums[s.item] || 0) }));
+        if (JSON.stringify(formData.settlement_costs) !== JSON.stringify(nextSettlement)) {
+            setFormData(prev => ({ ...prev, settlement_costs: nextSettlement }));
+        }
+    }, [formData?.labor_costs, formData?.tree_costs, formData?.material_costs, formData?.equipment_costs, formData?.transport_costs, formData?.subcontract_costs, formData?.etc_costs, view]);
+
     const renderTable = (key) => {
         if (!visibleSections[key]) return null;
-        const config = FIELD_MAPS[key];
-        const rows = formData?.[key] || [];
-        const isCollapsed = collapsedSections[key];
-        const widths = columnWidths[key] || {};
+        const config = FIELD_MAPS[key]; const allRows = formData?.[key] || [];
+        const isCollapsed = collapsedSections[key]; const widths = columnWidths[key] || {};
+
+        // 금일 내역 우선 정렬
+        const todayRows = allRows.filter(r => parseNumber(r.count) > 0 || parseNumber(r.total) > 0);
+        const pastRows = allRows.filter(r => parseNumber(r.count) === 0 && parseNumber(r.total) === 0);
+        const isExpanded = expandedSections[key];
+        const displayRows = isExpanded ? [...todayRows, ...pastRows] : todayRows;
 
         return (
             <div key={key} className="border border-slate-400 flex flex-col font-bold mb-3 w-full bg-white shadow-sm font-sans rounded-none overflow-hidden">
-                <div onClick={() => toggleSection(key)} className="bg-yellow-50 border-b border-slate-400 p-1 flex justify-between items-center font-black rounded-none sticky left-0 cursor-pointer hover:bg-yellow-100 transition-colors">
-                    <div className="flex items-center gap-1 font-black"><span className="text-[10px] uppercase">▣ {config.title} ({rows.length})</span></div>
+                <div onClick={() => toggleSection(key)} className="bg-yellow-50 border-b border-slate-400 p-1 flex justify-between items-center font-black cursor-pointer hover:bg-yellow-100 transition-colors">
+                    <div className="flex items-center gap-1 font-black"><span className="text-[10px] uppercase">▣ {config.title} ({allRows.length})</span></div>
                     <div className="flex items-center gap-2">
-                        {!isReadOnly && <button onClick={(e)=>{ e.stopPropagation(); setFormData(p=>({...p, [key]: [...(p[key]||[]), config.fields.reduce((a,f)=>({...a,[f]:''}),{})]})) }} className="bg-white border border-slate-400 px-2 py-0.5 text-[10px] font-black shadow-sm rounded-none hover:bg-slate-50 transition-all">+ 추가</button>}
+                        {!isReadOnly && <button onClick={(e)=>{ e.stopPropagation(); setFormData(p=>({...p, [key]: [{id:uuidv4(), ...config.fields.reduce((a,f)=>({...a,[f]:''}),{})}, ...(p[key]||[])]})) }} className="bg-white border border-slate-400 px-2 py-0.5 text-[10px] font-black shadow-sm rounded-none hover:bg-slate-50 transition-all">+ 추가</button>}
                         <div className="px-1 text-slate-500">{isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}</div>
                     </div>
                 </div>
@@ -315,7 +292,7 @@ export default function DailyWorkPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {rows.map((row, i) => (
+                                {displayRows.map((row, i) => (
                                     <tr key={i} className="border-b border-slate-200 hover:bg-slate-50">
                                         {config.fields.map((f, idx) => {
                                             const isNumeric = ['total','price','accum','count','prev_count', 'design_count'].includes(f);
@@ -323,16 +300,16 @@ export default function DailyWorkPage() {
                                             return (
                                                 <td key={f} className="border-r border-slate-200 p-0 font-sans relative overflow-hidden" style={{ width: widths[idx] ? `${widths[idx]}px` : 'auto' }}>
                                                     <input className={`w-full p-1 outline-none bg-transparent font-sans font-black rounded-none text-[8.5px] ${isNumeric ? 'text-right pr-1.5' : 'text-center px-1'}`}
-                                                        value={isNumeric && focusedField !== fieldId ? formatNumber(row[f]) : (isNumeric && (row[f] === "0" || row[f] === 0) ? "" : row[row[f] === undefined ? f : f])}
-                                                        readOnly={isReadOnly} onFocus={() => isNumeric && setFocusedField(fieldId)} onBlur={() => setFocusedField(null)} placeholder={isNumeric && focusedField === fieldId ? "0" : ""}
+                                                        value={isNumeric && focusedField !== fieldId ? formatNumber(row[f]) : (isNumeric && (row[f] === "0" || row[f] === 0) ? "" : row[f])}
+                                                        readOnly={isReadOnly} onFocus={() => isNumeric && setFocusedField(fieldId)} onBlur={() => setFocusedField(null)}
                                                         onChange={e => {
                                                             if (isReadOnly) return;
-                                                            const updated = [...rows]; 
+                                                            const updated = [...allRows]; const rowIndexInAll = allRows.findIndex(r => r === row);
                                                             const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
-                                                            updated[i][f] = val;
+                                                            updated[rowIndexInAll][f] = val;
                                                             if (isNumeric) {
-                                                                if (f === 'count' || f === 'prev_count') updated[i].accum = (parseNumber(updated[i].prev_count || 0) + parseNumber(updated[i].count || 0)).toString();
-                                                                if (f === 'price' || f === 'count') updated[i].total = (parseNumber(updated[i].price) * parseNumber(updated[i].count)).toString();
+                                                                if (f === 'count' || f === 'prev_count') updated[rowIndexInAll].accum = (parseNumber(updated[rowIndexInAll].prev_count || 0) + parseNumber(updated[rowIndexInAll].count || 0)).toString();
+                                                                if (f === 'price' || f === 'count') updated[rowIndexInAll].total = (parseNumber(updated[rowIndexInAll].price) * parseNumber(updated[rowIndexInAll].count)).toString();
                                                             }
                                                             setFormData({...formData, [key]: updated});
                                                         }} 
@@ -340,11 +317,22 @@ export default function DailyWorkPage() {
                                                 </td>
                                             );
                                         })}
-                                        {!isReadOnly && <td className="text-center text-red-500 cursor-pointer p-0 text-xs font-black" onClick={()=>setFormData(p=>({...p, [key]: rows.filter((_, idx)=>idx!==i)}))}>×</td>}
+                                        {!isReadOnly && <td className="text-center text-red-500 cursor-pointer p-0 text-xs font-black" onClick={()=>setFormData(p=>({...p, [key]: allRows.filter(r=>r!==row)}))}>×</td>}
                                     </tr>))}
+                                {pastRows.length > 0 && (
+                                    <tr>
+                                        <td colSpan={config.fields.length + (isReadOnly ? 0 : 1)} className="bg-slate-50/50 p-2 text-center border-b border-slate-200">
+                                            {isExpanded ? (
+                                                <button onClick={() => setExpandedSections(p=>({...p, [key]: false}))} className="text-[9px] text-red-500 font-black hover:bg-red-50 flex items-center justify-center gap-2 w-full py-1"><ListMinus size={12} /> 전일 내역 접기</button>
+                                            ) : (
+                                                <button onClick={() => setExpandedSections(p=>({...p, [key]: true}))} className="text-[9px] text-blue-600 font-black hover:bg-blue-50 flex items-center justify-center gap-2 w-full py-1"><ListFilter size={12} /> 전일 내역 {pastRows.length}건 펼쳐보기 (오늘 내역 우선 표시됨)</button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                )}
                                 <tr className="bg-slate-50 border-t border-slate-300 font-black text-blue-800">
                                     <td className="text-center p-1 border-r border-slate-200 font-sans whitespace-nowrap">합계</td>
-                                    {config.fields.slice(1).map((f, idx) => (<td key={idx} className="text-right pr-1.5 border-r border-slate-200 font-sans text-[8.5px]" style={{ width: widths[idx+1] ? `${widths[idx+1]}px` : 'auto' }}>{config.sums.includes(f) ? formatNumber(rows.reduce((acc, cur) => acc + parseNumber(cur[f]), 0)) : ''}</td>))}
+                                    {config.fields.slice(1).map((f, idx) => (<td key={idx} className="text-right pr-1.5 border-r border-slate-200 font-sans text-[8.5px]" style={{ width: widths[idx+1] ? `${widths[idx+1]}px` : 'auto' }}>{config.sums.includes(f) ? formatNumber(allRows.reduce((acc, cur) => acc + parseNumber(cur[f]), 0)) : ''}</td>))}
                                     {!isReadOnly && <td></td>}
                                 </tr>
                             </tbody>
@@ -356,8 +344,7 @@ export default function DailyWorkPage() {
     };
 
     if (!formData) return null;
-    const totalTodaySpend = formData?.settlement_costs?.reduce((a,c)=>a+parseNumber(c.today), 0) || 0;
-    const totalAccumSpend = formData?.settlement_costs?.reduce((a,c)=>a+parseNumber(c.total), 0) || 0;
+    const totalAccumSpend = settlementTotals.total;
     const contractAmt = parseNumber(formData?.total_contract_amount);
     const spendRate = contractAmt > 0 ? ((totalAccumSpend / contractAmt) * 100).toFixed(2) : "0.00";
 
@@ -387,13 +374,10 @@ export default function DailyWorkPage() {
                         <div className="flex flex-col gap-1 border-l pl-4 border-slate-200">
                             <div className="flex items-center gap-2 bg-red-50 px-3 py-1.5 border-2 border-red-500 rounded-none mb-0.5 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse">
                                 <AlertCircle size={15} className="text-red-600 fill-red-100" />
-                                <span className="text-[11px] font-black text-red-600 uppercase tracking-tight">표의 경계선을 드래그하여 열 너비를 조절하세요! 가려지는 내용 없이 출력이 가능합니다.</span>
+                                <span className="text-[11px] font-black text-red-600 uppercase tracking-tight">표의 경계선을 드래그하여 열 너비를 조절하세요! (금일 내역 상단 정렬 적용)</span>
                             </div>
                             <div className="flex gap-1 font-sans items-center">
-                                <div className="flex items-center gap-1 mr-2 text-slate-400">
-                                    <MousePointerClick size={12} />
-                                    <span className="text-[9px] font-black">항목 선택:</span>
-                                </div>
+                                <div className="flex items-center gap-1 mr-2 text-slate-400"><MousePointerClick size={12} /><span className="text-[9px] font-black">항목 선택:</span></div>
                                 {Object.entries(FIELD_MAPS).map(([key, config]) => (
                                     <button key={key} onClick={() => setVisibleSections(p => ({...p, [key]: !visibleSections[key]}))} className={`px-2.5 py-1.5 text-[9px] rounded-none transition-all font-black border ${visibleSections[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border border-slate-100 hover:border-slate-300'}`}>{config.title.split('(')[0]}</button>
                                 ))}
@@ -430,16 +414,16 @@ export default function DailyWorkPage() {
                                 <h1 className="text-5xl font-black uppercase tracking-[1em] text-left mt-2 mb-4 font-sans rounded-none">작 업 일 보</h1>
                                 <div className="flex gap-2 flex-wrap items-end font-sans italic-none font-black">
                                     <div className="flex border border-slate-400 text-[9px] font-black h-8 shrink-0 shadow-sm items-center px-3 bg-slate-50 uppercase rounded-none whitespace-nowrap">총 도급액: {formatNumber(formData?.total_contract_amount)}원</div>
-                                    <div className="flex border border-slate-400 text-[9px] font-black h-8 shrink-0 shadow-sm items-center px-3 text-blue-700 font-sans rounded-none whitespace-nowrap">금일 사용: {formatNumber(totalTodaySpend)}원</div>
-                                    <div className="flex border border-slate-400 text-[11px] bg-red-50 font-black h-8 shrink-0 shadow-sm items-center px-4 text-red-600 font-sans rounded-none whitespace-nowrap">누적 집행: {formatNumber(totalAccumSpend)}원 ({spendRate}%)</div>
+                                    <div className="flex border border-slate-400 text-[9px] font-black h-8 shrink-0 shadow-sm items-center px-3 text-blue-700 font-sans rounded-none whitespace-nowrap">금일 사용: {formatNumber(settlementTotals.today)}원</div>
+                                    <div className="flex border border-slate-400 text-[11px] bg-red-50 font-black h-8 shrink-0 shadow-sm items-center px-4 text-red-600 font-sans rounded-none whitespace-nowrap">누적 집행: {formatNumber(settlementTotals.total)}원 ({spendRate}%)</div>
                                     <div className="flex border border-slate-400 text-[11px] bg-blue-50 font-black h-8 shrink-0 shadow-sm items-center px-4 text-blue-800 font-sans gap-4 rounded-none whitespace-nowrap">
-                                        <span>식재 공정률: {(parseNumber(formData?.progress_plant_prev) + parseNumber(formData?.progress_plant)).toFixed(4)}%</span>
-                                        <div className="w-[1px] h-4 bg-blue-200" />
-                                        <span>시설 공정률: {(parseNumber(formData?.progress_facility_prev) + parseNumber(formData?.progress_facility)).toFixed(4)}%</span>
+                                        {/* 🚀 [좌측상단] 식재/시설 활성화 여부에 따라 공정률 표시 제어 */}
+                                        {siteData?.is_plant_active && <span>식재 공정률: {(parseNumber(formData?.progress_plant_prev) + parseNumber(formData?.progress_plant)).toFixed(4)}%</span>}
+                                        {siteData?.is_plant_active && siteData?.is_facility_active && <div className="w-[1px] h-4 bg-blue-200" />}
+                                        {siteData?.is_facility_active && <span>시설 공정률: {(parseNumber(formData?.progress_facility_prev) + parseNumber(formData?.progress_facility)).toFixed(4)}%</span>}
                                     </div>
                                 </div>
                             </div>
-                            {/* [수정] 현장명 영역 너비 350px -> 500px 확장 */}
                             <div className="flex flex-col gap-0 w-[500px] font-black shrink-0 border border-slate-400 shadow-sm bg-white font-sans italic-none rounded-none">
                                 <div className="flex border-b border-slate-400 h-8 font-black italic-none rounded-none">
                                     <div className="bg-slate-50 px-2 flex items-center border-r border-slate-400 text-[9px] w-20 font-black font-sans rounded-none">현장명</div>
@@ -447,19 +431,21 @@ export default function DailyWorkPage() {
                                     <div className="bg-slate-50 px-2 flex items-center border-l border-r border-slate-400 text-[9px] w-20 font-black font-sans rounded-none">작업 일시</div>
                                     <input type="date" className="px-2 text-[10px] outline-none bg-transparent font-sans font-black w-32 rounded-none" value={formData?.report_date || ''} readOnly={isReadOnly} onChange={e=>setFormData({...formData, report_date: e.target.value})} />
                                 </div>
+                                {/* 🚀 [우측현황판] 식재/시설 활성화 여부에 따라 렌더링 제어 */}
                                 {['plant', 'facility'].map((k, i) => {
                                     const isActive = k === 'plant' ? siteData?.is_plant_active : siteData?.is_facility_active;
+                                    if (!isActive) return null; // 해당 공정이 활성화되지 않으면 아예 렌더링하지 않음
                                     const fieldId = `progress-${k}`;
                                     const displayVal = focusedField === fieldId ? formData?.[`progress_${k}`] : (parseNumber(formData?.[`progress_${k}`]) === 0 ? "" : formData?.[`progress_${k}`]);
                                     return (
-                                        <div key={k} className={`flex h-10 bg-blue-50 font-black font-sans italic-none ${i === 0 ? 'border-b border-slate-400' : ''} rounded-none`}>
+                                        <div key={k} className={`flex h-10 bg-blue-50 font-black font-sans italic-none ${i === 0 && siteData?.is_facility_active ? 'border-b border-slate-400' : ''} rounded-none`}>
                                             <div className="bg-blue-50 px-2 flex items-center border-r border-slate-400 font-black uppercase font-sans text-[8px] w-20 font-black"> {k==='plant'?'식재공정':'시설공정'}</div>
                                             <div className="flex divide-x divide-slate-400 bg-white font-sans flex-1 italic-none rounded-none">
                                                 <div className="flex flex-col items-center justify-center flex-1 leading-tight"><span className="text-[6px] text-slate-400 font-sans whitespace-nowrap">전일</span><span className="text-[11px] font-black font-sans whitespace-nowrap">{formData?.[`progress_${k}_prev`] === '0.0000' ? '-' : formData?.[`progress_${k}_prev`]}</span></div>
-                                                <div className={`flex flex-col items-center justify-center flex-1 leading-tight ${!isActive ? 'bg-slate-100' : 'bg-blue-50/30'}`}>
+                                                <div className={`flex flex-col items-center justify-center flex-1 leading-tight bg-blue-50/30`}>
                                                     <span className="text-[6px] text-blue-400 font-sans whitespace-nowrap">금일(입력)</span>
-                                                    <input className={`w-full text-center text-[12px] text-blue-700 outline-none font-black bg-transparent font-sans ${!isActive ? 'cursor-not-allowed' : ''} rounded-none`} 
-                                                        value={displayVal} readOnly={isReadOnly || !isActive} onFocus={() => setFocusedField(fieldId)} onBlur={() => setFocusedField(null)} placeholder={focusedField === fieldId ? "0.0000" : "-"}
+                                                    <input className={`w-full text-center text-[12px] text-blue-700 outline-none font-black bg-transparent font-sans`} 
+                                                        value={displayVal} readOnly={isReadOnly} onFocus={() => setFocusedField(fieldId)} onBlur={() => setFocusedField(null)}
                                                         onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value.replace(/[^0-9.]/g, '')})} 
                                                     />
                                                 </div>
@@ -487,11 +473,11 @@ export default function DailyWorkPage() {
                                                 <td className="text-right px-2 text-red-600 font-bold font-sans whitespace-nowrap">{formatNumber(row.total)}</td>
                                             </tr>
                                         ))}
-                                        <tr className="bg-slate-100 border-t-2 border-slate-400 font-black rounded-none">
+                                        <tr className="bg-slate-100 border-t-2 border-slate-400 font-black rounded-none font-black text-blue-800">
                                             <td className="text-center p-1 border-r border-slate-200 font-sans whitespace-nowrap">총 합계</td>
                                             <td className="text-right px-2 border-r border-slate-200 font-sans whitespace-nowrap">{formatNumber(settlementTotals.prev)}</td>
                                             <td className="text-right px-2 text-blue-800 border-r border-slate-200 font-sans">{formatNumber(settlementTotals.today)}</td>
-                                            <td className="text-right px-2 text-red-800 font-sans">{formatNumber(settlementTotals.total)}</td>
+                                            <td className="text-right px-2 text-red-800 font-sans font-black">{formatNumber(settlementTotals.total)}</td>
                                         </tr>
                                     </tbody>
                                 </table>
