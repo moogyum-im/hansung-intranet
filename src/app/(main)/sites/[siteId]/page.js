@@ -258,7 +258,7 @@ export default function SiteDetailPage() {
                             <div className="space-y-5 font-black">
                                 {accessLogs.length > 0 ? accessLogs.map((log) => {
                                     // 🚀 [수정] 회장님(임철수) 성함 익명화 처리
-                                    const displayName = log.user_name === '임철수' ? 'L.C.S' : log.user_name;
+                                    const displayName = log.user_name === '임철수' ? 'CEO' : log.user_name;
                                     
                                     return (
                                         <div key={log.id} className="flex gap-4 group">
