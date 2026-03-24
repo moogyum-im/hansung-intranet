@@ -312,12 +312,19 @@ export default function ApprovalsPage() {
         try {
             const { data: appData } = await supabase.rpc('get_my_approvals', { p_user_id: currentEmployee.id });
             if (appData) {
+                // 🚀 [중복 제거 핵심 로직] 문서 ID(doc.id) 기준으로 고유한 데이터만 추출하여 2번씩 노출되는 버그 완벽 차단
+                const getUniqueDocs = (docs) => {
+                    const uniqueMap = new Map();
+                    docs.forEach(doc => uniqueMap.set(doc.id, doc));
+                    return Array.from(uniqueMap.values());
+                };
+
                 setApprovalsData({
-                    toReview: appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려'),
-                    submitted: appData.filter(doc => doc.category === 'submitted' && doc.status !== '반려' && doc.status !== '승인' && doc.status !== '완료'),
-                    approved: appData.filter(doc => (doc.status === '승인' || doc.status === '완료') && doc.status !== '반려'),
-                    rejected: appData.filter(doc => doc.status === '반려'),
-                    referred: appData.filter(doc => doc.category === 'referred'),
+                    toReview: getUniqueDocs(appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려')),
+                    submitted: getUniqueDocs(appData.filter(doc => doc.category === 'submitted' && doc.status !== '반려' && doc.status !== '승인' && doc.status !== '완료')),
+                    approved: getUniqueDocs(appData.filter(doc => (doc.status === '승인' || doc.status === '완료') && doc.status !== '반려')),
+                    rejected: getUniqueDocs(appData.filter(doc => doc.status === '반려')),
+                    referred: getUniqueDocs(appData.filter(doc => doc.category === 'referred')),
                 });
             }
 
