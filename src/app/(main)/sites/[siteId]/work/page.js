@@ -8,7 +8,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut, X, Plus, Edit3, Trash2, ChevronDown, ChevronUp, MousePointerClick, RotateCcw, AlertCircle, ListFilter, ListMinus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-// 숫자 포맷팅 유틸리티
 const formatNumber = (num) => {
     if (num === null || num === undefined || num === "" || isNaN(num) || Number(num.toString().replace(/,/g, '')) === 0) return "-";
     const n = Number(num.toString().replace(/,/g, ''));
@@ -23,7 +22,6 @@ const parseNumber = (str) => {
     return isNaN(num) ? 0 : num;
 };
 
-// 🚀 [에러 방지 핵심] 빈 데이터나 깨진 JSON을 읽을 때 화면이 멈추지 않도록 보호하는 함수
 const safeParseJSON = (data) => {
     if (!data) return {};
     if (typeof data === 'object') return data;
@@ -31,7 +29,7 @@ const safeParseJSON = (data) => {
         return JSON.parse(data);
     } catch (error) {
         console.warn('JSON parsing error (safely ignored):', error);
-        return {}; // 에러 발생 시 빈 객체를 반환하여 프로그램 다운 방지
+        return {}; 
     }
 };
 
@@ -118,9 +116,7 @@ export default function DailyWorkPage() {
         const historicalDataMap = {}; const historicalProgress = { plant: 0, facility: 0 }; const historicalSettlement = {};
         
         pastReports.forEach(report => {
-            // 🚀 파싱 오류 해결 적용
             const notes = safeParseJSON(report.notes);
-            
             historicalProgress.plant += parseNumber(notes.progress_plant);
             historicalProgress.facility += parseNumber(notes.progress_facility);
 
@@ -154,25 +150,32 @@ export default function DailyWorkPage() {
             const pastItems = { ...historicalDataMap[key] };
             
             const processedRows = currentRows.map(row => {
-                const { isNew, ...cleanRow } = row;
+                const { isPastRecord, ...cleanRow } = row;
                 const uKey = getUniqueKey(cleanRow);
                 const pastInfo = pastItems[uKey];
+                
+                const rowId = cleanRow.id || uuidv4();
+
                 if (pastInfo) {
                     const newPrev = pastInfo.prev_count;
                     delete pastItems[uKey]; 
                     return { 
                         ...cleanRow, 
+                        id: rowId,
+                        isPastRecord: false, // 🚀 이미 DB에 금일 내역으로 존재하는 행은 상단에 고정
                         prev_count: newPrev.toString(), 
                         accum: (newPrev + parseNumber(cleanRow.count)).toString() 
                     };
                 }
-                return { ...cleanRow, prev_count: "0", accum: cleanRow.count };
+                return { ...cleanRow, id: rowId, isPastRecord: false, prev_count: "0", accum: cleanRow.count };
             });
 
             const missingRows = Object.values(pastItems).map(pastRow => {
-                const { isNew, ...cleanPastRow } = pastRow;
+                const { isPastRecord, ...cleanPastRow } = pastRow;
                 return {
                     ...cleanPastRow,
+                    id: cleanPastRow.id || uuidv4(), 
+                    isPastRecord: true, // 🚀 과거에는 있었으나 오늘은 아직 등록 안된 데이터는 하단 전일내역으로 고정
                     prev_count: cleanPastRow.prev_count.toString(),
                     count: "0",
                     accum: cleanPastRow.prev_count.toString(),
@@ -182,6 +185,8 @@ export default function DailyWorkPage() {
 
             updatedData[key] = [...processedRows, ...missingRows];
         });
+
+        updatedData.etc_costs = (updatedData.etc_costs || []).map(r => ({ ...r, isPastRecord: false, id: r.id || uuidv4() }));
 
         if (updatedData.settlement_costs) {
             updatedData.settlement_costs = updatedData.settlement_costs.map(item => {
@@ -198,9 +203,12 @@ export default function DailyWorkPage() {
             setSiteData(site);
             if (reportId) {
                 const { data: rep } = await supabase.from('daily_site_reports').select('*').eq('id', reportId).single();
-                // 🚀 파싱 오류 해결 적용
                 const notes = safeParseJSON(rep.notes);
                 
+                ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs', 'etc_costs'].forEach(k => {
+                    if (notes[k]) notes[k] = notes[k].map(r => ({ ...r, id: r.id || uuidv4() }));
+                });
+
                 let fullData = await syncWithAllPastData({ ...notes, total_contract_amount: site?.budget || 0 });
                 setFormData(fullData); setOriginalData(fullData); 
                 if (notes.savedColumnWidths) setColumnWidths(notes.savedColumnWidths);
@@ -242,8 +250,12 @@ export default function DailyWorkPage() {
             const cleanDataToSave = JSON.parse(JSON.stringify(formData));
             ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs', 'etc_costs'].forEach(key => {
                 if (cleanDataToSave[key]) {
-                    cleanDataToSave[key] = cleanDataToSave[key].map(row => {
-                        const { isNew, ...rest } = row;
+                    // 🚀 [해결 핵심] 저장할 때만 값이 없는 행들을 버림. 그래야 다음날 불러올 때 과거 데이터로 인식됨.
+                    cleanDataToSave[key] = cleanDataToSave[key].filter(row => {
+                        if (key === 'etc_costs') return parseNumber(row.total) > 0 || row.content;
+                        return parseNumber(row.count) > 0 || parseNumber(row.total) > 0;
+                    }).map(row => {
+                        const { isPastRecord, ...rest } = row; // DB에 불필요한 프론트 플래그 제거
                         return rest;
                     });
                 }
@@ -274,7 +286,6 @@ export default function DailyWorkPage() {
             const match = allReports?.find(r => (safeParseJSON(r.notes)?.report_category || 'plant') === categoryType);
             if (!match) return toast.error(`데이터가 없습니다.`);
             
-            // 🚀 파싱 오류 해결 적용
             const importedData = safeParseJSON(match.notes);
             
             if (match.photos?.length > 0) { 
@@ -282,11 +293,7 @@ export default function DailyWorkPage() {
                 setTodayPhotos([]); 
             }
 
-            const resetRows = (rows = []) => rows.map(r => {
-                const { isNew, ...rest } = r; 
-                return { ...rest, count: '0', total: '0' };
-            });
-
+            // 🚀 불러온 데이터를 금일 내역에서 비워버리면 `syncWithAllPastData`가 전부 전일 내역(하단)으로 만들어줌
             const baseDataForSync = { 
                 ...formData, 
                 ...importedData, 
@@ -296,13 +303,13 @@ export default function DailyWorkPage() {
                 today_work: '',
                 progress_plant: '0.0000',
                 progress_facility: '0.0000',
-                labor_costs: resetRows(importedData.labor_costs),
-                material_costs: resetRows(importedData.material_costs),
-                equipment_costs: resetRows(importedData.equipment_costs),
-                tree_costs: resetRows(importedData.tree_costs),
-                transport_costs: resetRows(importedData.transport_costs),
-                subcontract_costs: resetRows(importedData.subcontract_costs),
-                etc_costs: resetRows(importedData.etc_costs)
+                labor_costs: [],
+                material_costs: [],
+                equipment_costs: [],
+                tree_costs: [],
+                transport_costs: [],
+                subcontract_costs: [],
+                etc_costs: []
             };
 
             setFormData(await syncWithAllPastData(baseDataForSync)); 
@@ -338,8 +345,9 @@ export default function DailyWorkPage() {
         const config = FIELD_MAPS[key]; const allRows = formData?.[key] || [];
         const isCollapsed = collapsedSections[key]; const widths = columnWidths[key] || {};
 
-        const todayRows = allRows.filter(r => parseNumber(r.count) > 0 || parseNumber(r.total) > 0 || r.isNew);
-        const pastRows = allRows.filter(r => parseNumber(r.count) === 0 && parseNumber(r.total) === 0 && !r.isNew);
+        // 🚀 [해결 핵심] 숫자를 입력한다고 줄이 위로 점프하지 않고, 페이지 로드 시 부여된 isPastRecord 상태를 유지함!
+        const todayRows = allRows.filter(r => !r.isPastRecord);
+        const pastRows = allRows.filter(r => r.isPastRecord);
         const isExpanded = expandedSections[key];
         const displayRows = isExpanded ? [...todayRows, ...pastRows] : todayRows;
 
@@ -350,7 +358,7 @@ export default function DailyWorkPage() {
                 <table className="min-w-full text-[9px] border-collapse" style={{ tableLayout: 'fixed' }}>
                     <thead className="font-sans">
                         <tr className="bg-yellow-50 border-b border-slate-400 h-8 cursor-pointer hover:bg-yellow-100 transition-colors" onClick={() => toggleSection(key)}>
-                            <th colSpan={colSpanTotal} className="p-0 text-left align-middle relative">
+                            <th colSpan={colSpanTotal} className="p-0 text-left align-middle relative border-r-0">
                                 <div className="flex justify-between items-center w-full h-full px-2">
                                     <div className="flex items-center gap-1 font-black"><span className="text-[10px] uppercase">▣ {config.title} ({allRows.length})</span></div>
                                     <div className="flex items-center gap-2">
@@ -359,9 +367,10 @@ export default function DailyWorkPage() {
                                                 onClick={(e)=>{ 
                                                     e.stopPropagation(); 
                                                     e.preventDefault();
+                                                    // 🚀 새 항목 추가 시 isPastRecord: false 를 부여하여 최상단 표시 보장
                                                     setFormData(p=>({
                                                         ...p, 
-                                                        [key]: [{id:uuidv4(), isNew: true, ...config.fields.reduce((a,f)=>({...a,[f]:''}),{})}, ...(p[key]||[])]
+                                                        [key]: [{id:uuidv4(), isPastRecord: false, ...config.fields.reduce((a,f)=>({...a,[f]:''}),{})}, ...(p[key]||[])]
                                                     }));
                                                 }} 
                                                 className="bg-white border border-slate-400 px-2 py-0.5 text-[9.5px] font-black shadow-sm rounded-none hover:bg-slate-50 transition-all leading-none"
@@ -394,14 +403,19 @@ export default function DailyWorkPage() {
                                         const isNumeric = ['total','price','accum','count','prev_count', 'design_count'].includes(f);
                                         const fieldId = `${key}-${i}-${f}`;
                                         return (
-                                            <td key={f} className={`p-0 font-sans relative overflow-hidden align-middle ${idx !== config.fields.length - 1 || !isReadOnly ? 'border-r border-slate-200' : ''}`} style={{ width: widths[idx] ? `${widths[idx]}px` : 'auto' }}>
-                                                <input className={`w-full h-full outline-none bg-transparent font-sans font-black rounded-none text-[8.5px] ${isNumeric ? 'text-right pr-2' : 'text-center px-1'}`}
+                                            <td key={f} className={`p-0 align-middle font-sans ${idx !== config.fields.length - 1 || !isReadOnly ? 'border-r border-slate-200' : ''}`} style={{ width: widths[idx] ? `${widths[idx]}px` : 'auto' }}>
+                                                <input className={`block w-full h-full p-1 outline-none bg-transparent font-sans font-black rounded-none text-[8.5px] z-10 ${isNumeric ? 'text-right pr-2' : 'text-center px-1'}`}
                                                     value={isNumeric && focusedField !== fieldId ? formatNumber(row[f]) : (isNumeric && (row[f] === "0" || row[f] === 0) ? "" : row[f])}
-                                                    readOnly={isReadOnly} onFocus={() => isNumeric && setFocusedField(fieldId)} onBlur={() => setFocusedField(null)}
+                                                    readOnly={isReadOnly} 
+                                                    onFocus={() => isNumeric && setFocusedField(fieldId)} 
+                                                    onBlur={() => setFocusedField(null)}
                                                     onChange={e => {
                                                         if (isReadOnly) return;
                                                         const updated = [...allRows]; 
-                                                        const rIdx = allRows.findIndex(x => x === row || x.id === row.id);
+                                                        // 🚀 [해결 핵심] 무조건 고유 id 값으로 탐색하므로 엉뚱한 줄이 수정되는 일 방지
+                                                        const rIdx = allRows.findIndex(x => x.id === row.id);
+                                                        if (rIdx === -1) return;
+
                                                         const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
                                                         updated[rIdx][f] = val;
                                                         if (isNumeric) {
@@ -414,7 +428,7 @@ export default function DailyWorkPage() {
                                             </td>
                                         );
                                     })}
-                                    {!isReadOnly && <td className="text-center text-red-500 cursor-pointer p-0 text-xs font-black align-middle" onClick={()=>setFormData(p=>({...p, [key]: allRows.filter(x=>x !== row && x.id !== row.id)}))}>×</td>}
+                                    {!isReadOnly && <td className="text-center text-red-500 cursor-pointer p-0 text-xs font-black align-middle" onClick={()=>setFormData(p=>({...p, [key]: allRows.filter(x => x.id !== row.id)}))}>×</td>}
                                 </tr>
                             ))}
                             {pastRows.length > 0 && (
@@ -520,7 +534,7 @@ export default function DailyWorkPage() {
                             </div>
                             <p className="text-[10.5px] font-bold ml-6 leading-relaxed">
                                 1. 내용이 가려질 경우, <strong>표의 각 제목(헤더) 사이 경계선</strong>에 마우스를 올린 후 좌우로 드래그하여 엑셀처럼 열 너비를 조절할 수 있습니다.<br/>
-                                2. 금일 작성하는 데이터는 확인이 편하도록 <strong>자동으로 표의 최상단</strong>에 나타나며, 과거 내역은 표 하단의 버튼을 눌러 펼쳐볼 수 있습니다.
+                                2. 금일 작성하는 데이터는 수정 중에는 제자리를 유지하며, <strong>작성을 완료하고 [일보 저장]을 누른 뒤 다시 접속하면 표의 최상단</strong>으로 자동 정렬됩니다.
                             </p>
                         </div>
                     )}
