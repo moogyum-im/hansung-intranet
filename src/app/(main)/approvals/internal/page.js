@@ -1,30 +1,71 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
-import dynamic from 'next/dynamic';
-import { X, Plus, Loader2, Database, CheckCircle, Users, ImageIcon, Info } from 'lucide-react';
-import 'react-quill/dist/quill.snow.css';
+import { X, Plus, Loader2, Database, CheckCircle, Users, ImageIcon, Info, Bold, Palette, Highlighter } from 'lucide-react';
 
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+// 🚀 [핵심 수정 1] 사내 맞춤형 초경량 리치 텍스트 에디터 (글자색, 배경색, 굵게)
+const SimpleRichTextEditor = ({ value, onChange, placeholder, minHeight = "400px" }) => {
+    const editorRef = useRef(null);
+
+    useEffect(() => {
+        if (editorRef.current && value && editorRef.current.innerHTML !== value) {
+            editorRef.current.innerHTML = value;
+        }
+    }, []);
+
+    const execCmd = (cmd, arg = null) => {
+        document.execCommand(cmd, false, arg);
+        editorRef.current.focus();
+        onChange(editorRef.current.innerHTML);
+    };
+
+    return (
+        <div className="border border-black flex flex-col font-black font-black">
+            <div className="bg-slate-50 border-b border-black p-2 flex gap-3 items-center">
+                <button type="button" onClick={(e) => { e.preventDefault(); execCmd('bold'); }} className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-300 hover:bg-slate-200 text-[10px] font-black rounded-sm transition-colors">
+                    <Bold size={12} /> 굵게
+                </button>
+                <label className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-300 hover:bg-slate-200 text-[10px] font-black cursor-pointer rounded-sm transition-colors">
+                    <Palette size={12} /> 글자색
+                    <input type="color" onChange={(e) => execCmd('foreColor', e.target.value)} className="w-4 h-4 p-0 border-0 cursor-pointer ml-1" />
+                </label>
+                <button type="button" onClick={(e) => { e.preventDefault(); execCmd('hiliteColor', 'yellow'); }} className="flex items-center gap-1 px-2 py-1 bg-yellow-100 border border-yellow-400 text-yellow-800 hover:bg-yellow-200 text-[10px] font-black rounded-sm transition-colors">
+                    <Highlighter size={12} /> 형광펜
+                </button>
+            </div>
+            <div
+                ref={editorRef}
+                style={{ minHeight }}
+                className="p-6 text-[13px] leading-relaxed outline-none focus:bg-slate-50/50 transition-all font-black whitespace-pre-wrap"
+                contentEditable
+                onInput={() => onChange(editorRef.current.innerHTML)}
+                placeholder={placeholder}
+            />
+        </div>
+    );
+};
 
 export default function InternalApprovalPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
 
     const [allEmployees, setAllEmployees] = useState([]);
-    const [formData, setFormData] = useState({ title: '', content: '' });
+    const [formData, setFormData] = useState({ 
+        document_number: '', // 🚀 문서 번호 추가
+        title: '', 
+        content: '' 
+    });
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
 
-    // 🚀 부서별 그룹화 및 정렬 로직 (재직자 대상)
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
             const dept = emp.department || '기타';
@@ -33,12 +74,7 @@ export default function InternalApprovalPage() {
             return acc;
         }, {});
 
-        const priority = {
-            '최고 경영진': 1,
-            '공무부': 2,
-            '관리부': 3,
-            '전략기획부': 4
-        };
+        const priority = { '최고 경영진': 1, '공무부': 2, '관리부': 3, '전략기획부': 4 };
 
         return Object.keys(groups)
             .sort((a, b) => (priority[a] || 999) - (priority[b] || 999) || a.localeCompare(b))
@@ -50,7 +86,7 @@ export default function InternalApprovalPage() {
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                setFormData(parsed.formData || { title: '', content: '' });
+                setFormData(parsed.formData || { document_number: '', title: '', content: '' });
                 setApprovers(parsed.approvers || []);
                 setReferrers(parsed.referrers || []);
                 setAttachments(parsed.attachments || []);
@@ -65,7 +101,6 @@ export default function InternalApprovalPage() {
 
     useEffect(() => {
         const fetchEmployees = async () => {
-            // 🚀 퇴사자 제외 필터 적용
             const { data } = await supabase.from('profiles').select('id, full_name, department, position').eq('employment_status', '재직');
             if (data) setAllEmployees(data);
         };
@@ -125,6 +160,7 @@ export default function InternalApprovalPage() {
         try {
             const submissionData = {
                 title: `내부결재: ${formData.title} (${employee?.full_name})`,
+                document_number: formData.document_number, // 🚀 문서번호 파라미터 추가
                 content: JSON.stringify({ ...formData, requesterName: employee.full_name, requesterDepartment: employee.department, requesterPosition: employee.position }),
                 document_type: 'internal_approval',
                 approver_ids: approvers,
@@ -143,10 +179,6 @@ export default function InternalApprovalPage() {
         } catch (error) { toast.error(error.message); } finally { setLoading(false); }
     };
 
-    const quillModules = {
-        toolbar: [[{ 'header': [1, 2, false] }], ['bold', 'italic', 'underline', 'strike'], [{ 'list': 'ordered' }, { 'list': 'bullet' }], ['clean']],
-    };
-
     const HelpTooltip = ({ text }) => (
         <div className="group relative inline-block ml-1.5 align-middle">
             <Info size={14} className="text-slate-300 hover:text-blue-500 cursor-help transition-colors" />
@@ -157,7 +189,7 @@ export default function InternalApprovalPage() {
         </div>
     );
 
-    if (employeeLoading) return <div className="p-10 text-black font-black text-xs h-screen flex items-center justify-center font-sans animate-pulse font-black">HANSUNG ERP SYNCING...</div>;
+    if (employeeLoading) return <div className="p-10 text-black font-black text-xs h-screen flex items-center justify-center font-sans animate-pulse font-black uppercase">HANSUNG ERP SYNCING...</div>;
 
     return (
         <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none font-black font-black">
@@ -180,7 +212,6 @@ export default function InternalApprovalPage() {
                             </div>
                         </div>
 
-                        {/* 🚀 실시간 결재 박스 UI */}
                         <div className="flex font-black font-black font-black">
                             <table className="border-collapse border border-black text-[11px] font-black font-black font-black">
                                 <tbody>
@@ -216,10 +247,13 @@ export default function InternalApprovalPage() {
                         <table className="w-full border-collapse border-t border-l border-black text-[11px] font-black font-black font-black font-black">
                             <tbody>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black font-black font-black">
+                                    {/* 🚀 [핵심 수정 2] 문서번호 수동 입력 칸 */}
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black font-black">문서번호 <HelpTooltip text="기안자가 직접 문서 번호를 기입하십시오." /></th>
+                                    <td className="p-3 font-black">
+                                        <input type="text" value={formData.document_number} onChange={(e) => setFormData({...formData, document_number: e.target.value})} placeholder="예: INT-202603-001" className="w-full outline-none bg-transparent font-black font-mono font-black" />
+                                    </td>
                                     <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black font-black">기안일자</th>
                                     <td className="p-3 font-mono font-black font-black font-black">{new Date().toLocaleDateString('ko-KR')}</td>
-                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black font-black">문서번호 <HelpTooltip text="문서번호는 상신 완료 후 시스템에서 자동 부여됩니다." /></th>
-                                    <td className="p-3 text-slate-400 font-black italic font-black">관리부 부여 예정</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -230,10 +264,9 @@ export default function InternalApprovalPage() {
                         </section>
 
                         <section className="font-black font-black font-black">
-                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black">02. 결재 상세 내용 <HelpTooltip text="구체적인 사유, 기대 효과, 관련 법규 등을 상세히 기술하십시오." /></h2>
-                            <div className="border border-black font-black font-black">
-                                <ReactQuill value={formData.content} onChange={(content) => setFormData({...formData, content})} modules={quillModules} placeholder="내용을 입력하십시오." className="h-[400px] mb-12 font-black font-black" />
-                            </div>
+                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black">02. 결재 상세 내용 <HelpTooltip text="구체적인 사유, 기대 효과, 관련 법규 등을 상세히 기술하십시오. (글자색, 형광펜 강조 가능)" /></h2>
+                            {/* 🚀 [핵심 수정 1] 리치 텍스트 에디터 적용 */}
+                            <SimpleRichTextEditor value={formData.content} onChange={(content) => setFormData({...formData, content})} placeholder="내용을 입력하십시오." />
                         </section>
 
                         <section className="font-black border-t border-black/5 pt-6 font-black font-black">
@@ -274,7 +307,7 @@ export default function InternalApprovalPage() {
 
                     <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm font-black text-black font-black font-black">
                         <div className="flex items-center justify-between mb-4 border-b pb-2 text-blue-600 font-black font-black font-black">
-                            <h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black text-black font-black font-black font-black font-black"><Users size={14}/> 참조인 지정</h2>
+                            <h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black text-black font-black font-black font-black font-black font-black"><Users size={14}/> 참조인 지정</h2>
                             <button type="button" onClick={addReferrer} className="text-[10px] border border-blue-600 px-2 py-0.5 hover:bg-blue-600 hover:text-white transition-all font-black font-black font-black">+ 추가</button>
                         </div>
                         <div className="space-y-2 font-black font-black font-black font-black font-black font-black">

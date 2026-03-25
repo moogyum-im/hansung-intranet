@@ -1,12 +1,55 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
-import { X, Plus, Loader2, Database, CheckCircle, Users, Calendar, Wallet, ImageIcon, CreditCard, UserPlus, Info } from 'lucide-react';
+import { X, Plus, Loader2, Database, CheckCircle, Users, Calendar, Wallet, ImageIcon, CreditCard, UserPlus, Info, Bold, Palette, Highlighter } from 'lucide-react';
+
+// 🚀 [핵심 수정 1] 사내 맞춤형 초경량 리치 텍스트 에디터 (글자색, 배경색, 굵게)
+const SimpleRichTextEditor = ({ value, onChange }) => {
+    const editorRef = useRef(null);
+
+    useEffect(() => {
+        if (editorRef.current && value && editorRef.current.innerHTML !== value) {
+            editorRef.current.innerHTML = value;
+        }
+    }, []);
+
+    const execCmd = (cmd, arg = null) => {
+        document.execCommand(cmd, false, arg);
+        editorRef.current.focus();
+        onChange(editorRef.current.innerHTML);
+    };
+
+    return (
+        <div className="border border-black flex flex-col font-black">
+            {/* 툴바 영역 */}
+            <div className="bg-slate-50 border-b border-black p-2 flex gap-3 items-center">
+                <button type="button" onClick={(e) => { e.preventDefault(); execCmd('bold'); }} className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-300 hover:bg-slate-200 text-[10px] font-black rounded-sm transition-colors">
+                    <Bold size={12} /> 굵게
+                </button>
+                <label className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-300 hover:bg-slate-200 text-[10px] font-black cursor-pointer rounded-sm transition-colors">
+                    <Palette size={12} /> 글자색
+                    <input type="color" onChange={(e) => execCmd('foreColor', e.target.value)} className="w-4 h-4 p-0 border-0 cursor-pointer ml-1" />
+                </label>
+                <button type="button" onClick={(e) => { e.preventDefault(); execCmd('hiliteColor', 'yellow'); }} className="flex items-center gap-1 px-2 py-1 bg-yellow-100 border border-yellow-400 text-yellow-800 hover:bg-yellow-200 text-[10px] font-black rounded-sm transition-colors">
+                    <Highlighter size={12} /> 형광펜
+                </button>
+            </div>
+            {/* 에디터 본문 영역 */}
+            <div
+                ref={editorRef}
+                className="p-6 text-[13px] leading-relaxed min-h-[200px] outline-none focus:bg-slate-50/50 transition-all font-black whitespace-pre-wrap"
+                contentEditable
+                onInput={() => onChange(editorRef.current.innerHTML)}
+                placeholder="상세 사유 기술 (글자 색상 및 형광펜 강조 가능)"
+            />
+        </div>
+    );
+};
 
 export default function ExpenseReportPage() {
     const { employee, loading: employeeLoading } = useEmployee();
@@ -30,7 +73,6 @@ export default function ExpenseReportPage() {
     const [isUploading, setIsUploading] = useState(false); 
     const [attachments, setAttachments] = useState([]);
 
-    // 🚀 부서별 그룹화 및 지정된 순서로 정렬 로직
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
             const dept = emp.department || '기타';
@@ -39,12 +81,7 @@ export default function ExpenseReportPage() {
             return acc;
         }, {});
 
-        const priority = {
-            '최고 경영진': 1,
-            '공무부': 2,
-            '관리부': 3,
-            '전략기획부': 4
-        };
+        const priority = { '최고 경영진': 1, '공무부': 2, '관리부': 3, '전략기획부': 4 };
 
         return Object.keys(groups)
             .sort((a, b) => (priority[a] || 999) - (priority[b] || 999) || a.localeCompare(b))
@@ -86,6 +123,11 @@ export default function ExpenseReportPage() {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    // 에디터 변경 감지 헬퍼
+    const handleDescriptionChange = (content) => {
+        setFormData(prev => ({ ...prev, description: content }));
     };
 
     const handleUploadComplete = useCallback((uploadedFiles) => {
@@ -195,7 +237,6 @@ export default function ExpenseReportPage() {
                             </div>
                         </div>
 
-                        {/* 🚀 실시간 결재 박스 UI (최대 4인) */}
                         <div className="flex font-black font-black">
                             <table className="border-collapse border border-black text-[11px] font-black font-black">
                                 <tbody>
@@ -237,8 +278,11 @@ export default function ExpenseReportPage() {
                                     </td>
                                 </tr>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black font-black">
-                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter w-24">문서번호 <HelpTooltip text="관리부에서 부여받은 번호가 있는 경우에만 입력하십시오." /></th>
-                                    <td className="p-3 font-black"><input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="추후 자동 부여" className="w-full outline-none bg-transparent font-black font-mono font-black font-black" /></td>
+                                    {/* 🚀 [핵심 수정 3] 문서번호 수동 입력 명확화 (참조인과 분리됨) */}
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter w-24">문서번호 <HelpTooltip text="기안자가 직접 문서 번호를 기입하십시오." /></th>
+                                    <td className="p-3 font-black">
+                                        <input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="예: EXP-202603-001 (직접 입력)" className="w-full outline-none bg-transparent font-black font-mono font-black font-black" />
+                                    </td>
                                     <th className="bg-slate-50 p-3 text-left border-black font-black uppercase w-24">기안일자</th>
                                     <td className="p-3 font-mono font-black font-black">{new Date().toLocaleDateString('ko-KR')}</td>
                                 </tr>
@@ -273,8 +317,9 @@ export default function ExpenseReportPage() {
                         </section>
 
                         <section className="font-black font-black font-black">
-                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black">02. 상세 내역 (적요) <HelpTooltip text="지출의 구체적인 내용 및 사유를 기술하십시오." /></h2>
-                            <textarea name="description" value={formData.description} onChange={handleChange} className="w-full border border-black p-6 text-[12px] leading-relaxed min-h-[200px] outline-none focus:bg-slate-50 transition-all font-black font-black font-black" placeholder="상세 사유 기술" required />
+                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black">02. 상세 내역 (적요) <HelpTooltip text="상세 사유 기술 (드래그 후 툴바를 이용해 글자색 변경 가능)" /></h2>
+                            {/* 🚀 [핵심 수정 1] 커스텀 리치 텍스트 에디터 렌더링 */}
+                            <SimpleRichTextEditor value={formData.description} onChange={handleDescriptionChange} />
                         </section>
 
                         <section className="font-black border-t border-black/5 pt-6 font-black font-black font-black font-black">
@@ -285,7 +330,6 @@ export default function ExpenseReportPage() {
                 </div>
 
                 <aside className="lg:col-span-4 space-y-4 no-print font-black font-black font-black">
-                    {/* 결재선 지정 (부서 정렬 적용) */}
                     <div className="bg-white border-2 border-black rounded-2xl p-6 shadow-sm font-black text-black font-black font-black font-black">
                         <div className="flex items-center justify-between mb-4 border-b-2 border-black/5 pb-2 font-black font-black">
                             <h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black font-black font-black"><Users size={14}/> 결재선 지정</h2>
@@ -309,7 +353,6 @@ export default function ExpenseReportPage() {
                         </div>
                     </div>
 
-                    {/* 🚀 참조인 지정 (Official CC 문구 제거) */}
                     <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm font-black text-black font-black font-black">
                         <div className="flex items-center justify-between mb-4 border-b pb-2 text-blue-600 font-black font-black font-black font-black font-black">
                             <h2 className="text-[11px] uppercase tracking-tighter flex items-center gap-2 font-black text-black font-black font-black font-black font-black"><Users size={14}/> 참조인 지정</h2>

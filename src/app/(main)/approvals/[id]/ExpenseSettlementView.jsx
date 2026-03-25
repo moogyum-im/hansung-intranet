@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { 
     Printer, Download, Eye, Hash, 
     Paperclip, FileIcon, CheckCircle2, CheckCircle,
-    Settings, Users, MapPin, Calendar, Car, ChevronRight, ImageIcon, ExternalLink, XCircle, FileText, MessageSquare
+    Settings, Users, MapPin, Calendar, Car, ChevronRight, ImageIcon, ExternalLink, XCircle, FileText, MessageSquare, ShieldAlert
 } from 'lucide-react';
 
 export default function ExpenseSettlementView({ doc, employee, approvalHistory, referrerHistory }) {
@@ -17,17 +17,14 @@ export default function ExpenseSettlementView({ doc, employee, approvalHistory, 
     const [actionLoading, setActionLoading] = useState(false);
     const [approvalComment, setApprovalComment] = useState('');
     const [currentStep, setCurrentStep] = useState(null);
-    const [mapUrls, setMapUrls] = useState([]); // 01번 주유 증빙 (네비, 지도)
-    const [receiptUrls, setReceiptUrls] = useState([]); // 02번 비용 증빙 (영수증)
-    const [manualDocNumber, setManualDocNumber] = useState('');
+    const [mapUrls, setMapUrls] = useState([]); 
+    const [receiptUrls, setReceiptUrls] = useState([]); 
 
     const displayApprovals = approvalHistory || doc?.approval_document_approvers || [];
     const displayReferrers = referrerHistory || doc?.approval_document_referrers || [];
     
-    const isReferrer = displayReferrers.some(ref => ref.referrer_id === employee?.id || ref.referrer?.id === employee?.id);
     const isMyTurn = employee && currentStep && currentStep.approver?.id === employee.id && (currentStep.status === 'pending' || currentStep.status === '대기');
 
-    // 🚀 안전한 날짜 포맷팅 함수
     const formatDateShort = (dateString) => {
         if (!dateString) return "";
         const date = new Date(dateString);
@@ -43,7 +40,6 @@ export default function ExpenseSettlementView({ doc, employee, approvalHistory, 
                 try {
                     const parsedContent = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content || {};
                     setFormData(parsedContent);
-                    setManualDocNumber(doc.document_number || '');
                     setCurrentStep(displayApprovals.find(step => step.status === 'pending' || step.status === '대기'));
 
                     const loadUrls = async (files) => {
@@ -83,16 +79,6 @@ export default function ExpenseSettlementView({ doc, employee, approvalHistory, 
         } catch (error) { toast.error("처리 실패"); } finally { setActionLoading(false); }
     };
 
-    const handleUpdateDocNumber = async () => {
-        if (!manualDocNumber.trim()) return toast.error("문서 번호 입력 필요");
-        setActionLoading(true);
-        try {
-            await supabase.from('approval_documents').update({ document_number: manualDocNumber }).eq('id', doc.id);
-            toast.success("반영되었습니다.");
-            router.refresh();
-        } catch (error) { toast.error("반영 실패"); } finally { setActionLoading(false); }
-    };
-
     if (loading) return <div className="p-20 text-center font-black text-black text-xs font-sans animate-pulse italic uppercase font-black">HANSUNG ERP LOADING...</div>;
 
     return (
@@ -121,12 +107,12 @@ export default function ExpenseSettlementView({ doc, employee, approvalHistory, 
                         <div className="space-y-4">
                             <h1 className="text-4xl font-black tracking-tighter uppercase font-black font-black font-black">출 장 여 비 정 산 서</h1>
                             <div className="flex flex-col text-[10px] space-y-1 font-black">
-                                <span>문서번호 : {doc?.document_number || '관리부 추후 부여'}</span>
+                                <span>문서번호 : {doc?.document_number || formData?.document_number || '-'}</span>
                                 <span>작성일자 : {doc?.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR') : '-'}</span>
                             </div>
                         </div>
 
-                        <div className="flex font-black font-black">
+                        <div className="flex flex-col items-end gap-2 font-black font-black">
                             <table className="approval-table border-collapse border border-black text-[11px] font-black">
                                 <tbody>
                                     <tr className="font-black">
@@ -178,6 +164,11 @@ export default function ExpenseSettlementView({ doc, employee, approvalHistory, 
                                     </tr>
                                 </tbody>
                             </table>
+                            {['진행중', 'pending', '대기'].includes(doc?.status) && currentStep && (
+                                <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded text-[11px] font-black flex items-center gap-1.5 shadow-sm mt-2 no-print">
+                                    <ShieldAlert size={12} /> 현재 <b>{currentStep.approver?.full_name} {currentStep.approver?.position}</b>님의 결재 대기 중
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -297,21 +288,9 @@ export default function ExpenseSettlementView({ doc, employee, approvalHistory, 
                 </div>
 
                 <aside className="lg:col-span-4 space-y-5 no-print font-black">
-                    {isReferrer && (
-                        <div className="bg-white border border-black p-6 shadow-sm font-black text-black font-black">
-                            <div className="flex flex-col gap-2 font-black font-black">
-                                <p className="text-[9px] text-slate-400 mb-1 font-black uppercase font-black">※ 관리부 승인 후 문서번호를 부여해 주십시오.</p>
-                                <div className="flex gap-2">
-                                    <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} className="flex-1 border border-black px-3 py-1.5 text-[11px] outline-none font-black text-black focus:bg-slate-50 font-black" placeholder="관리부 추후 부여" />
-                                    <button onClick={handleUpdateDocNumber} className="bg-black text-white px-4 py-1.5 text-[10px] font-black hover:bg-slate-800 transition-all font-black font-black font-black">반영</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-black font-black">
-                        <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4 font-black font-black">
-                            <Users size={20} /><h2 className="text-[13px] uppercase font-black tracking-widest font-black font-black font-black">결재 의견 및 참조인</h2>
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-black font-black font-black">
+                        <div className="flex items-center gap-2 mb-6 border-b-2 border-slate-100 pb-4 font-black font-black">
+                            <Users size={20} /><h2 className="text-[13px] uppercase font-black tracking-widest font-black font-black font-black">결재 의견</h2>
                         </div>
                         <div className="space-y-4 font-black font-black">
                             {displayApprovals.map((step, idx) => step.comment && (
@@ -323,19 +302,6 @@ export default function ExpenseSettlementView({ doc, employee, approvalHistory, 
                                     </div>
                                 </div>
                             ))}
-
-                            {displayReferrers.length > 0 && (
-                                <div className="pt-4 border-t border-dashed border-slate-200 mt-4 font-black font-black">
-                                    <p className="text-[10px] uppercase mb-2 font-black text-blue-600 tracking-widest font-black">참조인</p>
-                                    <div className="text-[11px] font-black text-blue-900 bg-blue-50/50 p-4 rounded-2xl leading-relaxed font-black font-black">
-                                        {displayReferrers.map((r, i) => (
-                                            <span key={i} className="block mb-1 last:mb-0 font-black font-black">
-                                                [{r.referrer?.department || '소속미정'}] {r.referrer?.full_name || r.referrer_name} {r.referrer?.position || ''}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
 

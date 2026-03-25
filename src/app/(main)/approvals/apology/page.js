@@ -14,6 +14,7 @@ export default function ApologyPage() {
 
     const [allEmployees, setAllEmployees] = useState([]);
     const [formData, setFormData] = useState({
+        document_number: '', 
         incidentDate: '',
         incidentDetails: '',
         cause: '',
@@ -26,7 +27,6 @@ export default function ApologyPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
 
-    // 🚀 부서별 그룹화 및 지정된 순서로 정렬 로직
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
             const dept = emp.department || '기타';
@@ -35,12 +35,7 @@ export default function ApologyPage() {
             return acc;
         }, {});
 
-        const priority = {
-            '최고 경영진': 1,
-            '공무부': 2,
-            '관리부': 3,
-            '전략기획부': 4
-        };
+        const priority = { '최고 경영진': 1, '공무부': 2, '관리부': 3, '전략기획부': 4 };
 
         return Object.keys(groups)
             .sort((a, b) => (priority[a] || 999) - (priority[b] || 999) || a.localeCompare(b))
@@ -67,7 +62,6 @@ export default function ApologyPage() {
 
     useEffect(() => {
         const fetchEmployees = async () => {
-            // 🚀 퇴사자 제외 필터 적용
             const { data } = await supabase.from('profiles').select('id, full_name, department, position').eq('employment_status', '재직');
             if (data) setAllEmployees(data);
         };
@@ -141,6 +135,7 @@ export default function ApologyPage() {
         try {
             const submissionData = {
                 title: `시말서 (${employee?.full_name})`,
+                document_number: formData.document_number, 
                 content: JSON.stringify({ ...formData, requesterName: employee.full_name, requesterDepartment: employee.department, requesterPosition: employee.position }),
                 document_type: 'apology',
                 approver_ids: approvers,
@@ -186,7 +181,6 @@ export default function ApologyPage() {
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">
                 <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative text-black font-black">
                     
-                    {/* 🚀 상단 헤더 및 실시간 결재 박스 */}
                     <div className="flex justify-between items-start mb-10 border-b-4 border-black pb-8 font-black font-black font-black">
                         <div className="space-y-4 font-black">
                             <h1 className="text-4xl font-black tracking-tighter uppercase font-black font-black">시 말 서</h1>
@@ -231,10 +225,16 @@ export default function ApologyPage() {
                         <table className="w-full border-collapse border-t border-l border-black text-[11px] font-black font-black">
                             <tbody>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black">
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter w-24">문서번호 <HelpTooltip text="기안자가 직접 문서 번호를 기입하십시오." /></th>
+                                    <td className="p-3 font-black">
+                                        <input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="예: APO-202603-001 (직접 입력)" className="w-full outline-none bg-transparent font-black font-mono font-black font-black" />
+                                    </td>
                                     <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black font-black font-black">작성일자</th>
                                     <td className="p-3 font-mono font-black font-black font-black font-black">{new Date().toLocaleDateString('ko-KR')}</td>
+                                </tr>
+                                <tr className="border-b border-r border-black divide-x divide-black font-black">
                                     <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black font-black font-black">발생일시 <HelpTooltip text="사건이 발생한 정확한 날짜와 시간을 선택하십시오." /></th>
-                                    <td className="p-3 font-black">
+                                    <td colSpan="3" className="p-3 font-black">
                                         <input type="datetime-local" name="incidentDate" value={formData.incidentDate} onChange={handleChange} className="w-full outline-none bg-transparent font-black font-mono text-[11px] font-black font-black" required />
                                     </td>
                                 </tr>

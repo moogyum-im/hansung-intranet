@@ -15,6 +15,7 @@ export default function LeaveRequestPage() {
     const [allEmployees, setAllEmployees] = useState([]);
     const [formData, setFormData] = useState({
         title: '휴가 신청서',
+        document_number: '', // 🚀 문서 번호 수동 기입 필드 추가
         leaveType: '연차',
         startDate: '',
         endDate: '',
@@ -26,7 +27,6 @@ export default function LeaveRequestPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
 
-    // 🚀 부서 정렬 및 그룹화 로직 (재직자 대상)
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
             const dept = emp.department || '기타';
@@ -35,7 +35,6 @@ export default function LeaveRequestPage() {
             return acc;
         }, {});
 
-        // 요청하신 부서 순서 반영
         const priority = { 
             '최고 경영진': 1, 
             '공무부': 2, 
@@ -53,7 +52,7 @@ export default function LeaveRequestPage() {
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                setFormData(parsed.formData || { title: '휴가 신청서', leaveType: '연차', startDate: '', endDate: '', reason: '' });
+                setFormData(parsed.formData || { title: '휴가 신청서', document_number: '', leaveType: '연차', startDate: '', endDate: '', reason: '' });
                 setApprovers(parsed.approvers || []);
                 setReferrers(parsed.referrers || []);
                 setAttachments(parsed.attachments || []);
@@ -127,6 +126,7 @@ export default function LeaveRequestPage() {
         try {
             const submissionData = {
                 title: `휴가신청서 (${employee?.full_name})`,
+                document_number: formData.document_number, // 🚀 문서 번호 저장
                 content: JSON.stringify({
                     ...formData,
                     requesterName: employee.full_name,
@@ -229,8 +229,13 @@ export default function LeaveRequestPage() {
                                     <td className="p-3 font-black font-black">{employee?.full_name} {employee?.position}</td>
                                 </tr>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black font-black">
-                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black">보존기한 <HelpTooltip text="휴가 신청서는 통상 3~5년 보관을 권장합니다." /></th>
-                                    <td className="p-3 font-black font-black" colSpan={3}>5년 (기본설정)</td>
+                                    {/* 🚀 [핵심 수정 1] 문서번호 수동 입력 칸 */}
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter w-24">문서번호 <HelpTooltip text="기안자가 직접 문서 번호를 기입하십시오." /></th>
+                                    <td className="p-3 font-black">
+                                        <input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="예: LEA-202603-001 (직접 입력)" className="w-full outline-none bg-transparent font-black font-mono font-black" />
+                                    </td>
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black w-24">보존기한</th>
+                                    <td className="p-3 font-black font-black">5년 (기본설정)</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -242,7 +247,6 @@ export default function LeaveRequestPage() {
                                     <tr className="border-b border-r border-black divide-x divide-black font-black text-black">
                                         <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black font-black">휴가종류 <HelpTooltip text="오전/오후 반차의 경우 정해진 시간을 확인하여 주십시오." /></th>
                                         <td className="p-3 font-black font-black">
-                                            {/* 🚀 반차 항목 세분화 및 시간 표기 반영 */}
                                             <select name="leaveType" value={formData.leaveType} onChange={handleChange} className="w-full bg-transparent outline-none font-black font-black">
                                                 <option value="연차">연차</option>
                                                 <option value="오전 반차 (09:00~12:00)">오전 반차 (09:00~12:00)</option>
@@ -268,6 +272,7 @@ export default function LeaveRequestPage() {
 
                         <section className="font-black font-black font-black font-black">
                             <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black font-black">02. 상세 사유 <HelpTooltip text="휴가 사유를 간략히 작성해 주세요. (예: 개인사정, 병원진료 등)" /></h2>
+                            {/* 진중한 기본 입력창 유지 */}
                             <textarea name="reason" value={formData.reason} onChange={handleChange} className="w-full border border-black p-6 text-[12px] leading-relaxed min-h-[200px] outline-none focus:bg-slate-50 transition-all font-black font-black font-black" placeholder="상세 사유 기술 (필요 시 증빙자료 첨부)" required />
                         </section>
 

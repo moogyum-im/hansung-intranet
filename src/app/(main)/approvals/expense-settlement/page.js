@@ -26,6 +26,7 @@ export default function ExpenseSettlementPage() {
 
     const [formData, setFormData] = useState({
         title: '출장 여비 정산서',
+        document_number: '', // 🚀 문서 번호 수동 기입 필드 추가
         preservationPeriod: '5년',
         startDate: '', endDate: '',
         startLocation: '', endLocation: '',
@@ -41,7 +42,6 @@ export default function ExpenseSettlementPage() {
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
 
-    // 🚀 부서별 그룹화 및 정렬 로직
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
             const dept = emp.department || '기타';
@@ -98,6 +98,11 @@ export default function ExpenseSettlementPage() {
         return () => clearTimeout(timeout);
     }, [formData, approvers, referrers, mapAttachments, receiptAttachments, isRestored]);
 
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
     const handleFuelTypeChange = (type) => {
         setFormData(prev => ({ ...prev, fuelType: type, fuelEfficiency: FUEL_STANDARDS[type] }));
     };
@@ -135,6 +140,7 @@ export default function ExpenseSettlementPage() {
         try {
             const submissionData = {
                 title: `${formData.title} (${employee?.full_name})`,
+                document_number: formData.document_number, // 🚀 문서번호 파라미터 추가
                 content: JSON.stringify({ ...formData, fuelAndDepreciation, otherTotal, totalAmount, mapAttachments, receiptAttachments }),
                 document_type: 'expense_settlement',
                 approver_ids: approvers.map(a => {
@@ -175,7 +181,6 @@ export default function ExpenseSettlementPage() {
     return (
         <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none font-black">
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
-                {/* 🚀 AUTO SAVED 영역 삭제됨 */}
                 <div className="flex items-center gap-2"></div>
                 <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
                     {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : <><CheckCircle size={14} /> 결재 상신하기</>}
@@ -229,8 +234,13 @@ export default function ExpenseSettlementPage() {
                         <table className="w-full border-collapse border-t border-l border-black text-[11px] font-black">
                             <tbody>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black">
+                                    {/* 🚀 [핵심 수정 1] 문서번호 수동 입력 칸 배치 */}
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter w-24">문서번호 <HelpTooltip text="기안자가 직접 문서 번호를 기입하십시오." /></th>
+                                    <td className="p-3 font-black">
+                                        <input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="예: EXS-202603-001 (직접 입력)" className="w-full outline-none bg-transparent font-black font-mono font-black" />
+                                    </td>
                                     <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black">보존기한 <HelpTooltip text="정산 서류는 통상 5년 보관을 권장합니다." /></th>
-                                    <td className="p-3 font-black" colSpan={3}>5년 (고정)</td>
+                                    <td className="p-3 font-black">5년 (고정)</td>
                                 </tr>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black text-black">
                                     <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black">출장기간 <HelpTooltip text="실제 이동이 발생한 날짜를 입력하십시오." /></th>

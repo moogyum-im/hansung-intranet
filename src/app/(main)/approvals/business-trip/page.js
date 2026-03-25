@@ -15,6 +15,7 @@ export default function BusinessTripWritePage() {
     const [allEmployees, setAllEmployees] = useState([]);
     const [formData, setFormData] = useState({
         title: '출장 신청서',
+        document_number: '', // 🚀 문서 번호 필드 추가
         preservationPeriod: '5년',
         startDate: '',
         endDate: '',
@@ -102,7 +103,6 @@ export default function BusinessTripWritePage() {
     const removeAttachment = (idx) => setAttachments(prev => prev.filter((_, i) => i !== idx));
 
     const addApprover = () => {
-        // 🚀 유연한 확장: 기안자 제외 최대 4명까지 (총 5칸)
         if (approvers.length >= 4) return toast.error("결재선은 최대 4명까지 가능합니다.");
         setApprovers([...approvers, { id: '', full_name: '', position: '' }]);
     };
@@ -134,6 +134,7 @@ export default function BusinessTripWritePage() {
         try {
             const submissionData = {
                 title: `${formData.title} (${employee?.full_name})`,
+                document_number: formData.document_number, // 🚀 문서번호 파라미터 추가
                 content: JSON.stringify({ ...formData, duration }),
                 document_type: 'business_trip',
                 approver_ids: approvers,
@@ -191,20 +192,17 @@ export default function BusinessTripWritePage() {
                             </div>
                         </div>
 
-                        {/* 🚀 유연한 결재 박스 UI (인원에 따라 가변 확장) */}
                         <div className="flex font-black font-black">
                             <table className="border-collapse border border-black text-[11px] font-black font-black">
                                 <tbody>
                                     <tr className="font-black">
                                         <th rowSpan="2" className="w-8 bg-slate-50 border border-black p-2 font-black text-center leading-tight">결<br/>재</th>
                                         <th className="w-16 h-8 bg-slate-50 border border-black p-1 text-center font-black">기안</th>
-                                        {/* 🚀 등록된 결재자 수만큼 동적으로 열 생성 */}
                                         {approvers.map((app, i) => (
                                             <th key={i} className="w-24 h-8 bg-slate-50 border border-black p-1 text-center font-black">
                                                 {app.position || '결재'}
                                             </th>
                                         ))}
-                                        {/* 최대 4명이 안 될 경우 빈 칸 표시 (최소 레이아웃 유지용) */}
                                         {approvers.length < 1 && <th className="w-24 h-8 bg-slate-50 border border-dashed border-slate-200"></th>}
                                     </tr>
                                     <tr className="h-20 font-black text-black font-black">
@@ -229,6 +227,11 @@ export default function BusinessTripWritePage() {
                         <table className="w-full border-collapse border-t border-l border-black text-[11px] font-black font-black">
                             <tbody>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black">
+                                    {/* 🚀 [핵심 수정] 문서번호 수동 입력 칸 추가 */}
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter w-24">문서번호 <HelpTooltip text="기안자가 직접 문서 번호를 기입하십시오." /></th>
+                                    <td className="p-3 font-black">
+                                        <input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="예: BT-202603-001 (직접 입력)" className="w-full outline-none bg-transparent font-black font-mono font-black font-black" />
+                                    </td>
                                     <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter w-24">보존기한 <HelpTooltip text="문서가 보관되는 기간을 설정합니다. 통상 업무는 5년을 권장합니다." /></th>
                                     <td className="p-3 font-black"><select name="preservationPeriod" value={formData.preservationPeriod} onChange={handleChange} className="w-full outline-none bg-transparent font-black"><option>1년</option><option>3년</option><option>5년</option><option>영구</option></select></td>
                                 </tr>

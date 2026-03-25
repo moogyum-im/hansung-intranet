@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { 
-    Printer, FileText, CheckCircle, XCircle, Users, Download, Paperclip, ImageIcon, MessageSquare
+    Printer, FileText, CheckCircle, XCircle, Users, Download, Paperclip, ImageIcon, MessageSquare, ShieldAlert
 } from 'lucide-react';
 
 export default function ApologyView({ doc, employee, approvalHistory, referrerHistory }) {
@@ -14,12 +14,11 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
     const [currentStep, setCurrentStep] = useState(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
-    const [manualDocNumber, setManualDocNumber] = useState('');
     const [approvalComment, setApprovalComment] = useState('');
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
 
     const isReferrer = referrerHistory?.some(ref => ref.referrer_id === employee?.id || ref.referrer?.id === employee?.id);
-    const isMyTurn = employee && currentStep && currentStep.approver?.id === employee.id && currentStep.status === '대기';
+    const isMyTurn = employee && currentStep && currentStep.approver?.id === employee.id && (currentStep.status === 'pending' || currentStep.status === '대기');
 
     const formatDateShort = (dateString) => {
         if (!dateString) return "";
@@ -36,8 +35,7 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                 try {
                     const content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content;
                     setFormData(content || {});
-                    setManualDocNumber(doc.document_number || '');
-                    setCurrentStep(approvalHistory?.find(s => s.status === '대기') || null);
+                    setCurrentStep(approvalHistory?.find(s => s.status === 'pending' || s.status === '대기') || null);
 
                     let rawAttachments = doc.attachments || content?.attachments || [];
                     if (typeof rawAttachments === 'string') {
@@ -64,16 +62,6 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
         };
         setupPage();
     }, [doc, approvalHistory]);
-
-    const handleUpdateDocNumber = async () => {
-        if (!manualDocNumber.trim()) return toast.error("문서 번호를 입력하세요.");
-        setActionLoading(true);
-        try {
-            await supabase.from('approval_documents').update({ document_number: manualDocNumber }).eq('id', doc.id);
-            toast.success("반영되었습니다.");
-            router.refresh();
-        } catch (error) { toast.error("실패"); } finally { setActionLoading(false); }
-    };
 
     const handleApprovalAction = async (newStatus) => {
         if (!currentStep) return;
@@ -119,12 +107,11 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                         <div className="space-y-4 font-black">
                             <h1 className="text-4xl font-black tracking-tighter uppercase font-black">시 말 서</h1>
                             <div className="flex flex-col text-[10px] space-y-1 font-black">
-                                <span>문서번호 : {doc.document_number || '관리부 추후 부여'}</span>
+                                <span>문서번호 : {doc.document_number || formData.document_number || '-'}</span>
                                 <span>작성일자 : {doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR') : '-'}</span>
                             </div>
                         </div>
 
-                        {/* 🚀 결재 스탬프 영역: 반려 날짜 로직 반영 */}
                         <div className="flex font-black font-black">
                             <table className="approval-table border-collapse border border-black text-[11px] font-black">
                                 <tbody>
@@ -156,7 +143,6 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                                                 ) : (
                                                     <div className="flex flex-col items-center font-black">
                                                         <div className={`font-black border-2 border-dashed rounded-full w-14 h-14 flex items-center justify-center mx-auto text-[10px] leading-tight rotate-[-15deg] uppercase italic font-black ${step.status === '반려' ? 'text-rose-500 border-rose-500' : 'text-slate-200 border-slate-100'}`}>
-                                                            {/* 🚀 반려 시 날짜 노출 */}
                                                             {step.status === '반려' ? `반려됨\n${formatDateShort(step.approved_at)}` : '대기중'}
                                                         </div>
                                                         <div className="mt-1 font-black text-[10px] text-black font-black">
@@ -169,6 +155,11 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                                     </tr>
                                 </tbody>
                             </table>
+                            {['진행중', 'pending', '대기'].includes(doc.status) && currentStep && (
+                                <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded text-[11px] font-black flex items-center gap-1.5 shadow-sm mt-2 no-print">
+                                    <ShieldAlert size={12} /> 현재 <b>{currentStep.approver?.full_name} {currentStep.approver?.position}</b>님의 결재 대기 중
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -202,7 +193,8 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
 
                         <section className="print-section font-black font-black">
                             <h2 className="text-[10px] mb-3 uppercase font-black tracking-tighter border-l-4 border-black pl-2 font-black font-black">03. 대책 및 반성</h2>
-                            <div className="border border-black p-5 text-[12px] leading-relaxed min-h-[150px] whitespace-pre-wrap font-black font-black font-black">{formData.apologyContent}</div>
+                            <div className="border border-black p-5 text-[12px] leading-relaxed min-h-[150px] whitespace-pre-wrap font-black font-black font-black">{formData.solution}</div>
+                            <div className="border border-black p-5 text-[12px] leading-relaxed min-h-[150px] whitespace-pre-wrap font-black font-black font-black border-t-0">{formData.apologyContent}</div>
                         </section>
 
                         {attachmentSignedUrls.length > 0 && (
@@ -242,18 +234,6 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                 </div>
 
                 <aside className="lg:col-span-4 space-y-5 no-print font-black font-black">
-                    {isReferrer && (
-                        <div className="bg-white border border-black p-6 shadow-sm font-black text-black font-black font-black font-black">
-                            <div className="flex flex-col gap-2 font-black font-black font-black">
-                                <p className="text-[9px] text-slate-400 mb-1 font-black uppercase font-black font-black font-black font-black">※ 관리부 승인 후 문서번호를 부여해 주십시오.</p>
-                                <div className="flex gap-2">
-                                    <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} className="flex-1 border border-black px-3 py-1.5 text-[11px] outline-none font-black text-black focus:bg-slate-50 font-black font-black" placeholder="문서번호 입력" />
-                                    <button onClick={handleUpdateDocNumber} className="bg-black text-white px-4 py-1.5 text-[10px] font-black hover:bg-slate-800 transition-all font-black font-black font-black font-black font-black">반영</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-black font-black font-black font-black">
                         <div className="flex items-center gap-2 mb-6 border-b-2 border-slate-100 pb-4 font-black font-black">
                             <Users size={20} /><h2 className="text-[13px] uppercase font-black tracking-widest font-black font-black font-black">결재 의견 및 참조인</h2>

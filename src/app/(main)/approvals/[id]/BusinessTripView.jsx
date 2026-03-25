@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { 
     Printer, FileText, CheckCircle, XCircle, Hash, 
-    Users, Loader2, Download, Paperclip, ImageIcon, MessageSquare
+    Users, Loader2, Download, Paperclip, ImageIcon, MessageSquare, ShieldAlert
 } from 'lucide-react';
 
 export default function BusinessTripView({ doc, employee, approvalHistory, referrerHistory }) {
@@ -15,14 +15,12 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
     const [currentStep, setCurrentStep] = useState(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
-    const [manualDocNumber, setManualDocNumber] = useState('');
     const [approvalComment, setApprovalComment] = useState('');
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
 
     const isReferrer = referrerHistory?.some(ref => ref.referrer_id === employee?.id || ref.referrer?.id === employee?.id);
     const isMyTurn = employee && currentStep && currentStep.approver?.id === employee.id && currentStep.status === '대기';
 
-    // 🚀 안전한 날짜 포맷팅 함수
     const formatDateShort = (dateString) => {
         if (!dateString) return "";
         const date = new Date(dateString);
@@ -38,7 +36,6 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                 try {
                     const content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content;
                     setFormData(content);
-                    setManualDocNumber(doc.document_number || '');
                     
                     const activeStep = approvalHistory?.find(s => s.status === '대기');
                     setCurrentStep(activeStep || null);
@@ -80,17 +77,6 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
         };
         setupPage();
     }, [doc, approvalHistory]);
-
-    const handleUpdateDocNumber = async () => {
-        if (!manualDocNumber.trim()) return toast.error("문서 번호를 입력하세요.");
-        setActionLoading(true);
-        try {
-            const { error } = await supabase.from('approval_documents').update({ document_number: manualDocNumber }).eq('id', doc.id);
-            if (error) throw error;
-            toast.success("반영되었습니다.");
-            router.refresh();
-        } catch (e) { toast.error("반영 실패"); } finally { setActionLoading(false); }
-    };
 
     const handleApprovalAction = async (newStatus) => {
         if (!currentStep) return;
@@ -143,15 +129,14 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                 <div className="lg:col-span-8 bg-white border border-black p-10 sm:p-14 shadow-sm relative print-container text-black font-black font-black font-black">
                     <div className="flex justify-between items-start mb-10 border-b-4 border-black pb-8 font-black font-black font-black font-black">
                         <div className="space-y-2 font-black">
-                            <h1 className="text-4xl font-black tracking-tighter uppercase font-black">출 장 신 신청서</h1>
+                            <h1 className="text-4xl font-black tracking-tighter uppercase font-black">출 장 신 청 서</h1>
                             <div className="flex flex-col text-[10px] space-y-1 font-black">
-                                <span>문서번호 : {doc.document_number || '관리부 추후 부여'}</span>
+                                <span>문서번호 : {doc.document_number || formData.document_number || '-'}</span>
                                 <span>작성일자 : {doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko-KR') : '-'}</span>
                             </div>
                         </div>
 
-                        {/* 🚀 결재 스탬프 영역: 상태에 따른 이름 상시 노출 및 반려 날짜 적용 */}
-                        <div className="flex font-black font-black">
+                        <div className="flex flex-col items-end gap-2 font-black">
                             <table className="approval-table border-collapse border border-black text-[11px] font-black font-black">
                                 <tbody>
                                     <tr className="font-black">
@@ -164,14 +149,12 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                                         ))}
                                     </tr>
                                     <tr className="h-20 font-black">
-                                        {/* 기안자 (완료 상태) */}
                                         <td className="border border-black p-1 text-center relative align-middle font-black">
                                             <div className="text-rose-600 font-black border-2 border-rose-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto opacity-70 rotate-[-15deg] text-[9px] leading-tight font-black">
                                                 서명완료<br/>{formatDateShort(doc.created_at)}
                                             </div>
                                             <div className="mt-1 font-black text-[9px] font-black">{doc.requester_name}</div>
                                         </td>
-                                        {/* 결재자 리스트 */}
                                         {approvalHistory?.map((step) => (
                                             <td key={step.id} className="border border-black p-1 text-center relative align-middle font-black">
                                                 {step.status === '승인' || step.status === '완료' ? (
@@ -183,7 +166,6 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                                                     </>
                                                 ) : step.status === '반려' ? (
                                                     <div className="flex flex-col items-center">
-                                                        {/* 🚀 반려 시 반려된 날짜 노출 */}
                                                         <div className="text-rose-500 font-black border-2 border-dashed border-rose-500 rounded-full w-14 h-14 flex items-center justify-center mx-auto rotate-[-15deg] text-[10px] leading-tight font-black uppercase">
                                                             반려됨<br/>{formatDateShort(step.approved_at)}
                                                         </div>
@@ -206,6 +188,11 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                                     </tr>
                                 </tbody>
                             </table>
+                            {['진행중', 'pending', '대기'].includes(doc.status) && currentStep && (
+                                <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded text-[11px] font-black flex items-center gap-1.5 shadow-sm mt-2 no-print">
+                                    <ShieldAlert size={12} /> 현재 <b>{currentStep.approver?.full_name} {currentStep.approver?.position}</b>님의 결재 대기 중
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -264,16 +251,6 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                 </div>
 
                 <aside className="lg:col-span-4 space-y-5 no-print font-black font-black">
-                    {isReferrer && (
-                        <div className="bg-white border border-black p-6 shadow-sm font-black font-black font-black font-black text-black">
-                            <p className="text-[10px] text-slate-400 mb-3 font-black uppercase font-black font-black font-black font-black">※ 관리자 전용: 문서번호 부여</p>
-                            <div className="flex gap-2 font-black font-black font-black font-black">
-                                <input type="text" value={manualDocNumber} onChange={(e) => setManualDocNumber(e.target.value)} className="flex-1 border border-black px-4 py-2 text-[12px] outline-none font-black text-black focus:bg-slate-50 font-black" placeholder="문서번호 입력" />
-                                <button onClick={handleUpdateDocNumber} className="bg-black text-white px-6 py-2 text-[11px] font-black hover:bg-slate-800 transition-all font-black font-black font-black font-black font-black font-black font-black">Apply</button>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm text-black font-black font-black font-black font-black">
                         <div className="flex items-center gap-2 mb-6 border-b-2 border-slate-100 pb-4 font-black font-black font-black font-black font-black">
                             <Users size={20} /><h2 className="text-[13px] uppercase font-black tracking-widest font-black font-black font-black font-black font-black">결재 의견 및 참조인</h2>
@@ -283,7 +260,7 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                                 <div key={step.id} className="flex gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 font-black font-black font-black font-black font-black font-black font-black">
                                     <MessageSquare size={16} className="text-slate-400 flex-shrink-0 mt-1 font-black" />
                                     <div className="font-black">
-                                        <p className="text-[10px] text-slate-400 font-black mb-1 font-black font-black font-black font-black font-black font-black font-black">{step.approver?.full_name} {step.approver?.position}</p>
+                                        <p className="text-[10px] text-slate-400 font-black mb-1 font-black font-black font-black font-black font-black font-black font-black">{step.approver?.full_name || step.approver_name} {step.approver?.position}</p>
                                         <p className="text-[12px] text-slate-700 leading-snug font-black font-black font-black font-black font-black font-black font-black font-black">{step.comment}</p>
                                     </div>
                                 </div>
@@ -341,7 +318,7 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                                 ))}
                             </div>
                         ) : (
-                            <div className="py-16 text-center border-2 border-dashed border-slate-100 rounded-3xl font-black font-black font-black font-black font-black font-black font-black">
+                            <div className="py-16 text-center border-2 border-dashed border-slate-100 rounded-3xl font-black font-black font-black font-black font-black font-black font-black font-black font-black">
                                 <Paperclip size={32} className="mx-auto text-slate-200 mb-3 font-black font-black font-black font-black font-black font-black font-black font-black font-black" />
                                 <p className="text-[12px] text-slate-300 font-black italic uppercase font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">No Attachments</p>
                             </div>
