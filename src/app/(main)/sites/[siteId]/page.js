@@ -33,8 +33,13 @@ export default function SiteDetailPage() {
         if (latestLogs) setAccessLogs(latestLogs);
     }, [siteId]);
 
-    const trackActivity = useCallback(async (content, menuLabel) => {
-        if (!siteId || hasTrackedInitial.current) return;
+   const trackActivity = useCallback(async (siteName) => {
+        if (!siteId) return;
+        
+        // 🚀 SessionStorage를 이용해 현재 세션에서 이 현장에 이미 접속 로그를 남겼는지 확인
+        const logKey = `site_visited_${siteId}`;
+        if (sessionStorage.getItem(logKey)) return; // 이미 남겼으면 실행 중단
+
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
@@ -44,13 +49,13 @@ export default function SiteDetailPage() {
                 user_id: user.id,
                 user_name: profile?.full_name,
                 activity_type: 'SITE_NAVIGATION',
-                content: content,
+                content: `['${siteName}' 현장]에 접속했습니다.`,
                 log_time: new Date().toLocaleString('ko-KR', { hour12: false }),
-                metadata: { site_id: siteId, menu: menuLabel }
+                metadata: { site_id: siteId, menu: '현장 메인' }
             });
             
-            hasTrackedInitial.current = true;
-            loadAccessLogs(); 
+            sessionStorage.setItem(logKey, 'true'); // 접속 이력 저장
+            loadAccessLogs(); // 로그 새로고침
         } catch (e) { console.error(e); }
     }, [siteId, loadAccessLogs]);
 
@@ -60,8 +65,8 @@ export default function SiteDetailPage() {
             const { data: siteData } = await supabase.from('construction_sites').select('*').eq('id', siteId).single();
             setSite(siteData);
 
-            if (siteData && !hasTrackedInitial.current) {
-                trackActivity(`['${siteData.name}' 현장]에 접속했습니다.`, '현장 메인');
+            if (siteData) {
+                trackActivity(siteData.name);
             }
 
             const { data: reportData } = await supabase.from('daily_site_reports').select('*, profiles(full_name)').eq('site_id', siteId).order('report_date', { ascending: false });

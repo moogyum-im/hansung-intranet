@@ -29,8 +29,72 @@ const safeParseJSON = (data) => {
         return JSON.parse(data);
     } catch (error) {
         console.warn('JSON parsing error (safely ignored):', error);
-        return {}; 
+        return {};
     }
+};
+
+// [수정점 2] 텍스트 <-> 배열 변환 유틸리티 추가
+const textToTableData = (text) => {
+    if (!text) return [];
+    if (Array.isArray(text)) return text.map(t => typeof t === 'string' ? { id: uuidv4(), content: t } : t);
+    return text.split('\n').filter(line => line.trim() !== '').map(line => ({ id: uuidv4(), content: line }));
+};
+
+// [수정점 2] 작업 요약 리스트 테이블 컴포넌트화 (타이핑 튕김 방지를 위해 외부에 선언, h-8 높이 고정)
+const WorkListTable = ({ title, list, listKey, readOnly, setFormData }) => {
+    return (
+        <div className="flex flex-col flex-1 border-r border-slate-400 last:border-r-0 bg-white">
+            <div className="bg-slate-50 h-8 text-center border-b border-slate-400 text-[10px] tracking-widest uppercase font-black flex justify-between items-center px-3">
+                <span>{title}</span>
+                {!readOnly && (
+                    <button 
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, [listKey]: [...(prev[listKey] || []), { id: uuidv4(), content: '' }] }))} 
+                        className="bg-white border border-slate-300 px-2 py-0.5 rounded text-[9px] hover:bg-slate-100 text-slate-700 shadow-sm"
+                    >+ 추가</button>
+                )}
+            </div>
+            <div className="flex-1 p-1 pb-4">
+                <table className="w-full border-collapse">
+                    <tbody>
+                        {list.map((item, idx) => (
+                            <tr key={item.id} className="border-b border-slate-100 group">
+                                <td className="w-6 text-center text-[10px] font-bold text-slate-300 align-top pt-2.5">{idx + 1}</td>
+                                <td className="p-0 align-top">
+                                    <textarea 
+                                        className="w-full p-1.5 text-[11px] font-bold outline-none resize-none bg-transparent leading-relaxed block overflow-hidden" 
+                                        rows={1}
+                                        value={item.content}
+                                        placeholder={readOnly ? "" : "내용 입력"}
+                                        readOnly={readOnly}
+                                        onChange={(e) => {
+                                            if (readOnly) return;
+                                            const val = e.target.value;
+                                            setFormData(prev => {
+                                                const newList = [...(prev[listKey] || [])];
+                                                const targetIdx = newList.findIndex(li => li.id === item.id);
+                                                if (targetIdx > -1) newList[targetIdx] = { ...newList[targetIdx], content: val };
+                                                return { ...prev, [listKey]: newList };
+                                            });
+                                        }}
+                                        onInput={(e) => {
+                                            e.target.style.height = 'auto';
+                                            e.target.style.height = e.target.scrollHeight + 'px';
+                                        }}
+                                    />
+                                </td>
+                                {!readOnly && (
+                                    <td className="w-6 text-center align-top pt-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button type="button" onClick={() => setFormData(prev => ({ ...prev, [listKey]: list.filter(li => li.id !== item.id) }))} className="text-red-400 hover:text-red-600 font-bold">×</button>
+                                    </td>
+                                )}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 };
 
 export default function DailyWorkPage() {
@@ -39,14 +103,13 @@ export default function DailyWorkPage() {
     const searchParams = useSearchParams();
     const reportId = searchParams.get('id');
     const categoryType = searchParams.get('type') || 'plant';
-    
     const { employee: currentUser } = useEmployee();
     const [view, setView] = useState(reportId ? 'detail' : 'write');
     const [formData, setFormData] = useState(null);
-    const [originalData, setOriginalData] = useState(null); 
+    const [originalData, setOriginalData] = useState(null);
     const [siteData, setSiteData] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
-    const [zoomLevel, setZoomLevel] = useState(1.0); 
+    const [zoomLevel, setZoomLevel] = useState(1.0);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importDate, setImportDate] = useState("");
     const [selectedImage, setSelectedImage] = useState(null);
@@ -58,7 +121,7 @@ export default function DailyWorkPage() {
     const isReadOnly = view === 'detail';
 
     const [visibleSections, setVisibleSections] = useState({
-        labor_costs: true, material_costs: true, equipment_costs: true, 
+        labor_costs: true, material_costs: true, equipment_costs: true,
         tree_costs: true, transport_costs: true, subcontract_costs: true, etc_costs: true
     });
 
@@ -101,11 +164,14 @@ export default function DailyWorkPage() {
         document.addEventListener('mouseup', onMouseUp);
     };
 
+    // [수정점 3] 단가(price)를 UniqueKey에 추가하여 단가 다르면 분리 누계
     const getUniqueKey = (row) => {
-        const name = row.item || row.name || '';
-        const spec = row.spec || '';
-        const vendor = row.vendor || '';
-        return `${name.trim()}_${spec.trim()}_${vendor.trim()}`;
+        const name = (row.item || row.name || '').trim();
+        if (!name) return null;
+        const spec = (row.spec || '').trim();
+        const vendor = (row.vendor || '').trim();
+        const price = row.price ? row.price.toString().replace(/,/g, '').trim() : '0';
+        return `${name}_${spec}_${vendor}_${price}`;
     };
 
     const syncWithAllPastData = useCallback(async (currentData) => {
@@ -114,7 +180,6 @@ export default function DailyWorkPage() {
         if (!pastReports) return currentData;
 
         const historicalDataMap = {}; const historicalProgress = { plant: 0, facility: 0 }; const historicalSettlement = {};
-        
         pastReports.forEach(report => {
             const notes = safeParseJSON(report.notes);
             historicalProgress.plant += parseNumber(notes.progress_plant);
@@ -125,10 +190,10 @@ export default function DailyWorkPage() {
                 if (notes[key] && Array.isArray(notes[key])) {
                     notes[key].forEach(row => {
                         const uKey = getUniqueKey(row);
-                        if (uKey === '__') return; 
+                        if (!uKey) return;
 
                         if (!historicalDataMap[key][uKey]) {
-                            historicalDataMap[key][uKey] = { ...row, count: 0, total: 0, prev_count: 0, accum: 0 }; 
+                            historicalDataMap[key][uKey] = { ...row, count: 0, total: 0, prev_count: 0, accum: 0 };
                         }
                         historicalDataMap[key][uKey].prev_count += parseNumber(row.count);
                     });
@@ -144,27 +209,29 @@ export default function DailyWorkPage() {
         const updatedData = { ...currentData };
         updatedData.progress_plant_prev = historicalProgress.plant.toFixed(4);
         updatedData.progress_facility_prev = historicalProgress.facility.toFixed(4);
+        
+        // [수정점 2] 작업 요약을 리스트 객체로 파싱
+        updatedData.prev_work_list = textToTableData(currentData.prev_work);
+        updatedData.today_work_list = textToTableData(currentData.today_work);
 
         ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs'].forEach(key => {
             const currentRows = updatedData[key] || [];
             const pastItems = { ...historicalDataMap[key] };
-            
             const processedRows = currentRows.map(row => {
                 const { isPastRecord, ...cleanRow } = row;
                 const uKey = getUniqueKey(cleanRow);
-                const pastInfo = pastItems[uKey];
-                
+                const pastInfo = uKey ? pastItems[uKey] : null;
                 const rowId = cleanRow.id || uuidv4();
 
                 if (pastInfo) {
                     const newPrev = pastInfo.prev_count;
-                    delete pastItems[uKey]; 
-                    return { 
-                        ...cleanRow, 
+                    delete pastItems[uKey];
+                    return {
+                        ...cleanRow,
                         id: rowId,
-                        isPastRecord: false, // 🚀 이미 DB에 금일 내역으로 존재하는 행은 상단에 고정
-                        prev_count: newPrev.toString(), 
-                        accum: (newPrev + parseNumber(cleanRow.count)).toString() 
+                        isPastRecord: false,
+                        prev_count: newPrev.toString(),
+                        accum: (newPrev + parseNumber(cleanRow.count)).toString()
                     };
                 }
                 return { ...cleanRow, id: rowId, isPastRecord: false, prev_count: "0", accum: cleanRow.count };
@@ -174,8 +241,8 @@ export default function DailyWorkPage() {
                 const { isPastRecord, ...cleanPastRow } = pastRow;
                 return {
                     ...cleanPastRow,
-                    id: cleanPastRow.id || uuidv4(), 
-                    isPastRecord: true, // 🚀 과거에는 있었으나 오늘은 아직 등록 안된 데이터는 하단 전일내역으로 고정
+                    id: cleanPastRow.id || uuidv4(),
+                    isPastRecord: true,
                     prev_count: cleanPastRow.prev_count.toString(),
                     count: "0",
                     accum: cleanPastRow.prev_count.toString(),
@@ -204,13 +271,12 @@ export default function DailyWorkPage() {
             if (reportId) {
                 const { data: rep } = await supabase.from('daily_site_reports').select('*').eq('id', reportId).single();
                 const notes = safeParseJSON(rep.notes);
-                
                 ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs', 'etc_costs'].forEach(k => {
                     if (notes[k]) notes[k] = notes[k].map(r => ({ ...r, id: r.id || uuidv4() }));
                 });
 
                 let fullData = await syncWithAllPastData({ ...notes, total_contract_amount: site?.budget || 0 });
-                setFormData(fullData); setOriginalData(fullData); 
+                setFormData(fullData); setOriginalData(fullData);
                 if (notes.savedColumnWidths) setColumnWidths(notes.savedColumnWidths);
                 if (notes.savedVisibleSections) setVisibleSections(notes.savedVisibleSections);
                 setTodayPhotos(rep.photos?.filter(p => p.timeType === 'today') || []);
@@ -223,6 +289,12 @@ export default function DailyWorkPage() {
                     labor_costs: [], material_costs: [], equipment_costs: [], tree_costs: [], transport_costs: [], subcontract_costs: [], etc_costs: []
                 };
                 const synced = await syncWithAllPastData(initialData);
+                
+                // 신규 작성 시 '금일 작업 요약' 기본 1칸(입력창) 추가
+                if (!synced.today_work_list || synced.today_work_list.length === 0) {
+                    synced.today_work_list = [{ id: uuidv4(), content: '' }];
+                }
+                
                 setFormData(synced); setOriginalData(synced);
             }
         };
@@ -248,22 +320,28 @@ export default function DailyWorkPage() {
             }));
 
             const cleanDataToSave = JSON.parse(JSON.stringify(formData));
+            
+            // [수정점 2] 저장 시 리스트 데이터를 다시 텍스트 문자열로 합침
+            cleanDataToSave.today_work = cleanDataToSave.today_work_list?.map(i => i.content).join('\n') || '';
+            cleanDataToSave.prev_work = cleanDataToSave.prev_work_list?.map(i => i.content).join('\n') || '';
+            delete cleanDataToSave.today_work_list; 
+            delete cleanDataToSave.prev_work_list; 
+
             ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs', 'etc_costs'].forEach(key => {
                 if (cleanDataToSave[key]) {
-                    // 🚀 [해결 핵심] 저장할 때만 값이 없는 행들을 버림. 그래야 다음날 불러올 때 과거 데이터로 인식됨.
                     cleanDataToSave[key] = cleanDataToSave[key].filter(row => {
                         if (key === 'etc_costs') return parseNumber(row.total) > 0 || row.content;
                         return parseNumber(row.count) > 0 || parseNumber(row.total) > 0;
                     }).map(row => {
-                        const { isPastRecord, ...rest } = row; // DB에 불필요한 프론트 플래그 제거
+                        const { isPastRecord, ...rest } = row;
                         return rest;
                     });
                 }
             });
 
-            const payload = { 
-                site_id: siteId, report_date: formData.report_date, author_id: currentUser.id, photos: uploadedPhotos.filter(v => v !== null), 
-                notes: JSON.stringify({ ...cleanDataToSave, savedVisibleSections: visibleSections, savedColumnWidths: columnWidths }), content: formData.today_work || '작업일보 기록'
+            const payload = {
+                site_id: siteId, report_date: formData.report_date, author_id: currentUser.id, photos: uploadedPhotos.filter(v => v !== null),
+                notes: JSON.stringify({ ...cleanDataToSave, savedVisibleSections: visibleSections, savedColumnWidths: columnWidths }), content: cleanDataToSave.today_work || '작업일보 기록'
             };
             const { data: existing } = await supabase.from('daily_site_reports').select('id, notes').eq('site_id', siteId).eq('report_date', formData.report_date);
             const targetId = existing?.find(r => (safeParseJSON(r.notes)?.report_category || 'plant') === categoryType)?.id || reportId;
@@ -285,21 +363,18 @@ export default function DailyWorkPage() {
             const { data: allReports } = await supabase.from('daily_site_reports').select('*').eq('site_id', siteId).eq('report_date', importDate);
             const match = allReports?.find(r => (safeParseJSON(r.notes)?.report_category || 'plant') === categoryType);
             if (!match) return toast.error(`데이터가 없습니다.`);
-            
             const importedData = safeParseJSON(match.notes);
-            
-            if (match.photos?.length > 0) { 
-                setTomorrowPhotos(match.photos.map(p => ({ ...p, timeType: 'tomorrow' }))); 
-                setTodayPhotos([]); 
+            if (match.photos?.length > 0) {
+                setTomorrowPhotos(match.photos.map(p => ({ ...p, timeType: 'tomorrow' })));
+                setTodayPhotos([]);
             }
 
-            // 🚀 불러온 데이터를 금일 내역에서 비워버리면 `syncWithAllPastData`가 전부 전일 내역(하단)으로 만들어줌
-            const baseDataForSync = { 
-                ...formData, 
-                ...importedData, 
-                report_date: formData.report_date, 
-                report_category: categoryType, 
-                prev_work: importedData.today_work, 
+            const baseDataForSync = {
+                ...formData,
+                ...importedData,
+                report_date: formData.report_date,
+                report_category: categoryType,
+                prev_work: importedData.today_work,
                 today_work: '',
                 progress_plant: '0.0000',
                 progress_facility: '0.0000',
@@ -312,7 +387,7 @@ export default function DailyWorkPage() {
                 etc_costs: []
             };
 
-            setFormData(await syncWithAllPastData(baseDataForSync)); 
+            setFormData(await syncWithAllPastData(baseDataForSync));
             setIsImportModalOpen(false);
             toast.success("성공적으로 데이터를 연동했습니다.");
         } catch (e) { toast.error("불러오기 실패"); }
@@ -345,7 +420,6 @@ export default function DailyWorkPage() {
         const config = FIELD_MAPS[key]; const allRows = formData?.[key] || [];
         const isCollapsed = collapsedSections[key]; const widths = columnWidths[key] || {};
 
-        // 🚀 [해결 핵심] 숫자를 입력한다고 줄이 위로 점프하지 않고, 페이지 로드 시 부여된 isPastRecord 상태를 유지함!
         const todayRows = allRows.filter(r => !r.isPastRecord);
         const pastRows = allRows.filter(r => r.isPastRecord);
         const isExpanded = expandedSections[key];
@@ -363,16 +437,15 @@ export default function DailyWorkPage() {
                                     <div className="flex items-center gap-1 font-black"><span className="text-[10px] uppercase">▣ {config.title} ({allRows.length})</span></div>
                                     <div className="flex items-center gap-2">
                                         {!isReadOnly && (
-                                            <button 
-                                                onClick={(e)=>{ 
-                                                    e.stopPropagation(); 
+                                            <button
+                                                onClick={(e)=>{
+                                                    e.stopPropagation();
                                                     e.preventDefault();
-                                                    // 🚀 새 항목 추가 시 isPastRecord: false 를 부여하여 최상단 표시 보장
                                                     setFormData(p=>({
-                                                        ...p, 
+                                                        ...p,
                                                         [key]: [{id:uuidv4(), isPastRecord: false, ...config.fields.reduce((a,f)=>({...a,[f]:''}),{})}, ...(p[key]||[])]
                                                     }));
-                                                }} 
+                                                }}
                                                 className="bg-white border border-slate-400 px-2 py-0.5 text-[9.5px] font-black shadow-sm rounded-none hover:bg-slate-50 transition-all leading-none"
                                             >
                                                 + 추가
@@ -406,13 +479,12 @@ export default function DailyWorkPage() {
                                             <td key={f} className={`p-0 align-middle font-sans ${idx !== config.fields.length - 1 || !isReadOnly ? 'border-r border-slate-200' : ''}`} style={{ width: widths[idx] ? `${widths[idx]}px` : 'auto' }}>
                                                 <input className={`block w-full h-full p-1 outline-none bg-transparent font-sans font-black rounded-none text-[8.5px] z-10 ${isNumeric ? 'text-right pr-2' : 'text-center px-1'}`}
                                                     value={isNumeric && focusedField !== fieldId ? formatNumber(row[f]) : (isNumeric && (row[f] === "0" || row[f] === 0) ? "" : row[f])}
-                                                    readOnly={isReadOnly} 
-                                                    onFocus={() => isNumeric && setFocusedField(fieldId)} 
+                                                    readOnly={isReadOnly}
+                                                    onFocus={() => isNumeric && setFocusedField(fieldId)}
                                                     onBlur={() => setFocusedField(null)}
                                                     onChange={e => {
                                                         if (isReadOnly) return;
-                                                        const updated = [...allRows]; 
-                                                        // 🚀 [해결 핵심] 무조건 고유 id 값으로 탐색하므로 엉뚱한 줄이 수정되는 일 방지
+                                                        const updated = [...allRows];
                                                         const rIdx = allRows.findIndex(x => x.id === row.id);
                                                         if (rIdx === -1) return;
 
@@ -423,7 +495,7 @@ export default function DailyWorkPage() {
                                                             if (f === 'price' || f === 'count') updated[rIdx].total = (parseNumber(updated[rIdx].price) * parseNumber(updated[rIdx].count)).toString();
                                                         }
                                                         setFormData({...formData, [key]: updated});
-                                                    }} 
+                                                    }}
                                                 />
                                             </td>
                                         );
@@ -526,23 +598,32 @@ export default function DailyWorkPage() {
             <div className="flex-1 overflow-auto bg-[#F8FAFC] p-4">
                 <div style={{ zoom: zoomLevel }} className="pb-40 flex flex-col items-center mx-auto w-full max-w-[1600px]">
                     
+                    {/* [수정점 4] 회장님 가이드라인 개편 */}
                     {!isReadOnly && (
-                        <div className="w-full bg-blue-50 border border-blue-200 p-3 mb-4 shadow-sm font-sans flex flex-col justify-center text-blue-900">
-                            <div className="flex items-center gap-2 mb-1">
-                                <AlertCircle size={16} className="text-blue-700"/>
-                                <span className="font-black text-xs uppercase tracking-wide">일보 작성 및 출력 가이드</span>
+                        <div className="w-full bg-red-50/50 border-2 border-red-500 p-4 mb-4 shadow-md font-sans flex flex-col justify-center text-slate-900">
+                            <div className="flex items-center gap-2 mb-3">
+                                <AlertCircle size={20} className="text-red-600 animate-pulse"/>
+                                <span className="font-black text-[13px] text-red-600 uppercase tracking-wider">💡 필수 확인: 일보 작성 및 출력 가이드</span>
                             </div>
-                            <p className="text-[10.5px] font-bold ml-6 leading-relaxed">
-                                1. 내용이 가려질 경우, <strong>표의 각 제목(헤더) 사이 경계선</strong>에 마우스를 올린 후 좌우로 드래그하여 엑셀처럼 열 너비를 조절할 수 있습니다.<br/>
-                                2. 금일 작성하는 데이터는 수정 중에는 제자리를 유지하며, <strong>작성을 완료하고 [일보 저장]을 누른 뒤 다시 접속하면 표의 최상단</strong>으로 자동 정렬됩니다.
-                            </p>
+                            <div className="flex flex-col gap-2 ml-7">
+                                <div className="bg-red-100/80 p-2.5 rounded-sm border-l-4 border-red-600 flex items-start gap-2">
+                                    <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-sm whitespace-nowrap mt-0.5">회장님 지시사항</span>
+                                    <p className="text-[11px] font-black text-red-900 leading-relaxed">
+                                        출력 시 내용이 가려지지 않도록, 반드시 <strong>표의 각 제목(헤더) 사이 경계선</strong>에 마우스를 올린 후 좌우로 드래그하여 엑셀처럼 열 너비를 조절하여 기입하십시오.
+                                    </p>
+                                </div>
+                                <p className="text-[11px] font-bold leading-relaxed text-slate-700 pl-1 mt-1">
+                                    2. 금일 작성 내역은 수정 중에는 제자리를 유지하며, <strong>작성을 완료 후 [일보 저장]을 누른 뒤 다시 접속하면 해당 공정 테이블의 최상단</strong>으로 자동 정렬됩니다.
+                                </p>
+                            </div>
                         </div>
                     )}
 
                     <div className="w-full bg-white border border-slate-400 shadow-sm font-sans flex flex-col">
                         
                         <div className="grid grid-cols-12 border-b border-slate-400 items-stretch">
-                            <div className="col-span-8 flex flex-col justify-between p-6 border-r border-slate-400">
+                            {/* [수정점 1] 상단 그리드 비율 (8:4 -> 7:5) 조정하여 현장명 공간 확보 */}
+                            <div className="col-span-7 flex flex-col justify-between p-6 border-r border-slate-400">
                                 <h1 className="text-5xl font-black uppercase tracking-[1em] text-left mt-2 mb-6 font-sans">작 업 일 보</h1>
                                 <div className="flex gap-2 flex-wrap items-end font-sans">
                                     <div className="flex border border-slate-400 text-[9px] font-black h-8 items-center px-3 bg-slate-50 uppercase">총 도급액: {formatNumber(formData?.total_contract_amount)}원</div>
@@ -558,18 +639,18 @@ export default function DailyWorkPage() {
                                 </div>
                             </div>
                             
-                            <div className="col-span-4 flex flex-col bg-white">
+                            <div className="col-span-5 flex flex-col bg-white">
                                 <table className="w-full text-[9px] border-collapse font-black h-full" style={{ tableLayout: 'fixed' }}>
                                     <colgroup>
-                                        <col style={{ width: '25%' }} />
-                                        <col style={{ width: '35%' }} />
-                                        <col style={{ width: '20%' }} />
-                                        <col style={{ width: '20%' }} />
+                                        <col style={{ width: '18%' }} />
+                                        <col style={{ width: '46%' }} /> {/* [수정점 1] 현장명 넓게 */}
+                                        <col style={{ width: '18%' }} />
+                                        <col style={{ width: '18%' }} />
                                     </colgroup>
                                     <tbody>
                                         <tr className="border-b border-slate-400 h-8">
                                             <th className="bg-slate-50 border-r border-slate-400 font-black text-center">현장명</th>
-                                            <td className="px-2 overflow-hidden whitespace-nowrap border-r border-slate-400 text-center">{siteData?.name}</td>
+                                            <td className="px-2 overflow-hidden text-ellipsis whitespace-nowrap border-r border-slate-400 text-center" title={siteData?.name}>{siteData?.name}</td>
                                             <th className="bg-slate-50 border-r border-slate-400 font-black text-center">작업 일시</th>
                                             <td className="px-1 text-center">
                                                 <input type="date" className="w-full outline-none bg-transparent text-center font-black" value={formData?.report_date || ''} readOnly={isReadOnly} onChange={e=>setFormData({...formData, report_date: e.target.value})} />
@@ -607,15 +688,16 @@ export default function DailyWorkPage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-12 border-b border-slate-400 items-stretch">
-                            <div className="col-span-8 grid grid-cols-2 border-r border-slate-400 min-h-[220px] bg-slate-50">
-                                <div className="border-r border-slate-400 flex flex-col"><div className="bg-slate-50 p-1.5 text-center border-b border-slate-400 text-[10px] tracking-widest uppercase font-black">전일 작업 요약</div><textarea className="w-full flex-1 p-4 text-[13px] outline-none font-bold resize-none bg-transparent text-center leading-relaxed" value={formData?.prev_work} readOnly /></div>
-                                <div className="flex flex-col"><div className="bg-slate-50 p-1.5 text-center border-b border-slate-400 text-[10px] tracking-widest uppercase font-black">금일 작업 요약</div><textarea className="w-full flex-1 p-4 text-[13px] outline-none font-bold resize-none bg-transparent text-center leading-relaxed" value={formData?.today_work} readOnly={isReadOnly} onChange={e=>setFormData({...formData, today_work: e.target.value})} /></div>
+                        {/* [수정점 2] 작업 요약 리스트 교체, 내부 스크롤 제거, 높이 h-8 동기화 */}
+                        <div className="grid grid-cols-12 border-b border-slate-400 items-stretch min-h-[170px]">
+                            <div className="col-span-8 grid grid-cols-2 border-r border-slate-400 bg-white">
+                                <WorkListTable title="전일 작업 요약" list={formData?.prev_work_list || []} listKey="prev_work_list" readOnly={true} setFormData={setFormData} />
+                                <WorkListTable title="금일 작업 요약" list={formData?.today_work_list || []} listKey="today_work_list" readOnly={isReadOnly} setFormData={setFormData} />
                             </div>
                             
-                            <div className="col-span-4 bg-white">
-                                <div className="bg-slate-800 text-white p-1.5 text-center text-[10px] uppercase font-black">실시간 정산 내역 합계</div>
-                                <table className="w-full text-[9px] border-collapse h-[calc(100%-25px)]" style={{ tableLayout: 'fixed' }}>
+                            <div className="col-span-4 bg-white flex flex-col">
+                                <div className="bg-slate-800 text-white h-8 flex items-center justify-center text-[10px] uppercase font-black">실시간 정산 내역 합계</div>
+                                <table className="w-full text-[9px] border-collapse flex-1" style={{ tableLayout: 'fixed' }}>
                                     <colgroup>
                                         <col style={{ width: '25%' }} />
                                         <col style={{ width: '35%' }} />
@@ -623,7 +705,7 @@ export default function DailyWorkPage() {
                                         <col style={{ width: '20%' }} />
                                     </colgroup>
                                     <thead className="bg-slate-50 border-b border-slate-400 font-bold">
-                                        <tr className="h-8">
+                                        <tr className="h-6">
                                             <th className="border-r border-slate-400 text-center uppercase whitespace-nowrap">항목</th>
                                             <th className="border-r border-slate-400 text-center uppercase whitespace-nowrap">전일</th>
                                             <th className="border-r border-slate-400 text-center text-blue-600 font-bold uppercase whitespace-nowrap">금일</th>
@@ -632,14 +714,14 @@ export default function DailyWorkPage() {
                                     </thead>
                                     <tbody className="font-black">
                                         {(formData?.settlement_costs || []).map((row, idx) => (
-                                            <tr key={idx} className="border-b border-slate-200">
+                                            <tr key={idx} className="border-b border-slate-200 h-5">
                                                 <td className="bg-slate-50 border-r border-slate-200 text-center p-0.5 whitespace-nowrap">{row.item}</td>
                                                 <td className="text-right px-2 border-r border-slate-200 whitespace-nowrap">{formatNumber(row.prev)}</td>
                                                 <td className="text-right px-2 text-blue-700 border-r border-slate-200 font-black whitespace-nowrap">{formatNumber(row.today)}</td>
                                                 <td className="text-right px-2 text-red-600 font-bold whitespace-nowrap">{formatNumber(row.total)}</td>
                                             </tr>
                                         ))}
-                                        <tr className="bg-slate-100 font-black text-blue-800">
+                                        <tr className="bg-slate-100 font-black text-blue-800 h-6">
                                             <td className="text-center p-1 border-r border-slate-200 whitespace-nowrap">총 합계</td>
                                             <td className="text-right px-2 border-r border-slate-200 whitespace-nowrap">{formatNumber(sTotals.prev)}</td>
                                             <td className="text-right px-2 text-blue-800 border-r border-slate-200 font-black">{formatNumber(sTotals.today)}</td>

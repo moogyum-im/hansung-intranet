@@ -140,8 +140,9 @@ export default function SiteDocumentsPage() {
                         <div className="flex items-center gap-4">
                             <button onClick={() => router.back()} className="p-2 hover:bg-white rounded-full text-slate-400"><ArrowLeft size={24}/></button>
                             <div>
-                                <h2 className="text-2xl text-slate-900 tracking-tight font-black">공무 서류 라이브러리</h2>
                                 <p className="text-[11px] text-slate-400 uppercase mt-1 font-black">Site Document Storage</p>
+                                <h2 className="text-2xl text-slate-900 tracking-tight font-black">공무 서류</h2>
+                                
                             </div>
                         </div>
                         <div className="flex gap-2">
