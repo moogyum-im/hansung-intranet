@@ -161,10 +161,11 @@ function ShareModal({ isOpen, onClose, doc, currentUser, allEmployees }) {
 // --- 메인 위젯 컴포넌트 ---
 function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, currentUserId, currentUserFullName, allEmployees }) {
     // 2-Depth State
-    const [activeMainTab, setActiveMainTab] = useState('submitted'); // 기본 탭: 상신한 결재
-    const [activeSubTab, setActiveSubTab] = useState('progress'); // 기본 서브: 진행 중
+    const [activeMainTab, setActiveMainTab] = useState('submitted');
+    const [activeSubTab, setActiveSubTab] = useState('progress');
     const [lastViewed, setLastViewed] = useState({});
     const [shareTarget, setShareTarget] = useState(null);
+    const [docSearchTerm, setDocSearchTerm] = useState('');
 
     useEffect(() => {
         const savedTime = localStorage.getItem('HANSUNG_APPROV_VIEW_V6');
@@ -179,6 +180,7 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
 
     const handleMainTabClick = (key) => {
         setActiveMainTab(key);
+        setDocSearchTerm(''); // 탭 이동 시 검색어 초기화
         if (key === 'received') {
             setActiveSubTab('pending');
             updateLastViewed('pending');
@@ -192,8 +194,18 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
 
     const handleSubTabClick = (key) => {
         setActiveSubTab(key);
+        setDocSearchTerm(''); // 서브 탭 이동 시 검색어 초기화
         updateLastViewed(key);
     };
+
+    // 🚀 [신규] 전체 문서를 중복 없이 하나로 합친 배열 (통합 검색용)
+    const allUniqueDocs = useMemo(() => {
+        const map = new Map();
+        [...toReview, ...submitted, ...approved, ...rejected, ...referred].forEach(doc => {
+            if (!map.has(doc.id)) map.set(doc.id, doc);
+        });
+        return Array.from(map.values());
+    }, [toReview, submitted, approved, rejected, referred]);
 
     const othersApproved = useMemo(() => approved.filter(doc => doc.creator_name !== currentUserFullName), [approved, currentUserFullName]);
     const othersRejected = useMemo(() => rejected.filter(doc => doc.creator_name !== currentUserFullName), [rejected, currentUserFullName]);
@@ -203,20 +215,34 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
     
     const cleanReferred = useMemo(() => referred.filter(doc => doc.creator_name !== currentUserFullName), [referred, currentUserFullName]);
 
+    // 🚀 [수정] 통합 검색 로직 반영
     const filteredData = useMemo(() => {
-        if (activeMainTab === 'received') {
-            if (activeSubTab === 'pending') return toReview;
-            if (activeSubTab === 'completed') return othersApproved;
-            if (activeSubTab === 'rejected') return othersRejected;
-        } else if (activeMainTab === 'submitted') {
-            if (activeSubTab === 'progress') return submitted;
-            if (activeSubTab === 'completed') return myApproved;
-            if (activeSubTab === 'rejected') return myRejected;
-        } else if (activeMainTab === 'referred') {
-            return cleanReferred;
+        // 검색어가 있을 경우: 탭에 상관없이 전체 문서에서 통합 검색 수행
+        if (docSearchTerm.trim() !== '') {
+            const lowerTerm = docSearchTerm.toLowerCase();
+            return allUniqueDocs.filter(doc => 
+                (doc.title && doc.title.toLowerCase().includes(lowerTerm)) || 
+                (doc.creator_name && doc.creator_name.toLowerCase().includes(lowerTerm))
+            );
         }
-        return [];
-    }, [activeMainTab, activeSubTab, toReview, submitted, othersApproved, othersRejected, myApproved, myRejected, cleanReferred]);
+
+        // 검색어가 없을 경우: 기존 탭 기반 필터링 수행
+        let currentData = [];
+        if (activeMainTab === 'received') {
+            if (activeSubTab === 'pending') currentData = toReview;
+            if (activeSubTab === 'completed') currentData = othersApproved;
+            if (activeSubTab === 'rejected') currentData = othersRejected;
+        } else if (activeMainTab === 'submitted') {
+            if (activeSubTab === 'progress') currentData = submitted;
+            if (activeSubTab === 'completed') currentData = myApproved;
+            if (activeSubTab === 'rejected') currentData = myRejected;
+        } else if (activeMainTab === 'referred') {
+            currentData = cleanReferred;
+        }
+
+        return currentData;
+
+    }, [activeMainTab, activeSubTab, toReview, submitted, othersApproved, othersRejected, myApproved, myRejected, cleanReferred, docSearchTerm, allUniqueDocs]);
 
     const getStatusChip = (status) => {
         const statusMap = { 
@@ -285,9 +311,9 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
                 allEmployees={allEmployees}
             />
 
-            {/* 🚀 1-Depth: 메인 탭 네비게이션 */}
-            <div className="p-3 border-b border-slate-200 bg-white">
-                <nav className="flex space-x-2 overflow-x-auto custom-scrollbar">
+            {/* 1-Depth: 메인 탭 네비게이션 및 검색창 */}
+            <div className="p-3 border-b border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <nav className="flex space-x-2 overflow-x-auto custom-scrollbar shrink-0">
                     {mainTabs.map((tab) => {
                         const Icon = tab.icon;
                         const active = activeMainTab === tab.key;
@@ -304,42 +330,71 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
                         );
                     })}
                 </nav>
+                
+                {/* 통합 검색창 */}
+                <div className="relative w-full sm:max-w-xs shrink-0">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                    <input 
+                        type="text" 
+                        placeholder="전체 문서 제목 또는 기안자 검색" 
+                        className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[13px] font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder:text-slate-400"
+                        value={docSearchTerm} 
+                        onChange={(e) => setDocSearchTerm(e.target.value)}
+                    />
+                    {docSearchTerm && (
+                        <button 
+                            onClick={() => setDocSearchTerm('')} 
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* 🚀 2-Depth: 하위 메뉴 (받은 결재, 상신한 결재 선택 시 노출 / 참조결재는 하위메뉴 없음) */}
-            {(activeMainTab === 'received' || activeMainTab === 'submitted') && (
-                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-3 overflow-x-auto custom-scrollbar">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><CornerDownRight size={12} className="text-slate-300"/> 폴더</span>
-                    <div className="w-px h-3 bg-slate-300" />
-                    {subTabs.map((tab) => {
-                        const Icon = tab.icon;
-                        const active = activeSubTab === tab.key;
-                        return (
-                            <button 
-                                key={tab.key} onClick={() => handleSubTabClick(tab.key)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-black transition-all ${active ? 'bg-white text-slate-800 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'}`}
-                            >
-                                {hasNewUpdate(tab.key, tab.data) && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full" />}
-                                <Icon size={12} className={active ? 'text-blue-500' : 'opacity-50'}/> 
-                                {tab.label} <span className="opacity-50 text-[10px]">({tab.count})</span>
-                            </button>
-                        );
-                    })}
+            {/* 🚀 검색 중일 때: 하위 메뉴 숨김 및 검색 결과 안내 바 노출 */}
+            {docSearchTerm.trim() !== '' ? (
+                <div className="px-4 py-2.5 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
+                    <SearchIcon size={14} className="text-blue-500" />
+                    <span className="text-[12px] font-black text-blue-700">
+                        전체 문서 통합 검색 결과 ({filteredData.length}건)
+                    </span>
                 </div>
+            ) : (
+                /* 평소(검색어 없음): 기존 하위 메뉴 노출 */
+                (activeMainTab === 'received' || activeMainTab === 'submitted') && (
+                    <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-3 overflow-x-auto custom-scrollbar shrink-0">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><CornerDownRight size={12} className="text-slate-300"/> 폴더</span>
+                        <div className="w-px h-3 bg-slate-300" />
+                        {subTabs.map((tab) => {
+                            const Icon = tab.icon;
+                            const active = activeSubTab === tab.key;
+                            return (
+                                <button 
+                                    key={tab.key} onClick={() => handleSubTabClick(tab.key)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-black transition-all ${active ? 'bg-white text-slate-800 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'}`}
+                                >
+                                    {hasNewUpdate(tab.key, tab.data) && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full" />}
+                                    <Icon size={12} className={active ? 'text-blue-500' : 'opacity-50'}/> 
+                                    {tab.label} <span className="opacity-50 text-[10px]">({tab.count})</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                )
             )}
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 bg-slate-50/30">
                 {filteredData.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400 font-bold">
                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                            <FileText size={24} className="text-slate-300" />
+                            {docSearchTerm ? <SearchIcon size={24} className="text-slate-300" /> : <FileText size={24} className="text-slate-300" />}
                         </div>
-                        해당하는 문서가 없습니다.
+                        {docSearchTerm ? '검색 결과가 없습니다.' : '해당하는 문서가 없습니다.'}
                     </div>
                 ) : (
                     filteredData.map(doc => {
                         const currentApprover = doc.current_approver_id ? allEmployees.find(e => e.id === doc.current_approver_id) : null;
-                        // 🚀 [에러 픽스] 작성자 이름이 null이거나 없을 경우 안전하게 '알수없음'으로 대체 처리
                         const safeCreatorName = doc.creator_name || '알수없음';
 
                         return (
@@ -354,7 +409,7 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
                                                 <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-black text-slate-600 border border-slate-200">
                                                     {safeCreatorName.charAt(0)}
                                                 </div>
-                                                {safeCreatorName === currentUserFullName ? '상신함' : '결재요청'}: {safeCreatorName}
+                                                {safeCreatorName === currentUserFullName ? '상신함' : '기안자'}: {safeCreatorName}
                                             </span>
                                             <span className="w-1 h-1 rounded-full bg-slate-300" />
                                             <span className="flex items-center gap-1.5"><Clock size={12} className="text-slate-400"/>{new Date(doc.created_at).toLocaleDateString()}</span>

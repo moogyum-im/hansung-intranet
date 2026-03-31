@@ -15,7 +15,7 @@ export default function LeaveRequestPage() {
     const [allEmployees, setAllEmployees] = useState([]);
     const [formData, setFormData] = useState({
         title: '휴가 신청서',
-        document_number: '', // 🚀 문서 번호 수동 기입 필드 추가
+        document_number: '', 
         leaveType: '연차',
         startDate: '',
         endDate: '',
@@ -26,6 +26,9 @@ export default function LeaveRequestPage() {
     const [loading, setLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
+
+    // 🚀 잔여 연차 조회를 위한 상태 추가
+    const [leaveData, setLeaveData] = useState({ remain: 0 });
 
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
@@ -46,6 +49,24 @@ export default function LeaveRequestPage() {
             .sort((a, b) => (priority[a] || 999) - (priority[b] || 999) || a.localeCompare(b))
             .reduce((acc, key) => { acc[key] = groups[key]; return acc; }, {});
     }, [allEmployees]);
+
+    // 🚀 휴가 신청 일수 자동 계산 로직 (반차는 0.5일, 연차는 날짜 계산)
+    const requestedDays = useMemo(() => {
+        if (!formData.startDate || !formData.endDate) return 0;
+        
+        if (formData.leaveType.includes('반차')) {
+            return 0.5;
+        }
+
+        const start = new Date(formData.startDate);
+        const end = new Date(formData.endDate);
+        
+        if (end < start) return 0;
+        
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        return diffDays;
+    }, [formData.startDate, formData.endDate, formData.leaveType]);
 
     useEffect(() => {
         const saved = localStorage.getItem('leave_draft_backup');
@@ -70,8 +91,20 @@ export default function LeaveRequestPage() {
             const { data } = await supabase.from('profiles').select('id, full_name, department, position').eq('employment_status', '재직');
             setAllEmployees(data || []);
         };
+
+        // 🚀 본인의 최신 잔여 연차 정보 가져오기
+        const fetchLeaveData = async () => {
+            const { data } = await supabase.from('profiles').select('total_leave_days, used_leave_days').eq('id', employee.id).single();
+            if (data) {
+                const total = parseFloat(data.total_leave_days || 0);
+                const used = parseFloat(data.used_leave_days || 0);
+                setLeaveData({ remain: total - used });
+            }
+        };
+
         if (!employeeLoading && employee) {
             fetchEmployees();
+            fetchLeaveData();
             const saved = localStorage.getItem('leave_draft_backup');
             if (!saved && employee.team_leader_id && employee.id !== employee.team_leader_id) {
                 setApprovers([{ id: employee.team_leader_id, full_name: '', position: '' }]);
@@ -122,13 +155,20 @@ export default function LeaveRequestPage() {
         if (isUploading) return toast.error("파일 업로드가 완료될 때까지 기다려주세요.");
         if (approvers.length === 0 || approvers.some(app => !app.id)) return toast.error("결재자를 지정해주세요.");
 
+        // 연차 초과 신청 방지 로직 (병가/경조사 제외)
+        const isDeductibleLeave = formData.leaveType.includes('연차') || formData.leaveType.includes('반차');
+        if (isDeductibleLeave && requestedDays > leaveData.remain) {
+            return toast.error("잔여 연차를 초과하여 신청할 수 없습니다.");
+        }
+
         setLoading(true);
         try {
             const submissionData = {
                 title: `휴가신청서 (${employee?.full_name})`,
-                document_number: formData.document_number, // 🚀 문서 번호 저장
+                document_number: formData.document_number, 
                 content: JSON.stringify({
                     ...formData,
+                    requestedDays, // 🚀 백엔드 자동 차감을 위한 요청 일수 데이터 전달
                     requesterName: employee.full_name,
                     requesterDepartment: employee.department,
                     requesterPosition: employee.position,
@@ -229,13 +269,18 @@ export default function LeaveRequestPage() {
                                     <td className="p-3 font-black font-black">{employee?.full_name} {employee?.position}</td>
                                 </tr>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black font-black">
-                                    {/* 🚀 [핵심 수정 1] 문서번호 수동 입력 칸 */}
+                                    {/* 🚀 문서번호 및 잔여 연차 표시 영역 구성 */}
                                     <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter w-24">문서번호 <HelpTooltip text="기안자가 직접 문서 번호를 기입하십시오." /></th>
                                     <td className="p-3 font-black">
-                                        <input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="예: LEA-202603-001 (직접 입력)" className="w-full outline-none bg-transparent font-black font-mono font-black" />
+                                        <input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="예: LEA-202603-001" className="w-full outline-none bg-transparent font-black font-mono font-black" />
                                     </td>
-                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black w-24">보존기한</th>
-                                    <td className="p-3 font-black font-black">5년 (기본설정)</td>
+                                    <th className="bg-slate-50 p-3 text-left border-black font-black uppercase font-black w-24">잔여 연차</th>
+                                    <td className="p-3 font-black font-black">
+                                        <span className="text-blue-600">{leaveData.remain} 일</span>
+                                        {requestedDays > 0 && (formData.leaveType.includes('연차') || formData.leaveType.includes('반차')) && (
+                                            <span className="text-rose-500 ml-2">(신청 시 예상 잔여: {leaveData.remain - requestedDays} 일)</span>
+                                        )}
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -262,7 +307,8 @@ export default function LeaveRequestPage() {
                                             <div className="flex items-center gap-3 font-black font-black font-black">
                                                 <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="border-b border-slate-200 outline-none focus:border-black py-0.5 font-black" required />
                                                 <span className="text-slate-300 font-black font-black">~</span>
-                                                <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} className="border-b border-slate-200 outline-none focus:border-black py-0.5 font-black" required />
+                                                <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} className="border-b border-slate-200 outline-none focus:border-black py-0.5 font-black" disabled={formData.leaveType.includes('반차')} required={!formData.leaveType.includes('반차')} />
+                                                {requestedDays > 0 && <span className="text-blue-600 font-black ml-2">(총 {requestedDays}일)</span>}
                                             </div>
                                         </td>
                                     </tr>
@@ -272,7 +318,6 @@ export default function LeaveRequestPage() {
 
                         <section className="font-black font-black font-black font-black">
                             <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black font-black">02. 상세 사유 <HelpTooltip text="휴가 사유를 간략히 작성해 주세요. (예: 개인사정, 병원진료 등)" /></h2>
-                            {/* 진중한 기본 입력창 유지 */}
                             <textarea name="reason" value={formData.reason} onChange={handleChange} className="w-full border border-black p-6 text-[12px] leading-relaxed min-h-[200px] outline-none focus:bg-slate-50 transition-all font-black font-black font-black" placeholder="상세 사유 기술 (필요 시 증빙자료 첨부)" required />
                         </section>
 
