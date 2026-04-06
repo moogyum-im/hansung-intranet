@@ -166,7 +166,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
     const canSeeAdminPortal = employee && (employee.department === '관리부' || employee.role === 'admin');
     if (canSeeAdminPortal) {
-        menuItems.push({ name: '경영지원', href: '/admin-portal', icon: Building2 });
+        menuItems.push({ name: '경영 지원', href: '/admin-portal', icon: Building2 });
     }
 
     menuItems.push(

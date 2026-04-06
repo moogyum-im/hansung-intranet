@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useTransition } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import { toast, Toaster } from 'react-hot-toast';
@@ -9,8 +9,9 @@ import { usePathname } from 'next/navigation';
 import { 
   Users, Search, Bell, ChevronDown, Wallet, ShieldAlert, 
   CalendarDays, RefreshCw, Loader2, Mail, Phone, LayoutDashboard,
-  UserCheck, UserMinus, UserX, X
+  UserCheck, UserMinus, UserX, X, UserPlus, Save
 } from 'lucide-react';
+import { registerEmployeeAction } from './actions'; 
 
 export default function MembersManagementPage() {
   const { employee, loading: authLoading } = useEmployee();
@@ -20,18 +21,34 @@ export default function MembersManagementPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // 🚀 탭 상태 (active: 재직자, resigned: 퇴사자)
+  // 🚀 등록된 모든 부서를 담을 상태 추가
+  const [departments, setDepartments] = useState([]);
+  
   const [activeTab, setActiveTab] = useState('active');
 
-  // 🚀 퇴사 처리 모달 상태
   const [isResignModalOpen, setIsResignModalOpen] = useState(false);
   const [targetEmp, setTargetEmp] = useState(null);
   const [resignDate, setResignDate] = useState('');
 
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isRegistering, startRegisterTransition] = useTransition();
+  
+  const [registerFormData, setRegisterFormData] = useState({
+    email: '',
+    password: '',
+    full_name: '',
+    department: '',
+    role: 'user',
+    position: '',
+    phone: '',
+    birth_date: '',
+    hire_date: '',
+    employment_status: '재직'
+  });
+
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      // 재직/퇴사자 모두 불러옴
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -39,7 +56,14 @@ export default function MembersManagementPage() {
         .order('full_name', { ascending: true });
 
       if (error) throw error;
-      setEmployees(data || []);
+      
+      const fetchedEmployees = data || [];
+      setEmployees(fetchedEmployees);
+      
+      // 🚀 직원 데이터를 기반으로 중복 없는 실제 부서 목록 추출
+      const uniqueDeps = [...new Set(fetchedEmployees.map(emp => emp.department).filter(Boolean))];
+      setDepartments(uniqueDeps);
+      
     } catch (error) {
       toast.error('직원 데이터를 불러오는데 실패했습니다.');
     } finally {
@@ -53,7 +77,6 @@ export default function MembersManagementPage() {
     }
   }, [employee, fetchEmployees]);
 
-  // 선택된 탭과 검색어에 따라 직원 필터링
   const filteredEmployees = employees.filter(emp => {
     const isMatchTab = activeTab === 'active' ? emp.employment_status === '재직' : emp.employment_status === '퇴사';
     const isMatchSearch = emp.full_name?.includes(searchTerm) || emp.department?.includes(searchTerm) || emp.position?.includes(searchTerm);
@@ -71,18 +94,15 @@ export default function MembersManagementPage() {
     window.open(`/admin-portal/hr/profile?empId=${empId}`, `HRProfile_${empId}`, `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`);
   };
 
-  // 🚀 퇴사 처리 모달 열기
   const openResignModal = (emp) => {
     setTargetEmp(emp);
-    setResignDate(new Date().toISOString().split('T')[0]); // 기본값: 오늘 날짜
+    setResignDate(new Date().toISOString().split('T')[0]); 
     setIsResignModalOpen(true);
   };
 
-  // 🚀 퇴사 처리 실행 로직
   const handleResignSubmit = async () => {
     if (!resignDate) return toast.error("퇴사일을 입력해 주세요.");
     
-    // 미사용 연차 계산
     const total = Number(targetEmp.total_leave_days || 0);
     const used = Number(targetEmp.used_leave_days || 0);
     const unused = Math.max(total - used, 0);
@@ -101,11 +121,50 @@ export default function MembersManagementPage() {
 
       toast.success(`${targetEmp.full_name} 님의 퇴사 처리가 완료되었습니다.`);
       setIsResignModalOpen(false);
-      fetchEmployees(); // 데이터 갱신
+      fetchEmployees(); 
     } catch (error) {
       console.error(error);
       toast.error('퇴사 처리에 실패했습니다.');
     }
+  };
+
+  // 🚀 모달 열 때 폼 초기화 (동적 부서 목록의 첫 번째 값을 기본값으로 설정)
+  const handleOpenRegisterModal = () => {
+    setRegisterFormData({
+        email: '', password: '', full_name: '', 
+        department: departments.length > 0 ? departments[0] : '', 
+        role: 'user', position: '', phone: '', birth_date: '', hire_date: '', employment_status: '재직'
+    });
+    setIsRegisterModalOpen(true);
+  };
+
+  const handleRegisterInputChange = (e) => {
+    const { name, value } = e.target;
+    setRegisterFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleRegisterSubmit = () => {
+    if (!registerFormData.email || !registerFormData.password || !registerFormData.full_name) {
+        toast.error("이메일, 비밀번호, 성명은 필수입니다.");
+        return;
+    }
+    
+    if (registerFormData.password.length < 6) {
+        toast.error("비밀번호는 6자리 이상이어야 합니다.");
+        return;
+    }
+
+    startRegisterTransition(async () => {
+        const result = await registerEmployeeAction(registerFormData);
+        
+        if (result.error) {
+            toast.error(`등록 실패: ${result.error}`);
+        } else {
+            toast.success(`${registerFormData.full_name} 사원이 등록되었습니다.`);
+            setIsRegisterModalOpen(false);
+            fetchEmployees(); 
+        }
+    });
   };
 
   const navItems = [
@@ -188,6 +247,9 @@ export default function MembersManagementPage() {
                 className="bg-transparent border-none outline-none text-xs font-bold text-slate-700 w-full placeholder:text-slate-400"
               />
             </div>
+            <button onClick={handleOpenRegisterModal} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl shadow-sm transition-all active:scale-95">
+              <UserPlus size={14} /> 인원 추가
+            </button>
             <button onClick={fetchEmployees} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-black rounded-xl shadow-sm transition-all active:scale-95">
               {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} 새로고침
             </button>
@@ -195,7 +257,6 @@ export default function MembersManagementPage() {
         </div>
 
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          {/* 🚀 재직자 / 퇴사자 탭 메뉴 */}
           <div className="flex border-b border-slate-100 bg-slate-50/50 p-2 gap-2">
             <button
               onClick={() => setActiveTab('active')}
@@ -283,7 +344,6 @@ export default function MembersManagementPage() {
                           >
                             인사 카드
                           </button>
-                          {/* 🚀 재직 중인 직원일 경우 퇴사 처리 버튼 노출 */}
                           {activeTab === 'active' && (
                             <button 
                               onClick={() => openResignModal(emp)} 
@@ -303,7 +363,107 @@ export default function MembersManagementPage() {
         </div>
       </main>
 
-      {/* 🚀 퇴사 처리 확인 모달 */}
+      {/* 신규 사원 등록 모달 */}
+      {isRegisterModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-blue-700">
+                <UserPlus size={20} strokeWidth={2.5} />
+                <h3 className="text-lg font-black tracking-tight">신규 사원 등록</h3>
+              </div>
+              <button onClick={() => setIsRegisterModalOpen(false)} className="text-blue-400 hover:text-blue-600"><X size={20}/></button>
+            </div>
+            
+            <div className="p-8 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <h2 className="text-xs font-black text-slate-500 mb-4 uppercase tracking-widest flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> 접속 계정 정보</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">이메일 (ID) *</label>
+                            <input type="email" name="email" value={registerFormData.email} onChange={handleRegisterInputChange} placeholder="example@company.com" className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none shadow-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">초기 비밀번호 *</label>
+                            <input type="password" name="password" value={registerFormData.password} onChange={handleRegisterInputChange} placeholder="최소 6자리 이상" className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none shadow-sm" />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <h2 className="text-xs font-black text-slate-500 mb-4 uppercase tracking-widest flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> 인사 상세 정보</h2>
+                    
+                    <div className="grid grid-cols-3 gap-5 mb-5">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">성명 *</label>
+                            <input type="text" name="full_name" value={registerFormData.full_name} onChange={handleRegisterInputChange} placeholder="홍길동" className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none shadow-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">소속 부서</label>
+                            {/* 🚀 동적으로 렌더링되는 부서 드롭다운 */}
+                            <select name="department" value={registerFormData.department} onChange={handleRegisterInputChange} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none bg-white shadow-sm">
+                                {departments.map(dep => (
+                                    <option key={dep} value={dep}>{dep}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">직급</label>
+                            <input type="text" name="position" value={registerFormData.position} onChange={handleRegisterInputChange} placeholder="사원, 대리, 과장..." className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none shadow-sm" />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-5 mb-5">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">연락처</label>
+                            <input type="text" name="phone" value={registerFormData.phone} onChange={handleRegisterInputChange} placeholder="010-0000-0000" className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none shadow-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">시스템 권한</label>
+                            <select name="role" value={registerFormData.role} onChange={handleRegisterInputChange} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none bg-white shadow-sm">
+                                <option value="user">일반 사원 (user)</option>
+                                <option value="manager">부서 관리자 (manager)</option>
+                                <option value="admin">최고 관리자 (admin)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">재직 상태</label>
+                            <select name="employment_status" value={registerFormData.employment_status} onChange={handleRegisterInputChange} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none bg-white shadow-sm">
+                                <option value="재직">재직</option>
+                                <option value="휴직">휴직</option>
+                                <option value="퇴사">퇴사</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-5 border-t border-slate-200 pt-5">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">입사일</label>
+                            <input type="date" name="hire_date" value={registerFormData.hire_date} onChange={handleRegisterInputChange} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none shadow-sm bg-white" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">생년월일</label>
+                            <input type="date" name="birth_date" value={registerFormData.birth_date} onChange={handleRegisterInputChange} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none shadow-sm bg-white" />
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 flex gap-2 bg-slate-50">
+              <button onClick={() => setIsRegisterModalOpen(false)} className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-black hover:bg-slate-100 transition-all shadow-sm">
+                취소
+              </button>
+              <button onClick={handleRegisterSubmit} disabled={isRegistering} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all disabled:bg-blue-400 flex justify-center items-center gap-2">
+                {isRegistering ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>}
+                {isRegistering ? '계정 생성 중...' : '등록 완료'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 퇴사 처리 확인 모달 */}
       {isResignModalOpen && targetEmp && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
