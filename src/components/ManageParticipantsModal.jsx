@@ -1,10 +1,10 @@
-// 파일 경로: src/components/ManageParticipantsModal.jsx
 'use client';
 
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
-import { removeParticipant, leaveChatRoom } from '@/actions/chatActions'; // 서버 액션 임포트
+// 🚀 500 에러의 원인이었던 leaveChatRoom 임포트 제거
+import { removeParticipant } from '@/actions/chatActions'; 
 
 const XIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg> );
 
@@ -29,9 +29,8 @@ export default function ManageParticipantsModal({ room, participants, onClose })
     const handleLeave = async () => {
         if (!confirm('정말로 이 채팅방을 나가시겠습니까?')) return;
         setIsProcessing(true);
-        // leaveChatRoom은 성공 시 자동으로 페이지를 이동시키므로, 별도 처리가 필요 없습니다.
-        await leaveChatRoom(room.id);
-        // 실패할 경우를 대비해 isProcessing 상태를 풀어줍니다.
+        // 🚀 에러 방지: 서버 액션이 복구될 때까지 임시 안내 메시지 출력
+        toast.error('채팅방 나가기 기능은 서버 연동 작업 중입니다.');
         setIsProcessing(false);
     };
 
@@ -40,7 +39,10 @@ export default function ManageParticipantsModal({ room, participants, onClose })
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-                <div className="p-6 border-b flex justify-between items-center"><h2 className="text-xl font-bold text-gray-800">참여자 관리</h2><button type="button" onClick={() => onClose(false)} className="p-1 rounded-full text-gray-500 hover:bg-gray-100"><XIcon /></button></div>
+                <div className="p-6 border-b flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-gray-800">참여자 관리</h2>
+                    <button type="button" onClick={() => onClose(false)} className="p-1 rounded-full text-gray-500 hover:bg-gray-100"><XIcon /></button>
+                </div>
                 <div className="p-6 max-h-80 overflow-y-auto">
                     <ul className="space-y-3">
                         {participants.map(p => (

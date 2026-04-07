@@ -21,7 +21,7 @@ export async function loginAction(formData) {
         return { success: false, error: '로그인 실패: ' + authError.message };
     }
 
-    // [수정] 2. 인증 성공 후, 재직 상태 확인
+    // 2. 인증 성공 후, 재직 상태 확인
     if (authData.user) {
         const { data: profile, error: profileError } = await supabase
             .from('profiles')
@@ -34,9 +34,12 @@ export async function loginAction(formData) {
             return { success: false, error: '사용자 프로필을 불러올 수 없습니다.' };
         }
 
-        // [수정] 3. 재직 상태가 '재직'이 아니면 로그인 차단
-        if (profile.employment_status !== '재직') {
-            await supabase.auth.signOut(); // 재직 상태가 아니므로 즉시 로그아웃
+        // 🚀 [수정] 3. 휴직 및 퇴사 상태 세분화하여 로그인 차단
+        if (profile.employment_status === '휴직') {
+            await supabase.auth.signOut(); // 즉시 세션 파기
+            return { success: false, error: '휴직 중에는 인트라넷 접속이 제한됩니다.' };
+        } else if (profile.employment_status !== '재직') {
+            await supabase.auth.signOut(); // 기타 비활성/퇴사 계정
             return { success: false, error: '퇴사 처리되었거나 비활성화된 계정입니다.' };
         }
     }
@@ -51,7 +54,6 @@ export async function signOutAction() {
     redirect('/login');
 }
 
-// ★★★ 개인정보 업데이트를 위한 서버 액션 수정 ★★★
 export async function updateProfileAction(formData) {
     const cookieStore = cookies();
     const supabase = createServerActionClient({ cookies: () => cookieStore });
@@ -61,14 +63,14 @@ export async function updateProfileAction(formData) {
 
     const fullName = formData.get('fullName');
     const position = formData.get('position');
-    const phone = formData.get('phone'); // phone_number -> phone으로 수정
+    const phone = formData.get('phone'); 
 
     const { error } = await supabase
         .from('profiles')
         .update({
             full_name: fullName,
             position: position,
-            phone: phone, // phone_number -> phone으로 수정
+            phone: phone, 
             updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);
@@ -82,7 +84,6 @@ export async function updateProfileAction(formData) {
     return { success: true, message: '프로필이 성공적으로 업데이트되었습니다.' };
 }
 
-// ★★★ 비밀번호 변경을 위한 서버 액션 ★★★
 export async function updateUserPasswordAction(formData) {
     const cookieStore = cookies();
     const supabase = createServerActionClient({ cookies: () => cookieStore });

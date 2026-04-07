@@ -17,7 +17,6 @@ import {
   RefreshCw,
   Loader2,
   Receipt,
-  ArrowRight,
   LayoutDashboard
 } from 'lucide-react';
 
@@ -26,12 +25,23 @@ const formatNumber = (num) => {
     return Number(num).toLocaleString();
 };
 
+const parseNumber = (str) => {
+    if (typeof str === 'number') return str;
+    if (!str) return 0;
+    const match = str.toString().replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+    return match ? Number(match[0]) : 0;
+};
+
 export default function AdminPortalPage() {
   const { employee, loading: authLoading } = useEmployee();
   const pathname = usePathname();
   
   const [employees, setEmployees] = useState([]);
   const [totalPayroll, setTotalPayroll] = useState(0);
+  
+  // 🚀 귀속월과 지급월을 명확하게 분리하여 상태로 관리
+  const [payrollDisplay, setPayrollDisplay] = useState({ workMonth: '-', payMonth: '-' });
+  
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -54,21 +64,44 @@ export default function AdminPortalPage() {
 
   const fetchPayrollData = useCallback(async () => {
     try {
-      const now = new Date();
-      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-      const { data, error } = await supabase
+      const { data: latestData, error: latestError } = await supabase
         .from('payroll_records')
-        .select('net_pay')
-        .eq('payment_month', currentMonth);
+        .select('payment_month')
+        .order('payment_month', { ascending: false })
+        .limit(1);
 
-      if (error) throw error;
+      if (latestError) throw latestError;
 
-      if (data && data.length > 0) {
-        const total = data.reduce((sum, record) => sum + (Number(record.net_pay) || 0), 0);
-        setTotalPayroll(total);
+      if (latestData && latestData.length > 0) {
+        const targetMonth = latestData[0].payment_month; // 예: "2026-04"
+        
+        // 🚀 익월 10일 지급 로직 자동 계산
+        const [year, month] = targetMonth.split('-');
+        const workMonthNum = Number(month);
+        const payMonthNum = workMonthNum === 12 ? 1 : workMonthNum + 1;
+        
+        setPayrollDisplay({ workMonth: workMonthNum, payMonth: payMonthNum });
+
+        const { data, error } = await supabase
+          .from('payroll_records')
+          .select('net_pay')
+          .eq('payment_month', targetMonth);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const total = data.reduce((sum, record) => sum + parseNumber(record.net_pay), 0);
+          setTotalPayroll(total);
+        } else {
+          setTotalPayroll(0);
+        }
       } else {
         setTotalPayroll(0);
+        // DB에 데이터가 아예 없을 경우 당월 기준으로 임시 표기
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+        setPayrollDisplay({ workMonth: currentMonth, payMonth: nextMonth });
       }
     } catch (error) {
       console.error('급여 데이터를 불러오는데 실패했습니다.', error);
@@ -101,7 +134,6 @@ export default function AdminPortalPage() {
     window.open(`/admin-portal/hr/profile?empId=${empId}`, `HRProfile_${empId}`, `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`);
   };
 
-  // 🚀 인사 관리와 연차 관리 탭 경로 완벽 분리
   const navItems = [
     { name: '통합 대시보드', path: '/admin-portal', icon: LayoutDashboard },
     { name: '인사 관리', path: '/admin-portal/members', icon: Users },
@@ -212,7 +244,13 @@ export default function AdminPortalPage() {
                 <Receipt size={24} strokeWidth={2.5} />
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-bold text-slate-400 mb-1">당월 급여 지급 예정액</span>
+                {/* 🚀 명확한 귀속월 및 지급일 표기 UI */}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold text-slate-400">급여 지급 예정액</span>
+                  <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-tight">
+                    {payrollDisplay.workMonth}월 귀속 → {payrollDisplay.payMonth}월 10일 지급
+                  </span>
+                </div>
                 <span className="text-3xl font-black text-slate-800">₩ {formatNumber(totalPayroll)}</span>
               </div>
             </div>

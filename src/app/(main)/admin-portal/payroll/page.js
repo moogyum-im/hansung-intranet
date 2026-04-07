@@ -59,7 +59,11 @@ export default function PayrollManagementPage() {
         if (!confirm(confirmMsg)) return;
         
         try {
-            await supabase.from('payroll_records').update({ is_published: true }).match({ employee_id: empId, payment_month: targetMonth });
+            // 발송 또는 재발송 시 직원 확인일시(viewed_at)를 초기화
+            await supabase.from('payroll_records')
+                .update({ is_published: true, viewed_at: null })
+                .match({ employee_id: empId, payment_month: targetMonth });
+                
             fetchData();
             toast.success(isPublished ? '재발송 완료' : '발송 완료');
         } catch (error) {
@@ -69,7 +73,6 @@ export default function PayrollManagementPage() {
 
     const filtered = employees.filter(e => e.full_name.includes(searchTerm));
 
-    // 🚀 공통 네비게이션 항목
     const navItems = [
       { name: '통합 대시보드', path: '/admin-portal', icon: LayoutDashboard },
       { name: '인사 관리', path: '/admin-portal/members', icon: Users },
@@ -92,7 +95,6 @@ export default function PayrollManagementPage() {
         <div className="flex flex-col h-screen bg-white font-sans text-slate-800 antialiased relative">
             <Toaster position="top-right" />
             
-            {/* 🚀 공통 상단 헤더 및 탭 네비게이션 시작 */}
             <header className="bg-white border-b border-slate-200 shrink-0 z-10 flex flex-col">
               <div className="h-16 px-8 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -134,9 +136,7 @@ export default function PayrollManagementPage() {
                 })}
               </div>
             </header>
-            {/* 🚀 공통 상단 헤더 및 탭 네비게이션 끝 */}
 
-            {/* 🚀 기존 급여정산 툴바 (헤더 아래로 배치) */}
             <div className="h-14 border-b border-slate-100 flex items-center justify-between px-6 shrink-0 bg-white">
                 <div className="flex items-center gap-4">
                     <span className="font-black text-sm text-slate-800">정산 월 선택</span>
@@ -177,7 +177,7 @@ export default function PayrollManagementPage() {
                                         {d.is_published ? <span className="text-emerald-600 font-bold">● 발송완료</span> : <span className="text-slate-300">○ 작성중</span>}
                                     </td>
                                     <td className="p-3 border-r border-slate-100 text-center font-mono text-[10px] text-blue-600 font-bold italic">
-                                        {d.viewed_at ? new Date(d.viewed_at).toLocaleString('ko-KR') : '-'}
+                                        {d.is_published && d.viewed_at ? new Date(d.viewed_at).toLocaleString('ko-KR') : '-'}
                                     </td>
                                     <td className="p-3 border-r border-slate-100 text-right font-mono text-slate-600">{formatCurrency(d.base_pay)}</td>
                                     <td className="p-3 border-r border-slate-100 text-right font-mono text-emerald-600">{formatCurrency(d.total_payment)}</td>

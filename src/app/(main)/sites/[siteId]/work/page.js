@@ -9,17 +9,18 @@ import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut
 import { toast } from 'react-hot-toast';
 
 const formatNumber = (num) => {
-    if (num === null || num === undefined || num === "" || isNaN(num) || Number(num.toString().replace(/,/g, '')) === 0) return "-";
+    if (num === null || num === undefined || num === "" || isNaN(num)) return "-";
     const n = Number(num.toString().replace(/,/g, ''));
+    if (n === 0) return "0";
     if (n % 1 !== 0) return n.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 4 });
     return Math.round(n).toLocaleString();
 };
 
 const parseNumber = (str) => {
     if (typeof str === 'number') return str;
-    const cleaned = str?.toString().replace(/,/g, '') || '0';
-    const num = Number(cleaned);
-    return isNaN(num) ? 0 : num;
+    if (!str) return 0;
+    const match = str.toString().replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+    return match ? Number(match[0]) : 0;
 };
 
 const safeParseJSON = (data) => {
@@ -33,64 +34,177 @@ const safeParseJSON = (data) => {
     }
 };
 
-// [수정점 2] 텍스트 <-> 배열 변환 유틸리티 추가
-const textToTableData = (text) => {
-    if (!text) return [];
-    if (Array.isArray(text)) return text.map(t => typeof t === 'string' ? { id: uuidv4(), content: t } : t);
-    return text.split('\n').filter(line => line.trim() !== '').map(line => ({ id: uuidv4(), content: line }));
-};
+// 🚀 식재 및 반입 수기 장부 (엑셀 샘플 가이드 100% 적용 완료)
+const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
 
-// [수정점 2] 작업 요약 리스트 테이블 컴포넌트화 (타이핑 튕김 방지를 위해 외부에 선언, h-8 높이 고정)
-const WorkListTable = ({ title, list, listKey, readOnly, setFormData }) => {
+    const contractSum = list?.reduce((acc, cur) => acc + parseNumber(cur.contract), 0) || 0;
+    const baseIncomingSum = list?.reduce((acc, cur) => acc + parseNumber(cur.base_incoming), 0) || 0;
+    const incomingSum = list?.reduce((acc, cur) => acc + parseNumber(cur.incoming), 0) || 0;
+    const notIncomingSum = list?.reduce((acc, cur) => acc + parseNumber(cur.not_incoming), 0) || 0;
+    const prevRemainSum = list?.reduce((acc, cur) => acc + parseNumber(cur.prev_remain), 0) || 0;
+    const plantedSum = list?.reduce((acc, cur) => acc + parseNumber(cur.planted), 0) || 0;
+    const finalRemainSum = list?.reduce((acc, cur) => acc + parseNumber(cur.final_remain), 0) || 0;
+
+    const todayRows = list?.filter(r => !r.isPastRecord) || [];
+    const pastRows = list?.filter(r => r.isPastRecord) || [];
+
+    const displayRows = isExpanded ? [...todayRows, ...pastRows] : todayRows;
+    const colSpanTotal = readOnly ? 10 : 11;
+
     return (
-        <div className="flex flex-col flex-1 border-r border-slate-400 last:border-r-0 bg-white">
-            <div className="bg-slate-50 h-8 text-center border-b border-slate-400 text-[10px] tracking-widest uppercase font-black flex justify-between items-center px-3">
-                <span>{title}</span>
+        <div className="flex flex-col flex-1 h-full w-full bg-white">
+            <div className="bg-yellow-50 min-h-[32px] text-center border-b border-slate-400 text-[10px] tracking-widest uppercase font-black flex justify-between items-center px-3 text-yellow-800 shrink-0 sticky top-0 z-10">
+                <span>식재 및 반입 수기 장부 (요약)</span>
                 {!readOnly && (
                     <button 
-                        type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, [listKey]: [...(prev[listKey] || []), { id: uuidv4(), content: '' }] }))} 
-                        className="bg-white border border-slate-300 px-2 py-0.5 rounded text-[9px] hover:bg-slate-100 text-slate-700 shadow-sm"
-                    >+ 추가</button>
+                        type="button" 
+                        onClick={() => setFormData(p => ({...p, manual_ledger: [{id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false}, ...(p.manual_ledger||[])]}))} 
+                        className="bg-white border border-yellow-300 px-2 py-0.5 rounded text-[9px] hover:bg-yellow-100 text-yellow-800 shadow-sm transition-all"
+                    >+ 행 추가</button>
                 )}
             </div>
-            <div className="flex-1 p-1 pb-4">
-                <table className="w-full border-collapse">
+            <div className="flex-1 w-full p-1 pb-4 overflow-x-auto overflow-y-hidden">
+                <table className="w-full text-[9px] border-collapse font-sans" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
+                    <colgroup>
+                        <col style={{ width: readOnly ? '13%' : '12%' }} /> {/* 수종명 */}
+                        <col style={{ width: '10%' }} />  {/* 규격 */}
+                        <col style={{ width: '8%' }} />   {/* 계약수량 */}
+                        <col style={{ width: '9%' }} />   {/* 기반입 */}
+                        <col style={{ width: '9%' }} />   {/* 금일반입 */}
+                        <col style={{ width: '9%' }} />   {/* 미반입 */}
+                        <col style={{ width: '10%' }} />  {/* 전일미식재 */}
+                        <col style={{ width: '9%' }} />   {/* 금일반입(표출) */}
+                        <col style={{ width: '9%' }} />   {/* 금일식재 */}
+                        <col style={{ width: '11%' }} />  {/* 잔량(미식재) */}
+                        {!readOnly && <col style={{ width: '3%' }} />} {/* 삭제 */}
+                    </colgroup>
+                    <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                            <th className="p-1 border border-slate-300 border-t-0 border-l-0 align-middle">수종명</th>
+                            <th className="p-1 border border-slate-300 border-t-0 align-middle">규격</th>
+                            <th className="p-1 border border-slate-300 border-t-0 align-middle">계약수량</th>
+                            <th className="p-1 border border-slate-300 border-t-0 align-middle bg-yellow-100/50">기반입</th>
+                            <th className="p-1 border border-slate-300 border-t-0 align-middle bg-yellow-100/50">금일반입</th>
+                            <th className="p-1 border border-slate-300 border-t-0 align-middle text-red-600">미반입</th>
+                            <th className="p-1 border border-slate-300 border-t-0 align-middle">전일미식재</th>
+                            <th className="p-1 border border-slate-300 border-t-0 align-middle bg-blue-50 text-blue-700">금일반입</th>
+                            <th className="p-1 border border-slate-300 border-t-0 align-middle">금일식재</th>
+                            <th className="p-1 border border-slate-300 border-t-0 border-r-0 align-middle text-red-600">잔량(미식재)</th>
+                            {!readOnly && <th className="p-1 border-b border-slate-300"></th>}
+                        </tr>
+                    </thead>
                     <tbody>
-                        {list.map((item, idx) => (
-                            <tr key={item.id} className="border-b border-slate-100 group">
-                                <td className="w-6 text-center text-[10px] font-bold text-slate-300 align-top pt-2.5">{idx + 1}</td>
-                                <td className="p-0 align-top">
-                                    <textarea 
-                                        className="w-full p-1.5 text-[11px] font-bold outline-none resize-none bg-transparent leading-relaxed block overflow-hidden" 
+                        {displayRows.map((item) => {
+                            const renderInput = (field, isHighlight = false, isRed = false, isBlue = false, forceReadOnly = false) => {
+                                const isCalculatedField = field === 'not_incoming' || field === 'final_remain' || forceReadOnly;
+
+                                return (
+                                    <textarea
                                         rows={1}
-                                        value={item.content}
-                                        placeholder={readOnly ? "" : "내용 입력"}
-                                        readOnly={readOnly}
+                                        className={`w-full p-1 text-center font-black outline-none resize-none overflow-hidden whitespace-pre-wrap leading-tight 
+                                        ${isHighlight ? 'bg-yellow-100 focus:bg-yellow-100' : isBlue ? 'bg-blue-50 focus:bg-blue-50' : 'bg-transparent focus:bg-slate-50'} 
+                                        ${isRed ? 'text-red-600' : isBlue ? 'text-blue-700' : 'text-slate-800'}
+                                        ${readOnly || isCalculatedField ? 'cursor-default' : ''}`}
+                                        value={item[field] || ''}
+                                        placeholder={readOnly ? "-" : ""}
+                                        readOnly={readOnly || isCalculatedField}
                                         onChange={(e) => {
-                                            if (readOnly) return;
+                                            if (readOnly || isCalculatedField) return;
                                             const val = e.target.value;
                                             setFormData(prev => {
-                                                const newList = [...(prev[listKey] || [])];
+                                                const newList = [...(prev.manual_ledger || [])];
                                                 const targetIdx = newList.findIndex(li => li.id === item.id);
-                                                if (targetIdx > -1) newList[targetIdx] = { ...newList[targetIdx], content: val };
-                                                return { ...prev, [listKey]: newList };
+                                                if (targetIdx > -1) {
+                                                    const row = { ...newList[targetIdx], [field]: val };
+                                                    
+                                                    // 🧮 엑셀 수식 실시간 연동
+                                                    if (['contract', 'base_incoming', 'incoming', 'prev_remain', 'planted'].includes(field)) {
+                                                        const cont = parseNumber(row.contract);
+                                                        const bInc = parseNumber(row.base_incoming);
+                                                        const inc = parseNumber(row.incoming);
+                                                        const pRem = parseNumber(row.prev_remain);
+                                                        const pl = parseNumber(row.planted);
+                                                        
+                                                        // 미반입 = 계약수량 - 기반입 - 금일반입
+                                                        if (row.contract || row.base_incoming || row.incoming) {
+                                                            row.not_incoming = (cont - bInc - inc).toString();
+                                                        } else {
+                                                            row.not_incoming = '';
+                                                        }
+                                                        
+                                                        // 잔량 = 전일미식재 + 금일반입 - 금일식재
+                                                        if (row.prev_remain || row.incoming || row.planted) {
+                                                            row.final_remain = (pRem + inc - pl).toString();
+                                                        } else {
+                                                            row.final_remain = '';
+                                                        }
+                                                    }
+                                                    newList[targetIdx] = row;
+                                                }
+                                                return { ...prev, manual_ledger: newList };
                                             });
                                         }}
-                                        onInput={(e) => {
-                                            e.target.style.height = 'auto';
-                                            e.target.style.height = e.target.scrollHeight + 'px';
-                                        }}
+                                        onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
                                     />
+                                );
+                            };
+
+                            return (
+                                <tr key={item.id} className="border-b border-slate-200 hover:bg-slate-50 group">
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('item')}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('spec')}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('contract')}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain')}</td>
+                                    {/* 🚀 금일반입 중복 연동 출력 칸 */}
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted')}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true)}</td>
+                                    {!readOnly && (
+                                        <td className="text-center align-middle opacity-0 group-hover:opacity-100 border-r border-slate-200">
+                                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, manual_ledger: prev.manual_ledger.filter(li => li.id !== item.id) }))} className="text-red-400 hover:text-red-600 font-bold px-1 w-full h-full min-h-[24px]">×</button>
+                                        </td>
+                                    )}
+                                </tr>
+                            );
+                        })}
+
+                        {pastRows.length > 0 && (
+                            <tr className="h-8">
+                                <td colSpan={colSpanTotal} className="bg-slate-50/50 p-0 text-center border-b border-slate-200 align-middle">
+                                    {isExpanded ? (
+                                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(false); }} className="text-[10px] text-red-500 font-black hover:bg-red-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
+                                            <ListMinus size={13} /> 전일 내역 접어놓기
+                                        </button>
+                                    ) : (
+                                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(true); }} className="text-[10px] text-blue-600 font-black hover:bg-blue-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
+                                            <ListFilter size={13} /> 전일 내역 {pastRows.length}건 펼쳐보기 (입력 시 저장 후 위로 정렬됨)
+                                        </button>
+                                    )}
                                 </td>
-                                {!readOnly && (
-                                    <td className="w-6 text-center align-top pt-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button type="button" onClick={() => setFormData(prev => ({ ...prev, [listKey]: list.filter(li => li.id !== item.id) }))} className="text-red-400 hover:text-red-600 font-bold">×</button>
-                                    </td>
-                                )}
                             </tr>
-                        ))}
+                        )}
                     </tbody>
+                    
+                    {(displayRows.length > 0 || pastRows.length > 0) && (
+                        <tfoot className="bg-slate-100 font-black text-slate-800">
+                            <tr>
+                                <td colSpan={2} className="border-r border-t border-slate-300 text-center p-2 uppercase tracking-widest text-[10px]">총 합계</td>
+                                <td className="border-r border-t border-slate-300 text-center p-2">{formatNumber(contractSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-center p-2 bg-yellow-100/50 text-yellow-900">{formatNumber(baseIncomingSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-center p-2 bg-yellow-100/50 text-yellow-900">{formatNumber(incomingSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-center p-2 text-red-600">{formatNumber(notIncomingSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-center p-2">{formatNumber(prevRemainSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-center p-2 bg-blue-50 text-blue-700">{formatNumber(incomingSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-center p-2">{formatNumber(plantedSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-center p-2 text-red-600">{formatNumber(finalRemainSum)}</td>
+                                {!readOnly && <td className="border-t border-slate-300 border-r"></td>}
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
         </div>
@@ -114,7 +228,6 @@ export default function DailyWorkPage() {
     const [importDate, setImportDate] = useState("");
     const [selectedImage, setSelectedImage] = useState(null);
     const [focusedField, setFocusedField] = useState(null);
-
     const [columnWidths, setColumnWidths] = useState({});
     const [expandedSections, setExpandedSections] = useState({});
 
@@ -144,7 +257,7 @@ export default function DailyWorkPage() {
         equipment_costs: { fields: ['item', 'price', 'prev_count', 'count', 'accum', 'total'], labels: ['품명', '단가', '전일누계', '금일', '출력누계', '금액'], title: '장비사용현황', sums: ['prev_count', 'count', 'accum', 'total'] },
         tree_costs: { fields: ['item', 'spec', 'price', 'design_count', 'prev_count', 'count', 'accum', 'vendor', 'total'], labels: ['품명', '규격', '단가', '설계수량', '전일누계', '금일수량', '전체누계', '거래처', '금액'], title: '수목반입현황', sums: ['design_count', 'prev_count', 'count', 'accum', 'total'] },
         transport_costs: { fields: ['item', 'spec', 'count', 'price', 'vendor', 'total'], labels: ['품명', '규격', '수량', '단가', '거래처', '금액'], title: '운반비투입현황', sums: ['count', 'total'] },
-        subcontract_costs: { fields: ['item', 'spec', 'price', 'count', 'vendor', 'total'], labels: ['품명', '규격', '단가', '수량', '거래처', '금액'], title: '자재납품 및 시공(외주)', sums: ['count', 'total'] },
+        subcontract_costs: { fields: ['item', 'spec', 'price', 'count', 'vendor', 'total'], labels: ['품명', '규격', '단가', '수량', '거래처', '금액'], title: '자재납품 및 시공', sums: ['count', 'total'] },
         etc_costs: { fields: ['category', 'content', 'usage', 'total'], labels: ['계정', '내용', '사용처', '금액'], title: '기타경비', sums: ['total'] }
     };
 
@@ -164,7 +277,6 @@ export default function DailyWorkPage() {
         document.addEventListener('mouseup', onMouseUp);
     };
 
-    // [수정점 3] 단가(price)를 UniqueKey에 추가하여 단가 다르면 분리 누계
     const getUniqueKey = (row) => {
         const name = (row.item || row.name || '').trim();
         if (!name) return null;
@@ -174,16 +286,52 @@ export default function DailyWorkPage() {
         return `${name}_${spec}_${vendor}_${price}`;
     };
 
-    const syncWithAllPastData = useCallback(async (currentData) => {
+    // 🚀 다른 장부들과 100% 동일하게 모든 과거 데이터를 날짜순 스캔하여 완벽하게 동기화!
+    const syncWithAllPastData = useCallback(async (currentData, isNewReport = false) => {
         if (!currentData?.report_date) return currentData;
-        const { data: pastReports } = await supabase.from('daily_site_reports').select('notes').eq('site_id', siteId).lt('report_date', currentData.report_date);
+        const { data: pastReports } = await supabase.from('daily_site_reports').select('notes, report_date').eq('site_id', siteId).lt('report_date', currentData.report_date);
         if (!pastReports) return currentData;
 
-        const historicalDataMap = {}; const historicalProgress = { plant: 0, facility: 0 }; const historicalSettlement = {};
+        // 과거 데이터를 정확한 시간순으로 정렬
+        pastReports.sort((a, b) => new Date(a.report_date) - new Date(b.report_date));
+
+        const historicalDataMap = {}; 
+        const historicalLedgerMap = {}; // 수기장부 전용 누적 맵
+        const historicalProgress = { plant: 0, facility: 0 }; 
+        const historicalSettlement = {};
+
         pastReports.forEach(report => {
             const notes = safeParseJSON(report.notes);
             historicalProgress.plant += parseNumber(notes.progress_plant);
             historicalProgress.facility += parseNumber(notes.progress_facility);
+            
+            // 🚀 수기 장부: 과거 데이터 누적 훑기 엔진 (품명_규격 조합으로 고유키 생성)
+            if (notes.manual_ledger && Array.isArray(notes.manual_ledger)) {
+                notes.manual_ledger.forEach(row => {
+                    const uKey = (row.item || '').trim() + '_' + (row.spec || '').trim();
+                    if (!uKey || uKey === '_') return;
+
+                    if (!historicalLedgerMap[uKey]) {
+                        historicalLedgerMap[uKey] = { 
+                            base_inc: 0, 
+                            remain: 0,
+                            contract: 0
+                        };
+                    }
+                    
+                    // 각 날짜별 계산을 그대로 모방하여 누적함
+                    let thisBaseInc = parseNumber(row.base_incoming);
+                    let thisFinalRem = parseNumber(row.final_remain);
+                    let thisInc = parseNumber(row.incoming);
+                    
+                    // 다음 날을 위한 기반입(누계) = 해당 일자의 기반입 + 금일반입
+                    historicalLedgerMap[uKey].base_inc = thisBaseInc + thisInc;
+                    // 다음 날을 위한 전일잔량 = 해당 일자의 잔량
+                    historicalLedgerMap[uKey].remain = thisFinalRem;
+                    
+                    if (row.contract) historicalLedgerMap[uKey].contract = parseNumber(row.contract);
+                });
+            }
 
             ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs'].forEach(key => {
                 if (!historicalDataMap[key]) historicalDataMap[key] = {};
@@ -199,9 +347,11 @@ export default function DailyWorkPage() {
                     });
                 }
             });
+
             if (notes.settlement_costs && Array.isArray(notes.settlement_costs)) {
                 notes.settlement_costs.forEach(item => {
-                    historicalSettlement[item.item] = (historicalSettlement[item.item] || 0) + parseNumber(item.today);
+                    const itemName = item.item === '자재납품 및 시공(외주)' ? '자재납품 및 시공' : item.item;
+                    historicalSettlement[itemName] = (historicalSettlement[itemName] || 0) + parseNumber(item.today);
                 });
             }
         });
@@ -210,10 +360,73 @@ export default function DailyWorkPage() {
         updatedData.progress_plant_prev = historicalProgress.plant.toFixed(4);
         updatedData.progress_facility_prev = historicalProgress.facility.toFixed(4);
         
-        // [수정점 2] 작업 요약을 리스트 객체로 파싱
-        updatedData.prev_work_list = textToTableData(currentData.prev_work);
-        updatedData.today_work_list = textToTableData(currentData.today_work);
+        // 🚀 스캔된 누적 데이터를 현재 장부에 결합 (구버전 호환성을 위해 total_remain도 스캔)
+        updatedData.manual_ledger = (currentData.manual_ledger || []).map(row => {
+            const uKey = (row.item || '').trim() + '_' + (row.spec || '').trim();
+            const pastInfo = uKey && uKey !== '_' ? historicalLedgerMap[uKey] : null;
+            const hasActivity = row.incoming?.toString().trim() || row.planted?.toString().trim();
 
+            let bInc = parseNumber(row.base_incoming);
+            let pRem = parseNumber(row.prev_remain || row.total_remain); // 호환성
+            let cont = parseNumber(row.contract);
+
+            if (pastInfo) {
+                bInc = pastInfo.base_inc;
+                pRem = pastInfo.remain;
+                if (!row.contract && pastInfo.contract) cont = pastInfo.contract;
+                delete historicalLedgerMap[uKey];
+            } else if (isNewReport) {
+                bInc = 0;
+                pRem = 0;
+            }
+
+            const inc = parseNumber(row.incoming);
+            const pl = parseNumber(row.planted);
+
+            if (!pastInfo && row.base_incoming) {
+                 bInc = parseNumber(row.base_incoming); 
+            }
+
+            const notInc = cont - bInc - inc;
+            const finalRem = pRem + inc - pl;
+
+            return {
+                ...row,
+                contract: cont > 0 ? cont.toString() : '',
+                base_incoming: (bInc > 0 || row.base_incoming) ? bInc.toString() : '',
+                prev_remain: (pRem > 0 || row.prev_remain || row.total_remain) ? pRem.toString() : '',
+                not_incoming: (cont > 0 || bInc > 0 || inc > 0) ? notInc.toString() : '',
+                final_remain: (pRem > 0 || inc > 0 || pl > 0) ? finalRem.toString() : '',
+                isPastRecord: !hasActivity
+            };
+        });
+
+        // 🚀 누락된 과거 데이터를 아래쪽에 자동으로 붙여줌 (다른 테이블들과 동일한 동작)
+        const missingLedgerRows = Object.keys(historicalLedgerMap).map(uKey => {
+            const pastInfo = historicalLedgerMap[uKey];
+            const [item, spec] = uKey.split('_');
+            const bInc = pastInfo.base_inc;
+            const pRem = pastInfo.remain;
+            const cont = pastInfo.contract;
+
+            return {
+                id: uuidv4(),
+                item: item || '',
+                spec: spec || '',
+                contract: cont > 0 ? cont.toString() : '',
+                base_incoming: bInc > 0 ? bInc.toString() : '',
+                prev_remain: pRem > 0 ? pRem.toString() : '',
+                incoming: '',
+                not_incoming: (cont > 0 || bInc > 0) ? (cont - bInc).toString() : '',
+                planted: '',
+                final_remain: pRem > 0 ? pRem.toString() : '',
+                isPastRecord: true
+            };
+        });
+
+        updatedData.manual_ledger = [...updatedData.manual_ledger, ...missingLedgerRows];
+
+        // 노무비, 자재비 등 기존 동기화
         ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs'].forEach(key => {
             const currentRows = updatedData[key] || [];
             const pastItems = { ...historicalDataMap[key] };
@@ -257,8 +470,9 @@ export default function DailyWorkPage() {
 
         if (updatedData.settlement_costs) {
             updatedData.settlement_costs = updatedData.settlement_costs.map(item => {
-                const totalPast = historicalSettlement[item.item] || 0;
-                return { ...item, prev: totalPast, total: totalPast + parseNumber(item.today) };
+                const itemName = item.item === '자재납품 및 시공(외주)' ? '자재납품 및 시공' : item.item;
+                const totalPast = historicalSettlement[itemName] || 0;
+                return { ...item, item: itemName, prev: totalPast, total: totalPast + parseNumber(item.today) };
             });
         }
         return updatedData;
@@ -275,7 +489,11 @@ export default function DailyWorkPage() {
                     if (notes[k]) notes[k] = notes[k].map(r => ({ ...r, id: r.id || uuidv4() }));
                 });
 
-                let fullData = await syncWithAllPastData({ ...notes, total_contract_amount: site?.budget || 0 });
+                let fullData = await syncWithAllPastData({ ...notes, total_contract_amount: site?.budget || 0 }, false);
+                
+                fullData.today_work = notes.today_work || '';
+                fullData.prev_work = notes.prev_work || '';
+
                 setFormData(fullData); setOriginalData(fullData);
                 if (notes.savedColumnWidths) setColumnWidths(notes.savedColumnWidths);
                 if (notes.savedVisibleSections) setVisibleSections(notes.savedVisibleSections);
@@ -285,16 +503,16 @@ export default function DailyWorkPage() {
                 const initialData = {
                     report_date: new Date().toISOString().split('T')[0], weather: '맑음', report_category: categoryType, total_contract_amount: site?.budget || 0,
                     progress_plant_prev: '0.0000', progress_facility_prev: '0.0000', progress_plant: '0.0000', progress_facility: '0.0000',
-                    settlement_costs: [{ item: '수목', prev: 0, today: 0, total: 0 }, { item: '자재납품 및 시공(외주)', prev: 0, today: 0, total: 0 }, { item: '자재비', prev: 0, today: 0, total: 0 }, { item: '장비대', prev: 0, today: 0, total: 0 }, { item: '노무비', prev: 0, today: 0, total: 0 }, { item: '운반비', prev: 0, today: 0, total: 0 }, { item: '기타경비', prev: 0, today: 0, total: 0 }],
-                    labor_costs: [], material_costs: [], equipment_costs: [], tree_costs: [], transport_costs: [], subcontract_costs: [], etc_costs: []
+                    settlement_costs: [{ item: '수목', prev: 0, today: 0, total: 0 }, { item: '자재납품 및 시공', prev: 0, today: 0, total: 0 }, { item: '자재비', prev: 0, today: 0, total: 0 }, { item: '장비대', prev: 0, today: 0, total: 0 }, { item: '노무비', prev: 0, today: 0, total: 0 }, { item: '운반비', prev: 0, today: 0, total: 0 }, { item: '기타경비', prev: 0, today: 0, total: 0 }],
+                    labor_costs: [], material_costs: [], equipment_costs: [], tree_costs: [], transport_costs: [], subcontract_costs: [], etc_costs: [],
+                    prev_work: '', today_work: '', manual_ledger: []
                 };
-                const synced = await syncWithAllPastData(initialData);
+                const synced = await syncWithAllPastData(initialData, true);
                 
-                // 신규 작성 시 '금일 작업 요약' 기본 1칸(입력창) 추가
-                if (!synced.today_work_list || synced.today_work_list.length === 0) {
-                    synced.today_work_list = [{ id: uuidv4(), content: '' }];
+                if (!synced.manual_ledger || synced.manual_ledger.length === 0) {
+                    synced.manual_ledger = [{ id: uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false }];
                 }
-                
+
                 setFormData(synced); setOriginalData(synced);
             }
         };
@@ -320,12 +538,13 @@ export default function DailyWorkPage() {
             }));
 
             const cleanDataToSave = JSON.parse(JSON.stringify(formData));
-            
-            // [수정점 2] 저장 시 리스트 데이터를 다시 텍스트 문자열로 합침
-            cleanDataToSave.today_work = cleanDataToSave.today_work_list?.map(i => i.content).join('\n') || '';
-            cleanDataToSave.prev_work = cleanDataToSave.prev_work_list?.map(i => i.content).join('\n') || '';
-            delete cleanDataToSave.today_work_list; 
-            delete cleanDataToSave.prev_work_list; 
+
+            if (cleanDataToSave.manual_ledger) {
+                cleanDataToSave.manual_ledger = cleanDataToSave.manual_ledger.map(row => {
+                    const { isPastRecord, ...rest } = row;
+                    return rest;
+                });
+            }
 
             ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs', 'etc_costs'].forEach(key => {
                 if (cleanDataToSave[key]) {
@@ -341,12 +560,27 @@ export default function DailyWorkPage() {
 
             const payload = {
                 site_id: siteId, report_date: formData.report_date, author_id: currentUser.id, photos: uploadedPhotos.filter(v => v !== null),
-                notes: JSON.stringify({ ...cleanDataToSave, savedVisibleSections: visibleSections, savedColumnWidths: columnWidths }), content: cleanDataToSave.today_work || '작업일보 기록'
+                notes: JSON.stringify({ ...cleanDataToSave, savedVisibleSections: visibleSections, savedColumnWidths: columnWidths }), 
+                content: cleanDataToSave.today_work || '작업일보 세부 기록 참조'
             };
             const { data: existing } = await supabase.from('daily_site_reports').select('id, notes').eq('site_id', siteId).eq('report_date', formData.report_date);
             const targetId = existing?.find(r => (safeParseJSON(r.notes)?.report_category || 'plant') === categoryType)?.id || reportId;
+            
             await supabase.from('daily_site_reports').upsert(targetId ? { id: targetId, ...payload } : payload);
-            toast.success("저장되었습니다."); router.push(`/sites/${siteId}`);
+            
+            setOriginalData(JSON.parse(JSON.stringify(cleanDataToSave)));
+            setFormData(JSON.parse(JSON.stringify(cleanDataToSave)));
+            toast.success("저장되었습니다."); 
+            
+            if (!targetId) {
+                const { data: newRow } = await supabase.from('daily_site_reports').select('id').eq('site_id', siteId).eq('report_date', formData.report_date).single();
+                if (newRow) router.replace(`/sites/${siteId}/work?id=${newRow.id}&type=${categoryType}`);
+            } else {
+                router.refresh(); 
+            }
+
+            setView('detail'); 
+            
         } catch (e) { toast.error("저장 오류"); } finally { setIsSaving(false); }
     };
 
@@ -354,7 +588,9 @@ export default function DailyWorkPage() {
         if (!confirm("정말 이 보고서를 삭제하시겠습니까?")) return;
         try {
             await supabase.from('daily_site_reports').delete().eq('id', reportId);
-            toast.success("삭제되었습니다."); router.back();
+            toast.success("삭제되었습니다."); 
+            router.push(`/sites/${siteId}`);
+            router.refresh();
         } catch (e) { toast.error("삭제 실패"); }
     };
 
@@ -369,13 +605,34 @@ export default function DailyWorkPage() {
                 setTodayPhotos([]);
             }
 
-            const baseDataForSync = {
+           const baseDataForSync = {
                 ...formData,
                 ...importedData,
                 report_date: formData.report_date,
                 report_category: categoryType,
-                prev_work: importedData.today_work,
-                today_work: '',
+                prev_work: importedData.today_work || '', 
+                today_work: '', 
+                manual_ledger: (importedData.manual_ledger || []).map(row => {
+                    // 🚀 불러오기 시: 전일 '기반입' + 전일 '금일반입'을 합산하여 오늘의 '기반입'으로 설정
+                    const prevBaseInc = parseNumber(row.base_incoming);
+                    const prevInc = parseNumber(row.incoming);
+                    const newBaseInc = prevBaseInc + prevInc; 
+                    const cont = parseNumber(row.contract);
+
+                    return {
+                        ...row,
+                        id: uuidv4(),
+                        contract: row.contract || '',
+                        base_incoming: newBaseInc > 0 ? newBaseInc.toString() : '',
+                        incoming: '', 
+                        // 🚀 합산된 새 기반입을 바탕으로 미반입 자동 계산 (계약수량 - 새 기반입)
+                        not_incoming: (cont > 0 || newBaseInc > 0) ? (cont - newBaseInc).toString() : '',
+                        prev_remain: row.final_remain || '0', 
+                        planted: '', 
+                        final_remain: row.final_remain || '0', 
+                        isPastRecord: true
+                    };
+                }),
                 progress_plant: '0.0000',
                 progress_facility: '0.0000',
                 labor_costs: [],
@@ -387,7 +644,7 @@ export default function DailyWorkPage() {
                 etc_costs: []
             };
 
-            setFormData(await syncWithAllPastData(baseDataForSync));
+            setFormData(await syncWithAllPastData(baseDataForSync, false));
             setIsImportModalOpen(false);
             toast.success("성공적으로 데이터를 연동했습니다.");
         } catch (e) { toast.error("불러오기 실패"); }
@@ -408,8 +665,14 @@ export default function DailyWorkPage() {
     useEffect(() => {
         if (!formData || isReadOnly) return;
         const getSum = (key) => (formData[key] || []).reduce((acc, cur) => acc + parseNumber(cur.total), 0);
-        const sums = { '수목': getSum('tree_costs'), '자재납품 및 시공(외주)': getSum('subcontract_costs'), '자재비': getSum('material_costs'), '장비대': getSum('equipment_costs'), '노무비': getSum('labor_costs'), '운반비': getSum('transport_costs'), '기타경비': getSum('etc_costs') };
-        const nextSettlement = (formData.settlement_costs || []).map(s => ({ ...s, today: sums[s.item] || 0, total: parseNumber(s.prev) + (sums[s.item] || 0) }));
+        
+        const sums = { '수목': getSum('tree_costs'), '자재납품 및 시공': getSum('subcontract_costs'), '자재비': getSum('material_costs'), '장비대': getSum('equipment_costs'), '노무비': getSum('labor_costs'), '운반비': getSum('transport_costs'), '기타경비': getSum('etc_costs') };
+        
+        const nextSettlement = (formData.settlement_costs || []).map(s => {
+            const itemName = s.item === '자재납품 및 시공(외주)' ? '자재납품 및 시공' : s.item;
+            return { ...s, item: itemName, today: sums[itemName] || 0, total: parseNumber(s.prev) + (sums[itemName] || 0) };
+        });
+
         if (JSON.stringify(formData.settlement_costs) !== JSON.stringify(nextSettlement)) {
             setFormData(prev => ({ ...prev, settlement_costs: nextSettlement }));
         }
@@ -507,12 +770,12 @@ export default function DailyWorkPage() {
                                 <tr className="h-8">
                                     <td colSpan={colSpanTotal} className="bg-slate-50/50 p-0 text-center border-b border-slate-200 align-middle">
                                         {isExpanded ? (
-                                            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setExpandedSections(p=>({...p, [key]: false})); }} className="text-[10px] text-red-500 font-black hover:bg-red-50 flex items-center justify-center gap-1 w-full h-full transition-all">
+                                            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setExpandedSections(p=>({...p, [key]: false})); }} className="text-[10px] text-red-500 font-black hover:bg-red-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
                                                 <ListMinus size={13} /> 전일 내역 접어놓기
                                             </button>
                                         ) : (
-                                            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setExpandedSections(p=>({...p, [key]: true})); }} className="text-[10px] text-blue-600 font-black hover:bg-blue-50 flex items-center justify-center gap-1 w-full h-full transition-all">
-                                                <ListFilter size={13} /> 전일 내역 {pastRows.length}건 펼쳐보기 (오늘 작업 우선 표시됨)
+                                            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setExpandedSections(p=>({...p, [key]: true})); }} className="text-[10px] text-blue-600 font-black hover:bg-blue-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
+                                                <ListFilter size={13} /> 전일 내역 {pastRows.length}건 펼쳐보기 (입력 시 저장 후 위로 정렬됨)
                                             </button>
                                         )}
                                     </td>
@@ -573,6 +836,11 @@ export default function DailyWorkPage() {
                         </div>
                     )}
                 </div>
+
+                <div className="flex-1 px-8 text-center font-black text-[16px] text-slate-800 tracking-wide truncate">
+                    {siteData?.name || '현장 작업일보'}
+                </div>
+
                 <div className="flex gap-3 items-center">
                     <div className="flex items-center gap-4 bg-slate-50 px-3 py-1.5 mr-4 border border-slate-200 font-sans">
                         <ZoomOut size={12} className="cursor-pointer" onClick={() => setZoomLevel(Math.max(0.4, zoomLevel - 0.05))}/>
@@ -598,7 +866,6 @@ export default function DailyWorkPage() {
             <div className="flex-1 overflow-auto bg-[#F8FAFC] p-4">
                 <div style={{ zoom: zoomLevel }} className="pb-40 flex flex-col items-center mx-auto w-full max-w-[1600px]">
                     
-                    {/* [수정점 4] 회장님 가이드라인 개편 */}
                     {!isReadOnly && (
                         <div className="w-full bg-red-50/50 border-2 border-red-500 p-4 mb-4 shadow-md font-sans flex flex-col justify-center text-slate-900">
                             <div className="flex items-center gap-2 mb-3">
@@ -622,17 +889,17 @@ export default function DailyWorkPage() {
                     <div className="w-full bg-white border border-slate-400 shadow-sm font-sans flex flex-col">
                         
                         <div className="grid grid-cols-12 border-b border-slate-400 items-stretch">
-                            {/* [수정점 1] 상단 그리드 비율 (8:4 -> 7:5) 조정하여 현장명 공간 확보 */}
-                            <div className="col-span-7 flex flex-col justify-between p-6 border-r border-slate-400">
-                                <h1 className="text-5xl font-black uppercase tracking-[1em] text-left mt-2 mb-6 font-sans">작 업 일 보</h1>
-                                <div className="flex gap-2 flex-wrap items-end font-sans">
-                                    <div className="flex border border-slate-400 text-[9px] font-black h-8 items-center px-3 bg-slate-50 uppercase">총 도급액: {formatNumber(formData?.total_contract_amount)}원</div>
-                                    <div className="flex border border-slate-400 text-[9px] font-black h-8 items-center px-3 text-blue-700">금일 사용: {formatNumber(sTotals.today)}원</div>
-                                    <div className="flex border border-slate-400 text-[11px] bg-red-50 font-black h-8 items-center px-4 text-red-600">누적 집행: {formatNumber(sTotals.total)}원 ({spendRate}%)</div>
+                            {/* 🚀 패딩(p-6 -> px-4 py-2), 텍스트 크기(text-5xl -> text-3xl), 마진(mb-6 -> mb-2) 대폭 축소 */}
+                            <div className="col-span-7 flex flex-col justify-between px-4 py-2 border-r border-slate-400">
+                                <h1 className="text-3xl font-black uppercase tracking-[0.5em] text-left mb-2 font-sans">작 업 일 보</h1>
+                                <div className="flex gap-1.5 flex-wrap items-end font-sans">
+                                    <div className="flex border border-slate-400 text-[9px] font-black h-6 items-center px-2 bg-slate-50 uppercase">총 도급액: {formatNumber(formData?.total_contract_amount)}원</div>
+                                    <div className="flex border border-slate-400 text-[9px] font-black h-6 items-center px-2 text-blue-700">금일 사용: {formatNumber(sTotals.today)}원</div>
+                                    <div className="flex border border-slate-400 text-[10px] bg-red-50 font-black h-6 items-center px-3 text-red-600">누적 집행: {formatNumber(sTotals.total)}원 ({spendRate}%)</div>
                                     {(siteData?.is_plant_active || siteData?.is_facility_active) && (
-                                        <div className="flex border border-slate-400 text-[11px] bg-blue-50 font-black h-8 items-center px-4 text-blue-800 gap-4">
+                                        <div className="flex border border-slate-400 text-[10px] bg-blue-50 font-black h-6 items-center px-3 text-blue-800 gap-3">
                                             {siteData?.is_plant_active && <span>식재 공정률: {(parseNumber(formData?.progress_plant_prev) + parseNumber(formData?.progress_plant)).toFixed(4)}%</span>}
-                                            {siteData?.is_plant_active && siteData?.is_facility_active && <div className="w-[1px] h-4 bg-blue-200" />}
+                                            {siteData?.is_plant_active && siteData?.is_facility_active && <div className="w-[1px] h-3 bg-blue-200" />}
                                             {siteData?.is_facility_active && <span>시설 공정률: {(parseNumber(formData?.progress_facility_prev) + parseNumber(formData?.progress_facility)).toFixed(4)}%</span>}
                                         </div>
                                     )}
@@ -643,14 +910,19 @@ export default function DailyWorkPage() {
                                 <table className="w-full text-[9px] border-collapse font-black h-full" style={{ tableLayout: 'fixed' }}>
                                     <colgroup>
                                         <col style={{ width: '18%' }} />
-                                        <col style={{ width: '46%' }} /> {/* [수정점 1] 현장명 넓게 */}
+                                        <col style={{ width: '46%' }} />
                                         <col style={{ width: '18%' }} />
                                         <col style={{ width: '18%' }} />
                                     </colgroup>
                                     <tbody>
-                                        <tr className="border-b border-slate-400 h-8">
+                                        {/* 🚀 우측 정보 테이블의 row 높이(h-8, h-10)도 컴팩트하게 조정 */}
+                                        <tr className="border-b border-slate-400 h-6">
                                             <th className="bg-slate-50 border-r border-slate-400 font-black text-center">현장명</th>
-                                            <td className="px-2 overflow-hidden text-ellipsis whitespace-nowrap border-r border-slate-400 text-center" title={siteData?.name}>{siteData?.name}</td>
+                                            <td className="px-2 border-r border-slate-400 text-center whitespace-normal break-keep" title={siteData?.name}>
+                                                <div className="line-clamp-2 leading-tight">
+                                                    {siteData?.name}
+                                                </div>
+                                            </td>
                                             <th className="bg-slate-50 border-r border-slate-400 font-black text-center">작업 일시</th>
                                             <td className="px-1 text-center">
                                                 <input type="date" className="w-full outline-none bg-transparent text-center font-black" value={formData?.report_date || ''} readOnly={isReadOnly} onChange={e=>setFormData({...formData, report_date: e.target.value})} />
@@ -664,20 +936,20 @@ export default function DailyWorkPage() {
                                             const isLastActive = (k === 'facility') || (k === 'plant' && !siteData?.is_facility_active);
 
                                             return (
-                                                <tr key={k} className={`h-10 bg-blue-50 ${!isLastActive ? 'border-b border-slate-400' : ''}`}>
+                                                <tr key={k} className={`h-8 bg-blue-50 ${!isLastActive ? 'border-b border-slate-400' : ''}`}>
                                                     <th className="bg-blue-50 border-r border-slate-400 uppercase text-[8px] font-black text-center">
                                                         {k==='plant'?'식재공정':'시설공정'}
                                                     </th>
                                                     <td className="bg-white border-r border-slate-400 text-center leading-tight">
                                                         <div className="flex flex-col items-center justify-center h-full">
                                                             <span className="text-[6px] text-slate-400 font-sans">전일</span>
-                                                            <span className="text-[11px] font-black">{formData?.[`progress_${k}_prev`] === '0.0000' ? '-' : formData?.[`progress_${k}_prev`]}</span>
+                                                            <span className="text-[10px] font-black">{formData?.[`progress_${k}_prev`] === '0.0000' ? '-' : formData?.[`progress_${k}_prev`]}</span>
                                                         </div>
                                                     </td>
                                                     <td colSpan={2} className="bg-blue-50/30 text-center leading-tight p-0">
                                                         <div className="flex flex-col items-center justify-center h-full w-full">
                                                             <span className="text-[6px] text-blue-400 font-black">금일(입력)</span>
-                                                            <input className="w-full text-center text-[12px] text-blue-700 outline-none font-black bg-transparent" value={displayVal} readOnly={isReadOnly} onFocus={() => setFocusedField(fieldId)} onBlur={() => setFocusedField(null)} onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value.replace(/[^0-9.]/g, '')})} />
+                                                            <input className="w-full text-center text-[11px] text-blue-700 outline-none font-black bg-transparent" value={displayVal} readOnly={isReadOnly} onFocus={() => setFocusedField(fieldId)} onBlur={() => setFocusedField(null)} onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value.replace(/[^0-9.]/g, '')})} />
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -688,44 +960,171 @@ export default function DailyWorkPage() {
                             </div>
                         </div>
 
-                        {/* [수정점 2] 작업 요약 리스트 교체, 내부 스크롤 제거, 높이 h-8 동기화 */}
-                        <div className="grid grid-cols-12 border-b border-slate-400 items-stretch min-h-[170px]">
-                            <div className="col-span-8 grid grid-cols-2 border-r border-slate-400 bg-white">
-                                <WorkListTable title="전일 작업 요약" list={formData?.prev_work_list || []} listKey="prev_work_list" readOnly={true} setFormData={setFormData} />
-                                <WorkListTable title="금일 작업 요약" list={formData?.today_work_list || []} listKey="today_work_list" readOnly={isReadOnly} setFormData={setFormData} />
-                            </div>
+                        <div className="grid grid-cols-12 border-b border-slate-400 items-stretch min-h-[220px]">
                             
+                            <div className="col-span-3 flex flex-col border-r border-slate-400 bg-white">
+                                
+                                {/* 전일 작업 요약 */}
+                                <div className="flex-1 border-b border-slate-400 flex flex-col bg-white">
+                                    <div className="flex justify-between items-center px-3 py-2 border-b border-slate-300 bg-slate-50/50">
+                                        <h3 className="text-[10px] font-black text-slate-800 flex items-center gap-1 uppercase tracking-widest"><ListMinus size={12}/> 전일 작업 요약</h3>
+                                        {!isReadOnly && (
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    const current = formData?.prev_work || '';
+                                                    setFormData({...formData, prev_work: current ? current + '\n' : '\n'});
+                                                }}
+                                                className="bg-white border border-slate-300 px-2 py-0.5 rounded text-[9px] hover:bg-slate-100 text-slate-600 shadow-sm transition-all"
+                                            >+ 추가</button>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 flex flex-col px-3 pb-2 overflow-y-auto">
+                                        {isReadOnly ? (
+                                            <div className="flex flex-col flex-1">
+                                                {(formData?.prev_work || '').split('\n').filter(l => l.trim() !== '').length > 0 
+                                                    ? (formData?.prev_work || '').split('\n').filter(l => l.trim() !== '').map((line, idx) => (
+                                                        <div key={idx} className="flex items-start gap-2 py-1 border-b border-slate-100 min-h-[24px]">
+                                                            <span className="text-[9px] font-black text-slate-300 w-4 text-center mt-0.5">{idx + 1}</span>
+                                                            <span className="text-[10px] font-bold text-slate-900 flex-1 leading-tight break-all">{line}</span>
+                                                        </div>
+                                                    ))
+                                                    : <div className="py-2 text-[10px] text-slate-400 font-bold">-</div>
+                                                }
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col flex-1">
+                                                {(formData?.prev_work || '').split('\n').map((line, idx) => (
+                                                    <div key={idx} className="flex items-start gap-2 py-1 border-b border-slate-100 min-h-[24px] group">
+                                                        <span className="text-[9px] font-black text-slate-300 w-4 text-center mt-0.5">{idx + 1}</span>
+                                                        <textarea 
+                                                            ref={el => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
+                                                            className="w-full flex-1 outline-none text-[10px] font-bold bg-transparent resize-none overflow-hidden leading-tight whitespace-pre-wrap placeholder:text-slate-300 mt-0.5 break-all" 
+                                                            value={line} 
+                                                            onChange={e => {
+                                                                const lines = (formData?.prev_work || '').split('\n');
+                                                                lines[idx] = e.target.value.replace(/\n/g, ''); 
+                                                                setFormData({...formData, prev_work: lines.join('\n')});
+                                                            }}
+                                                            onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                                                            rows={1}
+                                                            placeholder="내용 입력"
+                                                        />
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => {
+                                                                const lines = (formData?.prev_work || '').split('\n');
+                                                                lines.splice(idx, 1);
+                                                                setFormData({...formData, prev_work: lines.join('\n')});
+                                                            }} 
+                                                            className="text-red-400 hover:text-red-600 px-1 text-[10px] font-black opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >×</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {/* 금일 작업 요약 */}
+                                <div className="flex-1 flex flex-col bg-white">
+                                    <div className="flex justify-between items-center px-3 py-2 border-b border-slate-300 bg-blue-50/20">
+                                        <h3 className="text-[10px] font-black text-blue-800 flex items-center gap-1 uppercase tracking-widest"><ListFilter size={12}/> 금일 작업 요약</h3>
+                                        {!isReadOnly && (
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    const current = formData?.today_work || '';
+                                                    setFormData({...formData, today_work: current ? current + '\n' : '\n'});
+                                                }}
+                                                className="bg-white border border-blue-300 px-2 py-0.5 rounded text-[9px] hover:bg-blue-100 text-blue-700 shadow-sm transition-all"
+                                            >+ 추가</button>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 flex flex-col px-3 pb-2 overflow-y-auto">
+                                        {isReadOnly ? (
+                                            <div className="flex flex-col flex-1">
+                                                {(formData?.today_work || '').split('\n').filter(l => l.trim() !== '').length > 0 
+                                                    ? (formData?.today_work || '').split('\n').filter(l => l.trim() !== '').map((line, idx) => (
+                                                        <div key={idx} className="flex items-start gap-2 py-1 border-b border-slate-100 min-h-[24px]">
+                                                            <span className="text-[9px] font-black text-blue-300 w-4 text-center mt-0.5">{idx + 1}</span>
+                                                            <span className="text-[10px] font-bold text-blue-900 flex-1 leading-tight break-all">{line}</span>
+                                                        </div>
+                                                    ))
+                                                    : <div className="py-2 text-[10px] text-blue-300 font-bold">-</div>
+                                                }
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col flex-1">
+                                                {(formData?.today_work || '').split('\n').map((line, idx) => (
+                                                    <div key={idx} className="flex items-start gap-2 py-1 border-b border-slate-100 min-h-[24px] group">
+                                                        <span className="text-[9px] font-black text-blue-300 w-4 text-center mt-0.5">{idx + 1}</span>
+                                                        <textarea 
+                                                            ref={el => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
+                                                            className="w-full flex-1 outline-none text-[10px] font-bold bg-transparent resize-none overflow-hidden leading-tight text-blue-900 placeholder:text-blue-300 mt-0.5 break-all" 
+                                                            value={line} 
+                                                            onChange={e => {
+                                                                const lines = (formData?.today_work || '').split('\n');
+                                                                lines[idx] = e.target.value.replace(/\n/g, ''); 
+                                                                setFormData({...formData, today_work: lines.join('\n')});
+                                                            }}
+                                                            onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                                                            rows={1}
+                                                            placeholder="내용 입력"
+                                                        />
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => {
+                                                                const lines = (formData?.today_work || '').split('\n');
+                                                                lines.splice(idx, 1);
+                                                                setFormData({...formData, today_work: lines.join('\n')});
+                                                            }} 
+                                                            className="text-red-400 hover:text-red-600 px-1 text-[10px] font-black opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >×</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <div className="col-span-5 border-r border-slate-400 bg-white flex flex-col overflow-hidden">
+                                <ManualLedgerTable list={formData?.manual_ledger || []} setFormData={setFormData} readOnly={isReadOnly} />
+                            </div>
+
                             <div className="col-span-4 bg-white flex flex-col">
-                                <div className="bg-slate-800 text-white h-8 flex items-center justify-center text-[10px] uppercase font-black">실시간 정산 내역 합계</div>
-                                <table className="w-full text-[9px] border-collapse flex-1" style={{ tableLayout: 'fixed' }}>
+                                <div className="bg-slate-800 text-white h-8 flex items-center justify-center text-[10px] uppercase font-black shrink-0">실시간 정산 내역 합계</div>
+                                <table className="w-full text-[10px] border-collapse flex-1" style={{ tableLayout: 'fixed' }}>
                                     <colgroup>
                                         <col style={{ width: '25%' }} />
-                                        <col style={{ width: '35%' }} />
-                                        <col style={{ width: '20%' }} />
-                                        <col style={{ width: '20%' }} />
+                                        <col style={{ width: '25%' }} />
+                                        <col style={{ width: '25%' }} />
+                                        <col style={{ width: '25%' }} />
                                     </colgroup>
                                     <thead className="bg-slate-50 border-b border-slate-400 font-bold">
-                                        <tr className="h-6">
-                                            <th className="border-r border-slate-400 text-center uppercase whitespace-nowrap">항목</th>
-                                            <th className="border-r border-slate-400 text-center uppercase whitespace-nowrap">전일</th>
-                                            <th className="border-r border-slate-400 text-center text-blue-600 font-bold uppercase whitespace-nowrap">금일</th>
-                                            <th className="text-center text-red-600 uppercase font-bold whitespace-nowrap">누계</th>
+                                        <tr className="h-6 text-slate-500">
+                                            <th className="border-r border-slate-400 text-center uppercase">항목</th>
+                                            <th className="border-r border-slate-400 text-center uppercase">전일</th>
+                                            <th className="border-r border-slate-400 text-center text-blue-600 font-bold uppercase">금일</th>
+                                            <th className="text-center text-red-600 uppercase font-bold">누계</th>
                                         </tr>
                                     </thead>
                                     <tbody className="font-black">
                                         {(formData?.settlement_costs || []).map((row, idx) => (
-                                            <tr key={idx} className="border-b border-slate-200 h-5">
-                                                <td className="bg-slate-50 border-r border-slate-200 text-center p-0.5 whitespace-nowrap">{row.item}</td>
-                                                <td className="text-right px-2 border-r border-slate-200 whitespace-nowrap">{formatNumber(row.prev)}</td>
-                                                <td className="text-right px-2 text-blue-700 border-r border-slate-200 font-black whitespace-nowrap">{formatNumber(row.today)}</td>
-                                                <td className="text-right px-2 text-red-600 font-bold whitespace-nowrap">{formatNumber(row.total)}</td>
+                                            <tr key={idx} className="border-b border-slate-200 h-5 hover:bg-slate-50 transition-colors">
+                                                <td className="bg-slate-50 border-r border-slate-200 text-center p-0.5">{row.item}</td>
+                                                <td className="text-right px-4 border-r border-slate-200">{formatNumber(row.prev)}</td>
+                                                <td className="text-right px-4 text-blue-700 border-r border-slate-200 font-black">{formatNumber(row.today)}</td>
+                                                <td className="text-right px-4 text-red-600 font-bold">{formatNumber(row.total)}</td>
                                             </tr>
                                         ))}
-                                        <tr className="bg-slate-100 font-black text-blue-800 h-6">
-                                            <td className="text-center p-1 border-r border-slate-200 whitespace-nowrap">총 합계</td>
-                                            <td className="text-right px-2 border-r border-slate-200 whitespace-nowrap">{formatNumber(sTotals.prev)}</td>
-                                            <td className="text-right px-2 text-blue-800 border-r border-slate-200 font-black">{formatNumber(sTotals.today)}</td>
-                                            <td className="text-right px-2 text-red-800 font-black">{formatNumber(sTotals.total)}</td>
+                                        <tr className="bg-slate-100 font-black text-blue-800 h-7">
+                                            <td className="text-center p-1 border-r border-slate-200 uppercase tracking-widest">총 합계</td>
+                                            <td className="text-right px-4 border-r border-slate-200">{formatNumber(sTotals.prev)}</td>
+                                            <td className="text-right px-4 text-blue-800 border-r border-slate-200 font-black">{formatNumber(sTotals.today)}</td>
+                                            <td className="text-right px-4 text-red-800 font-black">{formatNumber(sTotals.total)}</td>
                                         </tr>
                                     </tbody>
                                 </table>

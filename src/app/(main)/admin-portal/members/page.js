@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 import { 
   Users, Search, Bell, ChevronDown, Wallet, ShieldAlert, 
   CalendarDays, RefreshCw, Loader2, Mail, Phone, LayoutDashboard,
-  UserCheck, UserMinus, UserX, X, UserPlus, Save
+  UserCheck, UserMinus, UserX, X, UserPlus, Save, UserCog
 } from 'lucide-react';
 import { registerEmployeeAction } from './actions'; 
 
@@ -21,9 +21,7 @@ export default function MembersManagementPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // 🚀 등록된 모든 부서를 담을 상태 추가
   const [departments, setDepartments] = useState([]);
-  
   const [activeTab, setActiveTab] = useState('active');
 
   const [isResignModalOpen, setIsResignModalOpen] = useState(false);
@@ -60,7 +58,6 @@ export default function MembersManagementPage() {
       const fetchedEmployees = data || [];
       setEmployees(fetchedEmployees);
       
-      // 🚀 직원 데이터를 기반으로 중복 없는 실제 부서 목록 추출
       const uniqueDeps = [...new Set(fetchedEmployees.map(emp => emp.department).filter(Boolean))];
       setDepartments(uniqueDeps);
       
@@ -78,12 +75,16 @@ export default function MembersManagementPage() {
   }, [employee, fetchEmployees]);
 
   const filteredEmployees = employees.filter(emp => {
-    const isMatchTab = activeTab === 'active' ? emp.employment_status === '재직' : emp.employment_status === '퇴사';
+    const isMatchTab = 
+        activeTab === 'active' ? emp.employment_status === '재직' : 
+        activeTab === 'leave' ? emp.employment_status === '휴직' : 
+        emp.employment_status === '퇴사';
     const isMatchSearch = emp.full_name?.includes(searchTerm) || emp.department?.includes(searchTerm) || emp.position?.includes(searchTerm);
     return isMatchTab && isMatchSearch;
   });
 
   const activeCount = employees.filter(e => e.employment_status === '재직').length;
+  const leaveCount = employees.filter(e => e.employment_status === '휴직').length;
   const resignedCount = employees.filter(e => e.employment_status === '퇴사').length;
 
   const openHrProfile = (empId) => {
@@ -128,7 +129,26 @@ export default function MembersManagementPage() {
     }
   };
 
-  // 🚀 모달 열 때 폼 초기화 (동적 부서 목록의 첫 번째 값을 기본값으로 설정)
+  // 🚀 휴직 및 복직 처리를 위한 함수 추가
+  const handleStatusChange = async (emp, newStatus) => {
+    const actionText = newStatus === '휴직' ? '휴직 처리' : '복직 처리';
+    if (!confirm(`${emp.full_name} 님을 ${actionText} 하시겠습니까?\n(${newStatus} 상태로 즉시 변경됩니다.)`)) return;
+
+    try {
+        const { error } = await supabase
+            .from('profiles')
+            .update({ employment_status: newStatus })
+            .eq('id', emp.id);
+
+        if (error) throw error;
+        toast.success(`${emp.full_name} 님이 ${newStatus} 상태로 변경되었습니다.`);
+        fetchEmployees();
+    } catch (error) {
+        console.error(error);
+        toast.error('상태 변경에 실패했습니다.');
+    }
+  };
+
   const handleOpenRegisterModal = () => {
     setRegisterFormData({
         email: '', password: '', full_name: '', 
@@ -198,10 +218,10 @@ export default function MembersManagementPage() {
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3 cursor-pointer p-1.5 pr-3 hover:bg-slate-50 rounded-full border border-transparent hover:border-slate-200 transition-colors">
               <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-500 font-black text-xs uppercase">
-                {employee?.full_name?.charAt(0)}
+                {(employee?.full_name || '👤').charAt(0)}
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-black text-slate-800">{employee?.full_name} {employee?.position}</span>
+                <span className="text-xs font-black text-slate-800">{employee?.full_name || '이름 없음'} {employee?.position}</span>
               </div>
               <ChevronDown size={14} className="text-slate-400 ml-1" />
             </div>
@@ -266,6 +286,13 @@ export default function MembersManagementPage() {
               <UserCheck size={18} /> 재직 중인 직원 ({activeCount})
             </button>
             <button
+              onClick={() => setActiveTab('leave')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-black transition-all
+                ${activeTab === 'leave' ? 'bg-white text-amber-500 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'}`}
+            >
+              <UserCog size={18} /> 휴직 중인 직원 ({leaveCount})
+            </button>
+            <button
               onClick={() => setActiveTab('resigned')}
               className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-black transition-all
                 ${activeTab === 'resigned' ? 'bg-white text-rose-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'}`}
@@ -279,10 +306,10 @@ export default function MembersManagementPage() {
               <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
                 <tr>
                   <th className="p-4 px-6 text-[12px] font-black text-slate-400 uppercase tracking-widest w-[25%]">성명 / 직무</th>
-                  {activeTab === 'active' ? (
-                    <th className="p-4 px-6 text-[12px] font-black text-slate-400 uppercase tracking-widest w-[15%]">입사일</th>
-                  ) : (
+                  {activeTab === 'resigned' ? (
                     <th className="p-4 px-6 text-[12px] font-black text-slate-400 uppercase tracking-widest w-[15%]">퇴사일</th>
+                  ) : (
+                    <th className="p-4 px-6 text-[12px] font-black text-slate-400 uppercase tracking-widest w-[15%]">입사일</th>
                   )}
                   <th className="p-4 px-6 text-[12px] font-black text-slate-400 uppercase tracking-widest w-[20%]">연락처 / 이메일</th>
                   {activeTab === 'resigned' ? (
@@ -304,19 +331,19 @@ export default function MembersManagementPage() {
                       <td className="p-4 px-6">
                         <div className="flex items-center gap-4">
                           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg shadow-sm border ${activeTab === 'active' ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-slate-50 text-slate-300 border-slate-100'}`}>
-                            {emp.full_name.charAt(0)}
+                            {(emp.full_name || '👤').charAt(0)}
                           </div>
                           <div className="flex flex-col">
-                            <span className={`text-base font-black transition-colors cursor-pointer ${activeTab === 'active' ? 'text-slate-900 group-hover:text-blue-600' : 'text-slate-500 group-hover:text-slate-700'}`} onClick={() => openHrProfile(emp.id)}>{emp.full_name}</span>
-                            <span className="text-[11px] font-bold text-slate-500 mt-0.5">{emp.department} · {emp.position}</span>
+                            <span className={`text-base font-black transition-colors cursor-pointer ${activeTab === 'active' ? 'text-slate-900 group-hover:text-blue-600' : 'text-slate-500 group-hover:text-slate-700'}`} onClick={() => openHrProfile(emp.id)}>{emp.full_name || '이름 없음'}</span>
+                            <span className="text-[11px] font-bold text-slate-500 mt-0.5">{emp.department || '미지정'} · {emp.position || ''}</span>
                           </div>
                         </div>
                       </td>
                       <td className="p-4 px-6">
-                        {activeTab === 'active' ? (
-                          <span className="text-sm font-bold text-slate-700">{emp.hire_date || '-'}</span>
-                        ) : (
+                        {activeTab === 'resigned' ? (
                           <span className="text-sm font-black text-rose-600">{emp.resignation_date || '-'}</span>
+                        ) : (
+                          <span className="text-sm font-bold text-slate-700">{emp.hire_date || '-'}</span>
                         )}
                       </td>
                       <td className="p-4 px-6">
@@ -326,13 +353,17 @@ export default function MembersManagementPage() {
                         </div>
                       </td>
                       <td className="p-4 px-6 text-center">
-                        {activeTab === 'active' ? (
-                          <span className="text-xs font-black bg-blue-50 text-blue-600 px-4 py-1.5 rounded-lg border border-blue-100 inline-block">
-                            {emp.employment_status}
-                          </span>
-                        ) : (
+                        {activeTab === 'resigned' ? (
                           <span className="text-xs font-black bg-slate-100 text-slate-600 px-4 py-1.5 rounded-lg border border-slate-200 inline-block">
                             {emp.unused_leave_days || 0} 일
+                          </span>
+                        ) : activeTab === 'leave' ? (
+                          <span className="text-xs font-black bg-amber-50 text-amber-600 px-4 py-1.5 rounded-lg border border-amber-200 inline-block">
+                            {emp.employment_status || '상태 없음'}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-black bg-blue-50 text-blue-600 px-4 py-1.5 rounded-lg border border-blue-100 inline-block">
+                            {emp.employment_status || '상태 없음'}
                           </span>
                         )}
                       </td>
@@ -344,13 +375,41 @@ export default function MembersManagementPage() {
                           >
                             인사 카드
                           </button>
+
+                          {/* 🚀 재직 중일 때: 휴직 및 퇴사 버튼 노출 */}
                           {activeTab === 'active' && (
-                            <button 
-                              onClick={() => openResignModal(emp)} 
-                              className="px-4 py-2 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-1.5"
-                            >
-                              <UserMinus size={14}/> 퇴사 처리
-                            </button>
+                            <>
+                                <button 
+                                onClick={() => handleStatusChange(emp, '휴직')} 
+                                className="px-4 py-2 bg-white border border-amber-200 text-amber-600 hover:bg-amber-50 hover:border-amber-300 rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-1.5"
+                                >
+                                <UserCog size={14}/> 휴직
+                                </button>
+                                <button 
+                                onClick={() => openResignModal(emp)} 
+                                className="px-4 py-2 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-1.5"
+                                >
+                                <UserMinus size={14}/> 퇴사
+                                </button>
+                            </>
+                          )}
+
+                          {/* 🚀 휴직 중일 때: 복직 및 퇴사 버튼 노출 */}
+                          {activeTab === 'leave' && (
+                            <>
+                                <button 
+                                onClick={() => handleStatusChange(emp, '재직')} 
+                                className="px-4 py-2 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-1.5"
+                                >
+                                <UserCheck size={14}/> 복직
+                                </button>
+                                <button 
+                                onClick={() => openResignModal(emp)} 
+                                className="px-4 py-2 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-1.5"
+                                >
+                                <UserMinus size={14}/> 퇴사
+                                </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -400,7 +459,6 @@ export default function MembersManagementPage() {
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-700 mb-1.5">소속 부서</label>
-                            {/* 🚀 동적으로 렌더링되는 부서 드롭다운 */}
                             <select name="department" value={registerFormData.department} onChange={handleRegisterInputChange} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none bg-white shadow-sm">
                                 {departments.map(dep => (
                                     <option key={dep} value={dep}>{dep}</option>
@@ -478,11 +536,11 @@ export default function MembersManagementPage() {
             <div className="p-8 space-y-6">
               <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                 <div className="w-12 h-12 bg-white rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 font-black text-lg">
-                  {targetEmp.full_name.charAt(0)}
+                  {(targetEmp.full_name || '👤').charAt(0)}
                 </div>
                 <div>
-                  <p className="text-lg font-black text-slate-900">{targetEmp.full_name} <span className="text-sm text-slate-500">{targetEmp.position}</span></p>
-                  <p className="text-xs font-bold text-slate-500">{targetEmp.department}</p>
+                  <p className="text-lg font-black text-slate-900">{targetEmp.full_name || '이름 없음'} <span className="text-sm text-slate-500">{targetEmp.position || ''}</span></p>
+                  <p className="text-xs font-bold text-slate-500">{targetEmp.department || '미지정'}</p>
                 </div>
               </div>
 
