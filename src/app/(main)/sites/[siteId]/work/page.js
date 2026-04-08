@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { useSearchParams, useRouter, useParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut, X, Plus, Edit3, Trash2, ChevronDown, ChevronUp, MousePointerClick, RotateCcw, AlertCircle, ListFilter, ListMinus } from 'lucide-react';
+import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut, X, Plus, Edit3, Trash2, ChevronDown, ChevronUp, MousePointerClick, RotateCcw, AlertCircle, ListFilter, ListMinus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const formatNumber = (num) => {
@@ -36,6 +36,8 @@ const safeParseJSON = (data) => {
 const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [colWidths, setColWidths] = useState({});
+    const [searchQuery, setSearchQuery] = useState('');
+    const [focusedLedgerField, setFocusedLedgerField] = useState(null);
 
     const contractSum = list?.reduce((acc, cur) => acc + parseNumber(cur.contract), 0) || 0;
     const baseIncomingSum = list?.reduce((acc, cur) => acc + parseNumber(cur.base_incoming), 0) || 0;
@@ -45,10 +47,24 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
     const plantedSum = list?.reduce((acc, cur) => acc + parseNumber(cur.planted), 0) || 0;
     const finalRemainSum = list?.reduce((acc, cur) => acc + parseNumber(cur.final_remain), 0) || 0;
 
-    const todayRows = (list && list.length > 0) ? list.filter(r => !r.isPastRecord) : [{id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false}];
+    let todayRows = list?.filter(r => !r.isPastRecord) || [];
+    if (todayRows.length === 0 && (!list || list.length === 0)) {
+        todayRows = [{id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false}];
+    }
     const pastRows = list?.filter(r => r.isPastRecord) || [];
 
-    const displayRows = isExpanded ? [...todayRows, ...pastRows] : todayRows;
+    const effectiveExpanded = isExpanded || searchQuery.trim().length > 0;
+    const displayRows = effectiveExpanded ? [...todayRows, ...pastRows] : todayRows;
+    
+    const filteredRows = displayRows.filter(row => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return Object.entries(row).some(([k, v]) => {
+            if (k === 'id' || k === 'isPastRecord' || k === 'isModified' || k === 'isTodayDbRecord') return false;
+            return String(v).toLowerCase().includes(q);
+        });
+    });
+
     const colSpanTotal = readOnly ? 10 : 11;
 
     const handleColResize = (idx, e) => {
@@ -71,7 +87,7 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
         document.addEventListener('mouseup', onMouseUp);
     };
 
-    const handlePaste = (e, rowIndex, targetField) => {
+    const handlePaste = (e, itemId, targetField) => {
         if (readOnly) return;
         const pasteData = e.clipboardData.getData('text');
         
@@ -89,21 +105,23 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
 
         setFormData(prev => {
             let newLedger = [...(prev.manual_ledger || [])];
+            let startIdx = newLedger.findIndex(li => li.id === itemId);
+            if (startIdx === -1) startIdx = 0;
             
             if (newLedger.length === 1 && !newLedger[0].item && !newLedger[0].contract) {
                 newLedger = [];
-                rowIndex = 0; 
+                startIdx = 0; 
             }
 
             rows.forEach((rowData, i) => {
                 const cols = rowData.split('\t');
-                const targetRowIdx = rowIndex + i;
+                const targetRowIdx = startIdx + i;
                 
                 if (targetRowIdx >= newLedger.length) {
                     newLedger.push({id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false});
                 }
 
-                let rowToUpdate = { ...newLedger[targetRowIdx], isPastRecord: false };
+                let rowToUpdate = { ...newLedger[targetRowIdx], isPastRecord: false, isModified: true };
                 
                 cols.forEach((colData, j) => {
                     const fieldToUpdate = EXCEL_FIELDS[targetColIndex + j];
@@ -138,13 +156,26 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
         <div className="flex flex-col flex-1 h-full w-full bg-white">
             <div className="bg-yellow-50 min-h-[32px] text-center border-b border-slate-400 text-[10px] tracking-widest uppercase font-black flex justify-between items-center px-3 text-yellow-800 shrink-0 sticky top-0 z-30">
                 <span>식재 및 반입 수기 장부 (요약)</span>
-                {!readOnly && (
-                    <button 
-                        type="button" 
-                        onClick={() => setFormData(p => ({...p, manual_ledger: [{id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false}, ...(p.manual_ledger||[])]}))} 
-                        className="bg-white border border-yellow-300 px-2 py-0.5 rounded text-[9px] hover:bg-yellow-100 text-yellow-800 shadow-sm transition-all"
-                    >+ 행 추가</button>
-                )}
+                <div className="flex items-center gap-2">
+                    <div className="relative flex items-center">
+                        <Search size={10} className="absolute left-1.5 text-yellow-600/70" />
+                        <input 
+                            type="text" 
+                            placeholder="장부 검색" 
+                            value={searchQuery} 
+                            onChange={e => setSearchQuery(e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            className="pl-5 pr-1.5 py-0.5 text-[9px] border border-yellow-300 rounded outline-none w-24 bg-white/90 text-slate-800 focus:border-yellow-500 focus:bg-white font-sans transition-colors placeholder:text-yellow-600/50"
+                        />
+                    </div>
+                    {!readOnly && (
+                        <button 
+                            type="button" 
+                            onClick={() => setFormData(p => ({...p, manual_ledger: [{id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false}, ...(p.manual_ledger||[])]}))} 
+                            className="bg-white border border-yellow-300 px-2 py-0.5 rounded text-[9px] hover:bg-yellow-100 text-yellow-800 shadow-sm transition-all"
+                        >+ 행 추가</button>
+                    )}
+                </div>
             </div>
             <div className="flex-1 w-full p-1 pb-4 overflow-x-auto overflow-y-auto max-h-[500px] print:max-h-none print:overflow-visible custom-scrollbar">
                 <table className="w-full text-[9px] border-collapse font-sans" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
@@ -199,29 +230,36 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                         </tr>
                     </thead>
                    <tbody>
-                                {displayRows.map((item, rowIndex) => {
+                                {filteredRows.map((item, rowIndex) => {
                                     const renderInput = (field, isHighlight = false, isRed = false, isBlue = false, forceReadOnly = false) => {
                                         const isCalculatedField = field === 'not_incoming' || field === 'final_remain' || forceReadOnly;
+                                        const isNumeric = ['contract', 'base_incoming', 'incoming', 'not_incoming', 'prev_remain', 'planted', 'final_remain'].includes(field);
+                                        const fieldId = `ledger-${item.id}-${field}`;
 
                                         return (
                                             <input
                                                 type="text"
-                                                className={`w-full p-1 text-center font-black outline-none leading-tight 
+                                                className={`w-full p-1 font-black outline-none leading-tight 
+                                                ${isNumeric ? 'text-right pr-2' : 'text-center px-1'}
                                                 ${isHighlight ? 'bg-yellow-100 focus:bg-yellow-100' : isBlue ? 'bg-blue-50 focus:bg-blue-50' : 'bg-transparent focus:bg-slate-50'} 
                                                 ${isRed ? 'text-red-600' : isBlue ? 'text-blue-700' : 'text-slate-800'}
                                                 ${readOnly || isCalculatedField ? 'cursor-default' : ''}`}
-                                                value={item[field] || ''}
+                                                
+                                                value={isNumeric && focusedLedgerField !== fieldId ? formatNumber(item[field]) : (isNumeric && (item[field] === "0" || item[field] === 0) ? "" : item[field] || '')}
+                                                
                                                 placeholder={readOnly ? "-" : ""}
                                                 readOnly={readOnly || isCalculatedField}
-                                                onPaste={(e) => handlePaste(e, rowIndex, field)}
+                                                onPaste={(e) => handlePaste(e, item.id, field)}
+                                                onFocus={() => isNumeric && setFocusedLedgerField(fieldId)}
+                                                onBlur={() => setFocusedLedgerField(null)}
                                                 onChange={(e) => {
                                                     if (readOnly || isCalculatedField) return;
-                                                    const val = e.target.value;
+                                                    const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
                                                     setFormData(prev => {
                                                         const newList = [...(prev.manual_ledger || [])];
                                                         const targetIdx = newList.findIndex(li => li.id === item.id);
                                                         if (targetIdx > -1) {
-                                                            const row = { ...newList[targetIdx], [field]: val };
+                                                            const row = { ...newList[targetIdx], [field]: val, isModified: true };
                                                             
                                                             if (['contract', 'base_incoming', 'incoming', 'prev_remain', 'planted'].includes(field)) {
                                                                 const cont = parseNumber(row.contract);
@@ -263,7 +301,7 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                                     );
                                 })}
 
-                                {pastRows.length > 0 && (
+                                {pastRows.length > 0 && !searchQuery.trim() && (
                                     <tr className="h-8">
                                         <td colSpan={colSpanTotal} className="bg-slate-50/50 p-0 text-center border-b border-slate-200 align-middle">
                                             {isExpanded ? (
@@ -284,14 +322,14 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                         <tfoot className="bg-slate-100 font-black text-slate-800">
                             <tr>
                                 <td colSpan={2} className="border-r border-t border-slate-300 text-center p-2 uppercase tracking-widest text-[10px]">총 합계</td>
-                                <td className="border-r border-t border-slate-300 text-center p-2">{formatNumber(contractSum)}</td>
-                                <td className="border-r border-t border-slate-300 text-center p-2 bg-yellow-100/50 text-yellow-900">{formatNumber(baseIncomingSum)}</td>
-                                <td className="border-r border-t border-slate-300 text-center p-2 bg-yellow-100/50 text-yellow-900">{formatNumber(incomingSum)}</td>
-                                <td className="border-r border-t border-slate-300 text-center p-2 text-red-600">{formatNumber(notIncomingSum)}</td>
-                                <td className="border-r border-t border-slate-300 text-center p-2">{formatNumber(prevRemainSum)}</td>
-                                <td className="border-r border-t border-slate-300 text-center p-2 bg-blue-50 text-blue-700">{formatNumber(incomingSum)}</td>
-                                <td className="border-r border-t border-slate-300 text-center p-2">{formatNumber(plantedSum)}</td>
-                                <td className="border-r border-t border-slate-300 text-center p-2 text-red-600">{formatNumber(finalRemainSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2">{formatNumber(contractSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2 bg-yellow-100/50 text-yellow-900">{formatNumber(baseIncomingSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2 bg-yellow-100/50 text-yellow-900">{formatNumber(incomingSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2 text-red-600">{formatNumber(notIncomingSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2">{formatNumber(prevRemainSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2 bg-blue-50 text-blue-700">{formatNumber(incomingSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2">{formatNumber(plantedSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2 text-red-600">{formatNumber(finalRemainSum)}</td>
                                 {!readOnly && <td className="border-t border-slate-300 border-r"></td>}
                             </tr>
                         </tfoot>
@@ -321,6 +359,7 @@ export default function DailyWorkPage() {
     const [focusedField, setFocusedField] = useState(null);
     const [columnWidths, setColumnWidths] = useState({});
     const [expandedSections, setExpandedSections] = useState({});
+    const [searchQueries, setSearchQueries] = useState({});
 
     const isReadOnly = view === 'detail';
 
@@ -453,16 +492,19 @@ export default function DailyWorkPage() {
             const uKey = (row.item || '').trim() + '_' + (row.spec || '').trim();
             const pastInfo = uKey && uKey !== '_' ? historicalLedgerMap[uKey] : null;
             
-            const hasActivity = row.incoming?.toString().trim() || row.planted?.toString().trim();
-            const hasData = row.item?.trim() || row.contract?.toString().trim() || row.base_incoming?.toString().trim();
+            const inc = parseNumber(row.incoming);
+            const pl = parseNumber(row.planted);
+            const hasActivity = inc > 0 || pl > 0;
+            
+            let bInc = parseNumber(row.base_incoming);
+            let pRem = parseNumber(row.prev_remain || row.total_remain); 
+            let cont = parseNumber(row.contract);
+
+            const hasData = row.item?.trim() || cont > 0 || bInc > 0 || pRem > 0;
 
             if (!hasActivity && !hasData && !pastInfo && !isNewReport && uKey === '_') {
                 return;
             }
-
-            let bInc = parseNumber(row.base_incoming);
-            let pRem = parseNumber(row.prev_remain || row.total_remain); 
-            let cont = parseNumber(row.contract);
 
             if (pastInfo) {
                 bInc = pastInfo.initial_base_inc + pastInfo.accum_inc;
@@ -473,9 +515,6 @@ export default function DailyWorkPage() {
                 bInc = parseNumber(row.base_incoming);
                 pRem = parseNumber(row.prev_remain || row.total_remain);
             }
-
-            const inc = parseNumber(row.incoming);
-            const pl = parseNumber(row.planted);
 
             if (!pastInfo && row.base_incoming && isNewReport) {
                  bInc = parseNumber(row.base_incoming); 
@@ -491,7 +530,8 @@ export default function DailyWorkPage() {
                 prev_remain: (pRem > 0 || row.prev_remain || row.total_remain) ? pRem.toString() : '',
                 not_incoming: (cont > 0 || bInc > 0 || inc > 0) ? notInc.toString() : '',
                 final_remain: (pRem > 0 || inc > 0 || pl > 0) ? finalRem.toString() : '',
-                isPastRecord: !hasActivity
+                isPastRecord: hasData && !hasActivity,
+                isTodayDbRecord: true
             });
         });
 
@@ -529,18 +569,26 @@ export default function DailyWorkPage() {
                 const pastInfo = uKey ? pastItems[uKey] : null;
                 const rowId = cleanRow.id || uuidv4();
 
+                const count = parseNumber(cleanRow.count);
+                const total = parseNumber(cleanRow.total);
+                const hasActivity = count > 0 || total > 0;
+                const hasData = cleanRow.item?.trim() || cleanRow.name?.trim();
+                
+                const isPast = hasData && !hasActivity;
+
                 if (pastInfo) {
                     const newPrev = pastInfo.prev_count;
                     delete pastItems[uKey];
                     return {
                         ...cleanRow,
                         id: rowId,
-                        isPastRecord: false,
+                        isPastRecord: isPast,
                         prev_count: newPrev.toString(),
-                        accum: (newPrev + parseNumber(cleanRow.count)).toString()
+                        accum: (newPrev + count).toString(),
+                        isTodayDbRecord: true
                     };
                 }
-                return { ...cleanRow, id: rowId, isPastRecord: false, prev_count: "0", accum: cleanRow.count };
+                return { ...cleanRow, id: rowId, isPastRecord: isPast, prev_count: "0", accum: cleanRow.count, isTodayDbRecord: true };
             });
 
             const missingRows = Object.values(pastItems).map(pastRow => {
@@ -638,16 +686,22 @@ export default function DailyWorkPage() {
 
             if (cleanDataToSave.manual_ledger) {
                 cleanDataToSave.manual_ledger = cleanDataToSave.manual_ledger.filter(row => {
-                    return row.item?.trim() || row.contract || row.incoming || row.planted;
-                }).map(({ isPastRecord, ...rest }) => rest);
+                    if (row.isPastRecord) {
+                        return row.isModified || row.isTodayDbRecord;
+                    }
+                    return row.item?.trim() || row.contract?.toString().trim() || row.incoming?.toString().trim() || row.planted?.toString().trim() || row.base_incoming?.toString().trim() || row.prev_remain?.toString().trim();
+                }).map(({ isPastRecord, isModified, isTodayDbRecord, ...rest }) => rest);
             }
 
             ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs', 'etc_costs'].forEach(key => {
                 if (cleanDataToSave[key]) {
                     cleanDataToSave[key] = cleanDataToSave[key].filter(row => {
-                        if (key === 'etc_costs') return parseNumber(row.total) > 0 || row.content;
-                        return parseNumber(row.count) > 0 || parseNumber(row.total) > 0;
-                    }).map(({ isPastRecord, ...rest }) => rest);
+                        if (key === 'etc_costs') return parseNumber(row.total) > 0 || row.content?.trim();
+                        if (row.isPastRecord) {
+                            return row.isModified || row.isTodayDbRecord;
+                        }
+                        return parseNumber(row.count) > 0 || parseNumber(row.total) > 0 || row.item?.trim() || row.name?.trim();
+                    }).map(({ isPastRecord, isModified, isTodayDbRecord, ...rest }) => rest);
                 }
             });
 
@@ -661,8 +715,9 @@ export default function DailyWorkPage() {
             
             await supabase.from('daily_site_reports').upsert(targetId ? { id: targetId, ...payload } : payload);
             
-            setOriginalData(JSON.parse(JSON.stringify(cleanDataToSave)));
-            setFormData(JSON.parse(JSON.stringify(cleanDataToSave)));
+            const syncedData = await syncWithAllPastData(cleanDataToSave, false);
+            setOriginalData(JSON.parse(JSON.stringify(syncedData)));
+            setFormData(JSON.parse(JSON.stringify(syncedData)));
             toast.success("저장되었습니다."); 
             
             if (!targetId) {
@@ -776,8 +831,20 @@ export default function DailyWorkPage() {
 
         const todayRows = allRows.filter(r => !r.isPastRecord);
         const pastRows = allRows.filter(r => r.isPastRecord);
+        
+        const query = searchQueries[key] || '';
         const isExpanded = expandedSections[key];
-        const displayRows = isExpanded ? [...todayRows, ...pastRows] : todayRows;
+        const effectiveExpanded = isExpanded || query.trim().length > 0;
+        const displayRows = effectiveExpanded ? [...todayRows, ...pastRows] : todayRows;
+        
+        const filteredRows = displayRows.filter(row => {
+            if (!query.trim()) return true;
+            const q = query.toLowerCase();
+            return Object.entries(row).some(([k, v]) => {
+                if (k === 'id' || k === 'isPastRecord' || k === 'isModified' || k === 'isTodayDbRecord') return false;
+                return String(v).toLowerCase().includes(q);
+            });
+        });
 
         const colSpanTotal = config.fields.length + (isReadOnly ? 0 : 1);
 
@@ -790,6 +857,22 @@ export default function DailyWorkPage() {
                                 <div className="flex justify-between items-center w-full h-full px-2">
                                     <div className="flex items-center gap-1 font-black"><span className="text-[10px] uppercase">▣ {config.title} ({allRows.length})</span></div>
                                     <div className="flex items-center gap-2">
+                                        <div className="relative flex items-center">
+                                            <Search size={10} className="absolute left-1.5 text-slate-400" />
+                                            <input 
+                                                type="text" 
+                                                placeholder="검색" 
+                                                value={query} 
+                                                onChange={e => {
+                                                    setSearchQueries(p => ({...p, [key]: e.target.value}));
+                                                    if (collapsedSections[key] && e.target.value) {
+                                                        setCollapsedSections(prev => ({ ...prev, [key]: false }));
+                                                    }
+                                                }}
+                                                onClick={e => e.stopPropagation()}
+                                                className="pl-5 pr-1.5 py-0.5 text-[9px] border border-slate-300 bg-white/90 rounded outline-none w-20 font-sans text-slate-800 focus:border-slate-500 focus:bg-white transition-colors"
+                                            />
+                                        </div>
                                         {!isReadOnly && (
                                             <button
                                                 onClick={(e)=>{
@@ -824,11 +907,11 @@ export default function DailyWorkPage() {
                     </thead>
                     {!isCollapsed && (
                         <tbody>
-                            {displayRows.map((row, i) => (
-                                <tr key={row.id || i} className="border-b border-slate-200 hover:bg-slate-50 h-8">
+                            {filteredRows.map((row, i) => (
+                                <tr key={row.id} className="border-b border-slate-200 hover:bg-slate-50 h-8">
                                     {config.fields.map((f, idx) => {
                                         const isNumeric = ['total','price','accum','count','prev_count', 'design_count'].includes(f);
-                                        const fieldId = `${key}-${i}-${f}`;
+                                        const fieldId = `${key}-${row.id}-${f}`;
                                         return (
                                             <td key={f} className={`p-0 align-middle font-sans ${idx !== config.fields.length - 1 || !isReadOnly ? 'border-r border-slate-200' : ''}`} style={{ width: widths[idx] ? `${widths[idx]}px` : 'auto' }}>
                                                 <input className={`block w-full h-full p-1 outline-none bg-transparent font-sans font-black rounded-none text-[8.5px] z-10 ${isNumeric ? 'text-right pr-2' : 'text-center px-1'}`}
@@ -843,7 +926,8 @@ export default function DailyWorkPage() {
                                                         if (rIdx === -1) return;
 
                                                         const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
-                                                        updated[rIdx][f] = val;
+                                                        updated[rIdx] = { ...updated[rIdx], [f]: val, isModified: true };
+                                                        
                                                         if (isNumeric) {
                                                             if (f === 'count' || f === 'prev_count') updated[rIdx].accum = (parseNumber(updated[rIdx].prev_count || 0) + parseNumber(updated[rIdx].count || 0)).toString();
                                                             if (f === 'price' || f === 'count') updated[rIdx].total = (parseNumber(updated[rIdx].price) * parseNumber(updated[rIdx].count)).toString();
@@ -857,7 +941,7 @@ export default function DailyWorkPage() {
                                     {!isReadOnly && <td className="text-center text-red-500 cursor-pointer p-0 text-xs font-black align-middle" onClick={()=>setFormData(p=>({...p, [key]: allRows.filter(x => x.id !== row.id)}))}>×</td>}
                                 </tr>
                             ))}
-                            {pastRows.length > 0 && (
+                            {pastRows.length > 0 && !query.trim() && (
                                 <tr className="h-8">
                                     <td colSpan={colSpanTotal} className="bg-slate-50/50 p-0 text-center border-b border-slate-200 align-middle">
                                         {isExpanded ? (
