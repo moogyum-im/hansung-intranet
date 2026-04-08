@@ -29,14 +29,13 @@ const safeParseJSON = (data) => {
     try {
         return JSON.parse(data);
     } catch (error) {
-        console.warn('JSON parsing error (safely ignored):', error);
         return {};
     }
 };
 
-// 🚀 식재 및 반입 수기 장부 (엑셀 샘플 가이드 100% 적용 완료)
 const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [colWidths, setColWidths] = useState({});
 
     const contractSum = list?.reduce((acc, cur) => acc + parseNumber(cur.contract), 0) || 0;
     const baseIncomingSum = list?.reduce((acc, cur) => acc + parseNumber(cur.base_incoming), 0) || 0;
@@ -46,15 +45,98 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
     const plantedSum = list?.reduce((acc, cur) => acc + parseNumber(cur.planted), 0) || 0;
     const finalRemainSum = list?.reduce((acc, cur) => acc + parseNumber(cur.final_remain), 0) || 0;
 
-    const todayRows = list?.filter(r => !r.isPastRecord) || [];
+    const todayRows = (list && list.length > 0) ? list.filter(r => !r.isPastRecord) : [{id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false}];
     const pastRows = list?.filter(r => r.isPastRecord) || [];
 
     const displayRows = isExpanded ? [...todayRows, ...pastRows] : todayRows;
     const colSpanTotal = readOnly ? 10 : 11;
 
+    const handleColResize = (idx, e) => {
+        if (readOnly) return;
+        const startX = e.pageX;
+        const th = e.target.parentElement;
+        const startWidth = th.offsetWidth;
+        
+        const onMouseMove = (moveEvent) => {
+            const newWidth = Math.max(40, startWidth + (moveEvent.pageX - startX));
+            setColWidths(prev => ({ ...prev, [idx]: newWidth }));
+        };
+        
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    };
+
+    const handlePaste = (e, rowIndex, targetField) => {
+        if (readOnly) return;
+        const pasteData = e.clipboardData.getData('text');
+        
+        if (!pasteData || (!pasteData.includes('\t') && !pasteData.includes('\n'))) return;
+
+        e.preventDefault();
+
+        const rows = pasteData.split(/\r?\n/).filter(r => r.trim() !== '');
+        if (rows.length === 0) return;
+
+        const EXCEL_FIELDS = ['item', 'spec', 'contract', 'base_incoming', 'incoming', 'not_incoming', 'prev_remain', 'incoming_dup', 'planted', 'final_remain'];
+        const targetColIndex = EXCEL_FIELDS.indexOf(targetField);
+        
+        if (targetColIndex === -1) return;
+
+        setFormData(prev => {
+            let newLedger = [...(prev.manual_ledger || [])];
+            
+            if (newLedger.length === 1 && !newLedger[0].item && !newLedger[0].contract) {
+                newLedger = [];
+                rowIndex = 0; 
+            }
+
+            rows.forEach((rowData, i) => {
+                const cols = rowData.split('\t');
+                const targetRowIdx = rowIndex + i;
+                
+                if (targetRowIdx >= newLedger.length) {
+                    newLedger.push({id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false});
+                }
+
+                let rowToUpdate = { ...newLedger[targetRowIdx], isPastRecord: false };
+                
+                cols.forEach((colData, j) => {
+                    const fieldToUpdate = EXCEL_FIELDS[targetColIndex + j];
+                    if (fieldToUpdate && fieldToUpdate !== 'incoming_dup') {
+                        const isNumeric = ['contract', 'base_incoming', 'incoming', 'not_incoming', 'prev_remain', 'planted', 'final_remain'].includes(fieldToUpdate);
+                        rowToUpdate[fieldToUpdate] = isNumeric ? colData.replace(/,/g, '').trim() : colData.trim();
+                    }
+                });
+
+                const cont = parseNumber(rowToUpdate.contract);
+                const bInc = parseNumber(rowToUpdate.base_incoming);
+                const inc = parseNumber(rowToUpdate.incoming);
+                const pRem = parseNumber(rowToUpdate.prev_remain);
+                const pl = parseNumber(rowToUpdate.planted);
+                
+                rowToUpdate.not_incoming = (rowToUpdate.contract || rowToUpdate.base_incoming || rowToUpdate.incoming) ? (cont - bInc - inc).toString() : '';
+                rowToUpdate.final_remain = (rowToUpdate.prev_remain || rowToUpdate.incoming || rowToUpdate.planted) ? (pRem + inc - pl).toString() : '';
+
+                newLedger[targetRowIdx] = rowToUpdate;
+            });
+
+            return { ...prev, manual_ledger: newLedger };
+        });
+        toast.success('엑셀 데이터를 성공적으로 붙여넣었습니다.');
+    };
+
+    const defaultWidths = readOnly 
+        ? ['13%', '10%', '8%', '9%', '9%', '9%', '10%', '9%', '9%', '11%']
+        : ['12%', '10%', '8%', '9%', '9%', '9%', '10%', '9%', '9%', '11%', '3%'];
+
     return (
         <div className="flex flex-col flex-1 h-full w-full bg-white">
-            <div className="bg-yellow-50 min-h-[32px] text-center border-b border-slate-400 text-[10px] tracking-widest uppercase font-black flex justify-between items-center px-3 text-yellow-800 shrink-0 sticky top-0 z-10">
+            <div className="bg-yellow-50 min-h-[32px] text-center border-b border-slate-400 text-[10px] tracking-widest uppercase font-black flex justify-between items-center px-3 text-yellow-800 shrink-0 sticky top-0 z-30">
                 <span>식재 및 반입 수기 장부 (요약)</span>
                 {!readOnly && (
                     <button 
@@ -64,130 +146,139 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                     >+ 행 추가</button>
                 )}
             </div>
-            <div className="flex-1 w-full p-1 pb-4 overflow-x-auto overflow-y-hidden">
+            <div className="flex-1 w-full p-1 pb-4 overflow-x-auto overflow-y-auto max-h-[500px] print:max-h-none print:overflow-visible custom-scrollbar">
                 <table className="w-full text-[9px] border-collapse font-sans" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
                     <colgroup>
-                        <col style={{ width: readOnly ? '13%' : '12%' }} /> {/* 수종명 */}
-                        <col style={{ width: '10%' }} />  {/* 규격 */}
-                        <col style={{ width: '8%' }} />   {/* 계약수량 */}
-                        <col style={{ width: '9%' }} />   {/* 기반입 */}
-                        <col style={{ width: '9%' }} />   {/* 금일반입 */}
-                        <col style={{ width: '9%' }} />   {/* 미반입 */}
-                        <col style={{ width: '10%' }} />  {/* 전일미식재 */}
-                        <col style={{ width: '9%' }} />   {/* 금일반입(표출) */}
-                        <col style={{ width: '9%' }} />   {/* 금일식재 */}
-                        <col style={{ width: '11%' }} />  {/* 잔량(미식재) */}
-                        {!readOnly && <col style={{ width: '3%' }} />} {/* 삭제 */}
+                        {defaultWidths.map((w, i) => (
+                            <col key={i} style={{ width: colWidths[i] ? `${colWidths[i]}px` : w }} />
+                        ))}
                     </colgroup>
-                    <thead className="bg-slate-50 text-slate-600">
+                    <thead className="text-slate-600 sticky top-0 z-20 shadow-sm shadow-slate-200">
                         <tr>
-                            <th className="p-1 border border-slate-300 border-t-0 border-l-0 align-middle">수종명</th>
-                            <th className="p-1 border border-slate-300 border-t-0 align-middle">규격</th>
-                            <th className="p-1 border border-slate-300 border-t-0 align-middle">계약수량</th>
-                            <th className="p-1 border border-slate-300 border-t-0 align-middle bg-yellow-100/50">기반입</th>
-                            <th className="p-1 border border-slate-300 border-t-0 align-middle bg-yellow-100/50">금일반입</th>
-                            <th className="p-1 border border-slate-300 border-t-0 align-middle text-red-600">미반입</th>
-                            <th className="p-1 border border-slate-300 border-t-0 align-middle">전일미식재</th>
-                            <th className="p-1 border border-slate-300 border-t-0 align-middle bg-blue-50 text-blue-700">금일반입</th>
-                            <th className="p-1 border border-slate-300 border-t-0 align-middle">금일식재</th>
-                            <th className="p-1 border border-slate-300 border-t-0 border-r-0 align-middle text-red-600">잔량(미식재)</th>
-                            {!readOnly && <th className="p-1 border-b border-slate-300"></th>}
+                            <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 border-l-0 align-middle relative">
+                                수종명
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(0, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle relative">
+                                규격
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(1, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle relative">
+                                계약수량
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(2, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            <th className="bg-yellow-100 p-1 border border-slate-300 border-t-0 align-middle relative">
+                                기반입
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(3, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            <th className="bg-yellow-100 p-1 border border-slate-300 border-t-0 align-middle relative">
+                                금일반입
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(4, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle text-red-600 relative">
+                                미반입
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(5, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle relative">
+                                전일미식재
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(6, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            <th className="bg-blue-50 p-1 border border-slate-300 border-t-0 align-middle text-blue-700 relative">
+                                금일반입
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(7, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle relative">
+                                금일식재
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(8, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 border-r-0 align-middle text-red-600 relative">
+                                잔량(미식재)
+                                {!readOnly && <div onMouseDown={(e) => handleColResize(9, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
+                            </th>
+                            {!readOnly && <th className="bg-slate-50 p-1 border-b border-slate-300"></th>}
                         </tr>
                     </thead>
-                    <tbody>
-                        {displayRows.map((item) => {
-                            const renderInput = (field, isHighlight = false, isRed = false, isBlue = false, forceReadOnly = false) => {
-                                const isCalculatedField = field === 'not_incoming' || field === 'final_remain' || forceReadOnly;
+                   <tbody>
+                                {displayRows.map((item, rowIndex) => {
+                                    const renderInput = (field, isHighlight = false, isRed = false, isBlue = false, forceReadOnly = false) => {
+                                        const isCalculatedField = field === 'not_incoming' || field === 'final_remain' || forceReadOnly;
 
-                                return (
-                                    <textarea
-                                        rows={1}
-                                        className={`w-full p-1 text-center font-black outline-none resize-none overflow-hidden whitespace-pre-wrap leading-tight 
-                                        ${isHighlight ? 'bg-yellow-100 focus:bg-yellow-100' : isBlue ? 'bg-blue-50 focus:bg-blue-50' : 'bg-transparent focus:bg-slate-50'} 
-                                        ${isRed ? 'text-red-600' : isBlue ? 'text-blue-700' : 'text-slate-800'}
-                                        ${readOnly || isCalculatedField ? 'cursor-default' : ''}`}
-                                        value={item[field] || ''}
-                                        placeholder={readOnly ? "-" : ""}
-                                        readOnly={readOnly || isCalculatedField}
-                                        onChange={(e) => {
-                                            if (readOnly || isCalculatedField) return;
-                                            const val = e.target.value;
-                                            setFormData(prev => {
-                                                const newList = [...(prev.manual_ledger || [])];
-                                                const targetIdx = newList.findIndex(li => li.id === item.id);
-                                                if (targetIdx > -1) {
-                                                    const row = { ...newList[targetIdx], [field]: val };
-                                                    
-                                                    // 🧮 엑셀 수식 실시간 연동
-                                                    if (['contract', 'base_incoming', 'incoming', 'prev_remain', 'planted'].includes(field)) {
-                                                        const cont = parseNumber(row.contract);
-                                                        const bInc = parseNumber(row.base_incoming);
-                                                        const inc = parseNumber(row.incoming);
-                                                        const pRem = parseNumber(row.prev_remain);
-                                                        const pl = parseNumber(row.planted);
-                                                        
-                                                        // 미반입 = 계약수량 - 기반입 - 금일반입
-                                                        if (row.contract || row.base_incoming || row.incoming) {
-                                                            row.not_incoming = (cont - bInc - inc).toString();
-                                                        } else {
-                                                            row.not_incoming = '';
+                                        return (
+                                            <input
+                                                type="text"
+                                                className={`w-full p-1 text-center font-black outline-none leading-tight 
+                                                ${isHighlight ? 'bg-yellow-100 focus:bg-yellow-100' : isBlue ? 'bg-blue-50 focus:bg-blue-50' : 'bg-transparent focus:bg-slate-50'} 
+                                                ${isRed ? 'text-red-600' : isBlue ? 'text-blue-700' : 'text-slate-800'}
+                                                ${readOnly || isCalculatedField ? 'cursor-default' : ''}`}
+                                                value={item[field] || ''}
+                                                placeholder={readOnly ? "-" : ""}
+                                                readOnly={readOnly || isCalculatedField}
+                                                onPaste={(e) => handlePaste(e, rowIndex, field)}
+                                                onChange={(e) => {
+                                                    if (readOnly || isCalculatedField) return;
+                                                    const val = e.target.value;
+                                                    setFormData(prev => {
+                                                        const newList = [...(prev.manual_ledger || [])];
+                                                        const targetIdx = newList.findIndex(li => li.id === item.id);
+                                                        if (targetIdx > -1) {
+                                                            const row = { ...newList[targetIdx], [field]: val };
+                                                            
+                                                            if (['contract', 'base_incoming', 'incoming', 'prev_remain', 'planted'].includes(field)) {
+                                                                const cont = parseNumber(row.contract);
+                                                                const bInc = parseNumber(row.base_incoming);
+                                                                const inc = parseNumber(row.incoming);
+                                                                const pRem = parseNumber(row.prev_remain);
+                                                                const pl = parseNumber(row.planted);
+                                                                
+                                                                row.not_incoming = (row.contract || row.base_incoming || row.incoming) ? (cont - bInc - inc).toString() : '';
+                                                                row.final_remain = (row.prev_remain || row.incoming || row.planted) ? (pRem + inc - pl).toString() : '';
+                                                            }
+                                                            newList[targetIdx] = row;
                                                         }
-                                                        
-                                                        // 잔량 = 전일미식재 + 금일반입 - 금일식재
-                                                        if (row.prev_remain || row.incoming || row.planted) {
-                                                            row.final_remain = (pRem + inc - pl).toString();
-                                                        } else {
-                                                            row.final_remain = '';
-                                                        }
-                                                    }
-                                                    newList[targetIdx] = row;
-                                                }
-                                                return { ...prev, manual_ledger: newList };
-                                            });
-                                        }}
-                                        onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
-                                    />
-                                );
-                            };
+                                                        return { ...prev, manual_ledger: newList };
+                                                    });
+                                                }}
+                                            />
+                                        );
+                                    };
 
-                            return (
-                                <tr key={item.id} className="border-b border-slate-200 hover:bg-slate-50 group">
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('item')}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('spec')}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('contract')}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain')}</td>
-                                    {/* 🚀 금일반입 중복 연동 출력 칸 */}
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted')}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true)}</td>
-                                    {!readOnly && (
-                                        <td className="text-center align-middle opacity-0 group-hover:opacity-100 border-r border-slate-200">
-                                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, manual_ledger: prev.manual_ledger.filter(li => li.id !== item.id) }))} className="text-red-400 hover:text-red-600 font-bold px-1 w-full h-full min-h-[24px]">×</button>
+                                    return (
+                                        <tr key={item.id} className="border-b border-slate-200 hover:bg-slate-50 group">
+                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('item')}</td>
+                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('spec')}</td>
+                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('contract')}</td>
+                                            <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true)}</td>
+                                            <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true)}</td>
+                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true)}</td>
+                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain')}</td>
+                                            <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, true)}</td>
+                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted')}</td>
+                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true)}</td>
+                                            {!readOnly && (
+                                                <td className="text-center align-middle opacity-0 group-hover:opacity-100 border-r border-slate-200">
+                                                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, manual_ledger: prev.manual_ledger.filter(li => li.id !== item.id) }))} className="text-red-400 hover:text-red-600 font-bold px-1 w-full h-full min-h-[24px]">×</button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    );
+                                })}
+
+                                {pastRows.length > 0 && (
+                                    <tr className="h-8">
+                                        <td colSpan={colSpanTotal} className="bg-slate-50/50 p-0 text-center border-b border-slate-200 align-middle">
+                                            {isExpanded ? (
+                                                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(false); }} className="text-[10px] text-red-500 font-black hover:bg-red-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
+                                                    <ListMinus size={13} /> 전일 내역 접어놓기
+                                                </button>
+                                            ) : (
+                                                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(true); }} className="text-[10px] text-blue-600 font-black hover:bg-blue-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
+                                                    <ListFilter size={13} /> 전일 내역 {pastRows.length}건 펼쳐보기 (입력 시 저장 후 위로 정렬됨)
+                                                </button>
+                                            )}
                                         </td>
-                                    )}
-                                </tr>
-                            );
-                        })}
-
-                        {pastRows.length > 0 && (
-                            <tr className="h-8">
-                                <td colSpan={colSpanTotal} className="bg-slate-50/50 p-0 text-center border-b border-slate-200 align-middle">
-                                    {isExpanded ? (
-                                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(false); }} className="text-[10px] text-red-500 font-black hover:bg-red-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
-                                            <ListMinus size={13} /> 전일 내역 접어놓기
-                                        </button>
-                                    ) : (
-                                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(true); }} className="text-[10px] text-blue-600 font-black hover:bg-blue-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
-                                            <ListFilter size={13} /> 전일 내역 {pastRows.length}건 펼쳐보기 (입력 시 저장 후 위로 정렬됨)
-                                        </button>
-                                    )}
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
+                                    </tr>
+                                )}
+                            </tbody>
                     
                     {(displayRows.length > 0 || pastRows.length > 0) && (
                         <tfoot className="bg-slate-100 font-black text-slate-800">
@@ -286,17 +377,15 @@ export default function DailyWorkPage() {
         return `${name}_${spec}_${vendor}_${price}`;
     };
 
-    // 🚀 다른 장부들과 100% 동일하게 모든 과거 데이터를 날짜순 스캔하여 완벽하게 동기화!
     const syncWithAllPastData = useCallback(async (currentData, isNewReport = false) => {
         if (!currentData?.report_date) return currentData;
         const { data: pastReports } = await supabase.from('daily_site_reports').select('notes, report_date').eq('site_id', siteId).lt('report_date', currentData.report_date);
         if (!pastReports) return currentData;
 
-        // 과거 데이터를 정확한 시간순으로 정렬
         pastReports.sort((a, b) => new Date(a.report_date) - new Date(b.report_date));
 
         const historicalDataMap = {}; 
-        const historicalLedgerMap = {}; // 수기장부 전용 누적 맵
+        const historicalLedgerMap = {}; 
         const historicalProgress = { plant: 0, facility: 0 }; 
         const historicalSettlement = {};
 
@@ -305,31 +394,29 @@ export default function DailyWorkPage() {
             historicalProgress.plant += parseNumber(notes.progress_plant);
             historicalProgress.facility += parseNumber(notes.progress_facility);
             
-            // 🚀 수기 장부: 과거 데이터 누적 훑기 엔진 (품명_규격 조합으로 고유키 생성)
             if (notes.manual_ledger && Array.isArray(notes.manual_ledger)) {
                 notes.manual_ledger.forEach(row => {
                     const uKey = (row.item || '').trim() + '_' + (row.spec || '').trim();
                     if (!uKey || uKey === '_') return;
 
                     if (!historicalLedgerMap[uKey]) {
-                        historicalLedgerMap[uKey] = { 
-                            base_inc: 0, 
-                            remain: 0,
-                            contract: 0
+                        historicalLedgerMap[uKey] = {
+                            item: row.item,
+                            spec: row.spec,
+                            contract: parseNumber(row.contract),
+                            initial_base_inc: parseNumber(row.base_incoming),
+                            initial_prev_rem: parseNumber(row.prev_remain || row.total_remain),
+                            accum_inc: 0,
+                            accum_pl: 0
                         };
+                    } else {
+                        if (parseNumber(row.contract) > 0) {
+                            historicalLedgerMap[uKey].contract = parseNumber(row.contract);
+                        }
                     }
-                    
-                    // 각 날짜별 계산을 그대로 모방하여 누적함
-                    let thisBaseInc = parseNumber(row.base_incoming);
-                    let thisFinalRem = parseNumber(row.final_remain);
-                    let thisInc = parseNumber(row.incoming);
-                    
-                    // 다음 날을 위한 기반입(누계) = 해당 일자의 기반입 + 금일반입
-                    historicalLedgerMap[uKey].base_inc = thisBaseInc + thisInc;
-                    // 다음 날을 위한 전일잔량 = 해당 일자의 잔량
-                    historicalLedgerMap[uKey].remain = thisFinalRem;
-                    
-                    if (row.contract) historicalLedgerMap[uKey].contract = parseNumber(row.contract);
+
+                    historicalLedgerMap[uKey].accum_inc += parseNumber(row.incoming);
+                    historicalLedgerMap[uKey].accum_pl += parseNumber(row.planted);
                 });
             }
 
@@ -360,37 +447,44 @@ export default function DailyWorkPage() {
         updatedData.progress_plant_prev = historicalProgress.plant.toFixed(4);
         updatedData.progress_facility_prev = historicalProgress.facility.toFixed(4);
         
-        // 🚀 스캔된 누적 데이터를 현재 장부에 결합 (구버전 호환성을 위해 total_remain도 스캔)
-        updatedData.manual_ledger = (currentData.manual_ledger || []).map(row => {
+       const processedLedger = [];
+
+        (currentData.manual_ledger || []).forEach(row => {
             const uKey = (row.item || '').trim() + '_' + (row.spec || '').trim();
             const pastInfo = uKey && uKey !== '_' ? historicalLedgerMap[uKey] : null;
+            
             const hasActivity = row.incoming?.toString().trim() || row.planted?.toString().trim();
+            const hasData = row.item?.trim() || row.contract?.toString().trim() || row.base_incoming?.toString().trim();
+
+            if (!hasActivity && !hasData && !pastInfo && !isNewReport && uKey === '_') {
+                return;
+            }
 
             let bInc = parseNumber(row.base_incoming);
-            let pRem = parseNumber(row.prev_remain || row.total_remain); // 호환성
+            let pRem = parseNumber(row.prev_remain || row.total_remain); 
             let cont = parseNumber(row.contract);
 
             if (pastInfo) {
-                bInc = pastInfo.base_inc;
-                pRem = pastInfo.remain;
-                if (!row.contract && pastInfo.contract) cont = pastInfo.contract;
+                bInc = pastInfo.initial_base_inc + pastInfo.accum_inc;
+                pRem = pastInfo.initial_prev_rem + pastInfo.accum_inc - pastInfo.accum_pl;
+                if (pastInfo.contract > 0) cont = pastInfo.contract;
                 delete historicalLedgerMap[uKey];
-            } else if (isNewReport) {
-                bInc = 0;
-                pRem = 0;
+            } else if (!isNewReport && !hasActivity) {
+                bInc = parseNumber(row.base_incoming);
+                pRem = parseNumber(row.prev_remain || row.total_remain);
             }
 
             const inc = parseNumber(row.incoming);
             const pl = parseNumber(row.planted);
 
-            if (!pastInfo && row.base_incoming) {
+            if (!pastInfo && row.base_incoming && isNewReport) {
                  bInc = parseNumber(row.base_incoming); 
             }
 
             const notInc = cont - bInc - inc;
             const finalRem = pRem + inc - pl;
 
-            return {
+            processedLedger.push({
                 ...row,
                 contract: cont > 0 ? cont.toString() : '',
                 base_incoming: (bInc > 0 || row.base_incoming) ? bInc.toString() : '',
@@ -398,21 +492,21 @@ export default function DailyWorkPage() {
                 not_incoming: (cont > 0 || bInc > 0 || inc > 0) ? notInc.toString() : '',
                 final_remain: (pRem > 0 || inc > 0 || pl > 0) ? finalRem.toString() : '',
                 isPastRecord: !hasActivity
-            };
+            });
         });
 
-        // 🚀 누락된 과거 데이터를 아래쪽에 자동으로 붙여줌 (다른 테이블들과 동일한 동작)
+        updatedData.manual_ledger = processedLedger;
+
         const missingLedgerRows = Object.keys(historicalLedgerMap).map(uKey => {
             const pastInfo = historicalLedgerMap[uKey];
-            const [item, spec] = uKey.split('_');
-            const bInc = pastInfo.base_inc;
-            const pRem = pastInfo.remain;
+            const bInc = pastInfo.initial_base_inc + pastInfo.accum_inc;
+            const pRem = pastInfo.initial_prev_rem + pastInfo.accum_inc - pastInfo.accum_pl;
             const cont = pastInfo.contract;
 
             return {
                 id: uuidv4(),
-                item: item || '',
-                spec: spec || '',
+                item: pastInfo.item || '',
+                spec: pastInfo.spec || '',
                 contract: cont > 0 ? cont.toString() : '',
                 base_incoming: bInc > 0 ? bInc.toString() : '',
                 prev_remain: pRem > 0 ? pRem.toString() : '',
@@ -426,7 +520,6 @@ export default function DailyWorkPage() {
 
         updatedData.manual_ledger = [...updatedData.manual_ledger, ...missingLedgerRows];
 
-        // 노무비, 자재비 등 기존 동기화
         ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs'].forEach(key => {
             const currentRows = updatedData[key] || [];
             const pastItems = { ...historicalDataMap[key] };
@@ -494,6 +587,10 @@ export default function DailyWorkPage() {
                 fullData.today_work = notes.today_work || '';
                 fullData.prev_work = notes.prev_work || '';
 
+                if (!fullData.manual_ledger || fullData.manual_ledger.length === 0) {
+                    fullData.manual_ledger = [{ id: uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false }];
+                }
+
                 setFormData(fullData); setOriginalData(fullData);
                 if (notes.savedColumnWidths) setColumnWidths(notes.savedColumnWidths);
                 if (notes.savedVisibleSections) setVisibleSections(notes.savedVisibleSections);
@@ -540,10 +637,9 @@ export default function DailyWorkPage() {
             const cleanDataToSave = JSON.parse(JSON.stringify(formData));
 
             if (cleanDataToSave.manual_ledger) {
-                cleanDataToSave.manual_ledger = cleanDataToSave.manual_ledger.map(row => {
-                    const { isPastRecord, ...rest } = row;
-                    return rest;
-                });
+                cleanDataToSave.manual_ledger = cleanDataToSave.manual_ledger.filter(row => {
+                    return row.item?.trim() || row.contract || row.incoming || row.planted;
+                }).map(({ isPastRecord, ...rest }) => rest);
             }
 
             ['labor_costs', 'material_costs', 'equipment_costs', 'tree_costs', 'transport_costs', 'subcontract_costs', 'etc_costs'].forEach(key => {
@@ -551,10 +647,7 @@ export default function DailyWorkPage() {
                     cleanDataToSave[key] = cleanDataToSave[key].filter(row => {
                         if (key === 'etc_costs') return parseNumber(row.total) > 0 || row.content;
                         return parseNumber(row.count) > 0 || parseNumber(row.total) > 0;
-                    }).map(row => {
-                        const { isPastRecord, ...rest } = row;
-                        return rest;
-                    });
+                    }).map(({ isPastRecord, ...rest }) => rest);
                 }
             });
 
@@ -605,7 +698,7 @@ export default function DailyWorkPage() {
                 setTodayPhotos([]);
             }
 
-           const baseDataForSync = {
+            const baseDataForSync = {
                 ...formData,
                 ...importedData,
                 report_date: formData.report_date,
@@ -613,7 +706,6 @@ export default function DailyWorkPage() {
                 prev_work: importedData.today_work || '', 
                 today_work: '', 
                 manual_ledger: (importedData.manual_ledger || []).map(row => {
-                    // 🚀 불러오기 시: 전일 '기반입' + 전일 '금일반입'을 합산하여 오늘의 '기반입'으로 설정
                     const prevBaseInc = parseNumber(row.base_incoming);
                     const prevInc = parseNumber(row.incoming);
                     const newBaseInc = prevBaseInc + prevInc; 
@@ -625,7 +717,6 @@ export default function DailyWorkPage() {
                         contract: row.contract || '',
                         base_incoming: newBaseInc > 0 ? newBaseInc.toString() : '',
                         incoming: '', 
-                        // 🚀 합산된 새 기반입을 바탕으로 미반입 자동 계산 (계약수량 - 새 기반입)
                         not_incoming: (cont > 0 || newBaseInc > 0) ? (cont - newBaseInc).toString() : '',
                         prev_remain: row.final_remain || '0', 
                         planted: '', 
@@ -693,7 +784,7 @@ export default function DailyWorkPage() {
         return (
             <div key={key} className="break-inside-avoid w-full bg-white font-black border-b border-slate-400 last:border-b-0">
                 <table className="min-w-full text-[9px] border-collapse" style={{ tableLayout: 'fixed' }}>
-                    <thead className="font-sans">
+                    <thead className="font-sans sticky top-0 z-20 shadow-sm shadow-slate-200 bg-white">
                         <tr className="bg-yellow-50 border-b border-slate-400 h-8 cursor-pointer hover:bg-yellow-100 transition-colors" onClick={() => toggleSection(key)}>
                             <th colSpan={colSpanTotal} className="p-0 text-left align-middle relative border-r-0">
                                 <div className="flex justify-between items-center w-full h-full px-2">
@@ -722,12 +813,12 @@ export default function DailyWorkPage() {
                         {!isCollapsed && (
                             <tr className="bg-slate-50 border-b border-slate-400 h-8">
                                 {config.labels.map((l, idx) => (
-                                    <th key={l} className={`p-1 uppercase whitespace-nowrap relative align-middle ${idx !== config.labels.length - 1 || !isReadOnly ? 'border-r border-slate-300' : ''}`} style={{ width: widths[idx] ? `${widths[idx]}px` : 'auto' }}>
+                                    <th key={l} className={`p-1 bg-slate-50 uppercase whitespace-nowrap relative align-middle ${idx !== config.labels.length - 1 || !isReadOnly ? 'border-r border-slate-300' : ''}`} style={{ width: widths[idx] ? `${widths[idx]}px` : 'auto' }}>
                                         {l}
                                         {!isReadOnly && <div onMouseDown={(e) => onResizeStart(key, idx, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
                                     </th>
                                 ))}
-                                {!isReadOnly && <th className="w-6 p-0 border-slate-300 align-middle"></th>}
+                                {!isReadOnly && <th className="w-6 p-0 bg-slate-50 border-slate-300 align-middle"></th>}
                             </tr>
                         )}
                     </thead>
@@ -889,7 +980,6 @@ export default function DailyWorkPage() {
                     <div className="w-full bg-white border border-slate-400 shadow-sm font-sans flex flex-col">
                         
                         <div className="grid grid-cols-12 border-b border-slate-400 items-stretch">
-                            {/* 🚀 패딩(p-6 -> px-4 py-2), 텍스트 크기(text-5xl -> text-3xl), 마진(mb-6 -> mb-2) 대폭 축소 */}
                             <div className="col-span-7 flex flex-col justify-between px-4 py-2 border-r border-slate-400">
                                 <h1 className="text-3xl font-black uppercase tracking-[0.5em] text-left mb-2 font-sans">작 업 일 보</h1>
                                 <div className="flex gap-1.5 flex-wrap items-end font-sans">
@@ -915,7 +1005,6 @@ export default function DailyWorkPage() {
                                         <col style={{ width: '18%' }} />
                                     </colgroup>
                                     <tbody>
-                                        {/* 🚀 우측 정보 테이블의 row 높이(h-8, h-10)도 컴팩트하게 조정 */}
                                         <tr className="border-b border-slate-400 h-6">
                                             <th className="bg-slate-50 border-r border-slate-400 font-black text-center">현장명</th>
                                             <td className="px-2 border-r border-slate-400 text-center whitespace-normal break-keep" title={siteData?.name}>
@@ -964,8 +1053,7 @@ export default function DailyWorkPage() {
                             
                             <div className="col-span-3 flex flex-col border-r border-slate-400 bg-white">
                                 
-                                {/* 전일 작업 요약 */}
-                                <div className="flex-1 border-b border-slate-400 flex flex-col bg-white">
+                                <div className="border-b border-slate-400 flex flex-col bg-white">
                                     <div className="flex justify-between items-center px-3 py-2 border-b border-slate-300 bg-slate-50/50">
                                         <h3 className="text-[10px] font-black text-slate-800 flex items-center gap-1 uppercase tracking-widest"><ListMinus size={12}/> 전일 작업 요약</h3>
                                         {!isReadOnly && (
@@ -1026,8 +1114,7 @@ export default function DailyWorkPage() {
                                     </div>
                                 </div>
                                 
-                                {/* 금일 작업 요약 */}
-                                <div className="flex-1 flex flex-col bg-white">
+                                <div className="border-b border-slate-400 flex flex-col bg-white">
                                     <div className="flex justify-between items-center px-3 py-2 border-b border-slate-300 bg-blue-50/20">
                                         <h3 className="text-[10px] font-black text-blue-800 flex items-center gap-1 uppercase tracking-widest"><ListFilter size={12}/> 금일 작업 요약</h3>
                                         {!isReadOnly && (
@@ -1087,6 +1174,7 @@ export default function DailyWorkPage() {
                                         )}
                                     </div>
                                 </div>
+                                <div className="flex-1 bg-white"></div>
 
                             </div>
 
@@ -1094,21 +1182,21 @@ export default function DailyWorkPage() {
                                 <ManualLedgerTable list={formData?.manual_ledger || []} setFormData={setFormData} readOnly={isReadOnly} />
                             </div>
 
-                            <div className="col-span-4 bg-white flex flex-col">
+                            <div className="col-span-4 bg-white flex flex-col justify-start h-full">
                                 <div className="bg-slate-800 text-white h-8 flex items-center justify-center text-[10px] uppercase font-black shrink-0">실시간 정산 내역 합계</div>
-                                <table className="w-full text-[10px] border-collapse flex-1" style={{ tableLayout: 'fixed' }}>
+                                <table className="w-full text-[10px] border-collapse" style={{ tableLayout: 'fixed' }}>
                                     <colgroup>
                                         <col style={{ width: '25%' }} />
                                         <col style={{ width: '25%' }} />
                                         <col style={{ width: '25%' }} />
                                         <col style={{ width: '25%' }} />
                                     </colgroup>
-                                    <thead className="bg-slate-50 border-b border-slate-400 font-bold">
+                                    <thead className="bg-slate-50 border-b border-slate-400 font-bold sticky top-0 z-20 shadow-sm shadow-slate-200">
                                         <tr className="h-6 text-slate-500">
-                                            <th className="border-r border-slate-400 text-center uppercase">항목</th>
-                                            <th className="border-r border-slate-400 text-center uppercase">전일</th>
-                                            <th className="border-r border-slate-400 text-center text-blue-600 font-bold uppercase">금일</th>
-                                            <th className="text-center text-red-600 uppercase font-bold">누계</th>
+                                            <th className="bg-slate-50 border-r border-slate-400 text-center uppercase">항목</th>
+                                            <th className="bg-slate-50 border-r border-slate-400 text-center uppercase">전일</th>
+                                            <th className="bg-slate-50 border-r border-slate-400 text-center text-blue-600 font-bold uppercase">금일</th>
+                                            <th className="bg-slate-50 text-center text-red-600 uppercase font-bold">누계</th>
                                         </tr>
                                     </thead>
                                     <tbody className="font-black">
@@ -1130,7 +1218,7 @@ export default function DailyWorkPage() {
                                 </table>
                             </div>
                         </div>
-
+                        
                         <div className="grid grid-cols-3 items-start border-b border-slate-400">
                             <div className="flex flex-col border-r border-slate-400 h-full">
                                 {renderTable('labor_costs')}
