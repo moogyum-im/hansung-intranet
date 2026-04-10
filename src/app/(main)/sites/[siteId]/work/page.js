@@ -9,7 +9,7 @@ import { Save, ArrowLeft, Camera, Loader2, RefreshCw, ImageIcon, ZoomIn, ZoomOut
 import { toast } from 'react-hot-toast';
 
 const formatNumber = (num) => {
-    if (num === null || num === undefined || num === "" || isNaN(num)) return "-";
+    if (num === null || num === undefined || num === "" || isNaN(num)) return "0";
     const n = Number(num.toString().replace(/,/g, ''));
     if (n === 0) return "0";
     if (n % 1 !== 0) return n.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 4 });
@@ -19,7 +19,7 @@ const formatNumber = (num) => {
 const parseNumber = (str) => {
     if (typeof str === 'number') return str;
     if (!str) return 0;
-    const match = str.toString().replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+    const match = str.toString().replace(/,/g, '').match(/-?\d*\.?\d+/);
     return match ? Number(match[0]) : 0;
 };
 
@@ -39,13 +39,12 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [focusedLedgerField, setFocusedLedgerField] = useState(null);
 
-    const contractSum = list?.reduce((acc, cur) => acc + parseNumber(cur.contract), 0) || 0;
-    const baseIncomingSum = list?.reduce((acc, cur) => acc + parseNumber(cur.base_incoming), 0) || 0;
-    const incomingSum = list?.reduce((acc, cur) => acc + parseNumber(cur.incoming), 0) || 0;
-    const notIncomingSum = list?.reduce((acc, cur) => acc + parseNumber(cur.not_incoming), 0) || 0;
-    const prevRemainSum = list?.reduce((acc, cur) => acc + parseNumber(cur.prev_remain), 0) || 0;
-    const plantedSum = list?.reduce((acc, cur) => acc + parseNumber(cur.planted), 0) || 0;
-    const finalRemainSum = list?.reduce((acc, cur) => acc + parseNumber(cur.final_remain), 0) || 0;
+    useEffect(() => {
+        if (readOnly) {
+            setIsExpanded(false);
+            setSearchQuery('');
+        }
+    }, [readOnly]);
 
     let todayRows = list?.filter(r => !r.isPastRecord) || [];
     if (todayRows.length === 0 && (!list || list.length === 0)) {
@@ -64,6 +63,14 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
             return String(v).toLowerCase().includes(q);
         });
     });
+
+    const contractSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.contract), 0);
+    const baseIncomingSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.base_incoming), 0);
+    const incomingSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.incoming), 0);
+    const notIncomingSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.not_incoming), 0);
+    const prevRemainSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.prev_remain), 0);
+    const plantedSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.planted), 0);
+    const finalRemainSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.final_remain), 0);
 
     const colSpanTotal = readOnly ? 10 : 11;
 
@@ -229,94 +236,94 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                             {!readOnly && <th className="bg-slate-50 p-1 border-b border-slate-300"></th>}
                         </tr>
                     </thead>
-                   <tbody>
-                                {filteredRows.map((item, rowIndex) => {
-                                    const renderInput = (field, isHighlight = false, isRed = false, isBlue = false, forceReadOnly = false) => {
-                                        const isCalculatedField = field === 'not_incoming' || field === 'final_remain' || forceReadOnly;
-                                        const isNumeric = ['contract', 'base_incoming', 'incoming', 'not_incoming', 'prev_remain', 'planted', 'final_remain'].includes(field);
-                                        const fieldId = `ledger-${item.id}-${field}`;
+                    <tbody>
+                        {filteredRows.map((item, rowIndex) => {
+                            const renderInput = (field, isHighlight = false, isRed = false, isBlue = false, forceReadOnly = false) => {
+                                const isCalculatedField = field === 'not_incoming' || field === 'final_remain' || forceReadOnly;
+                                const isNumeric = ['contract', 'base_incoming', 'incoming', 'not_incoming', 'prev_remain', 'planted', 'final_remain'].includes(field);
+                                const fieldId = `ledger-${item.id}-${field}`;
 
-                                        return (
-                                            <input
-                                                type="text"
-                                                className={`w-full p-1 font-black outline-none leading-tight 
-                                                ${isNumeric ? 'text-right pr-2' : 'text-center px-1'}
-                                                ${isHighlight ? 'bg-yellow-100 focus:bg-yellow-100' : isBlue ? 'bg-blue-50 focus:bg-blue-50' : 'bg-transparent focus:bg-slate-50'} 
-                                                ${isRed ? 'text-red-600' : isBlue ? 'text-blue-700' : 'text-slate-800'}
-                                                ${readOnly || isCalculatedField ? 'cursor-default' : ''}`}
-                                                
-                                                value={isNumeric && focusedLedgerField !== fieldId ? formatNumber(item[field]) : (isNumeric && (item[field] === "0" || item[field] === 0) ? "" : item[field] || '')}
-                                                
-                                                placeholder={readOnly ? "-" : ""}
-                                                readOnly={readOnly || isCalculatedField}
-                                                onPaste={(e) => handlePaste(e, item.id, field)}
-                                                onFocus={() => isNumeric && setFocusedLedgerField(fieldId)}
-                                                onBlur={() => setFocusedLedgerField(null)}
-                                                onChange={(e) => {
-                                                    if (readOnly || isCalculatedField) return;
-                                                    const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
-                                                    setFormData(prev => {
-                                                        const newList = [...(prev.manual_ledger || [])];
-                                                        const targetIdx = newList.findIndex(li => li.id === item.id);
-                                                        if (targetIdx > -1) {
-                                                            const row = { ...newList[targetIdx], [field]: val, isModified: true };
-                                                            
-                                                            if (['contract', 'base_incoming', 'incoming', 'prev_remain', 'planted'].includes(field)) {
-                                                                const cont = parseNumber(row.contract);
-                                                                const bInc = parseNumber(row.base_incoming);
-                                                                const inc = parseNumber(row.incoming);
-                                                                const pRem = parseNumber(row.prev_remain);
-                                                                const pl = parseNumber(row.planted);
-                                                                
-                                                                row.not_incoming = (row.contract || row.base_incoming || row.incoming) ? (cont - bInc - inc).toString() : '';
-                                                                row.final_remain = (row.prev_remain || row.incoming || row.planted) ? (pRem + inc - pl).toString() : '';
-                                                            }
-                                                            newList[targetIdx] = row;
-                                                        }
-                                                        return { ...prev, manual_ledger: newList };
-                                                    });
-                                                }}
-                                            />
-                                        );
-                                    };
+                                return (
+                                    <input
+                                        type="text"
+                                        className={`w-full p-1 font-black outline-none leading-tight 
+                                        ${isNumeric ? 'text-right pr-2' : 'text-center px-1'}
+                                        ${isHighlight ? 'bg-yellow-100 focus:bg-yellow-100' : isBlue ? 'bg-blue-50 focus:bg-blue-50' : 'bg-transparent focus:bg-slate-50'} 
+                                        ${isRed ? 'text-red-600' : isBlue ? 'text-blue-700' : 'text-slate-800'}
+                                        ${readOnly || isCalculatedField ? 'cursor-default' : ''}`}
+                                        
+                                        value={isNumeric && focusedLedgerField !== fieldId ? formatNumber(item[field]) : (item[field] === 0 ? "" : item[field] || '')}
+                                        
+                                        placeholder={readOnly ? "0" : ""}
+                                        readOnly={readOnly || isCalculatedField}
+                                        onPaste={(e) => handlePaste(e, item.id, field)}
+                                        onFocus={() => isNumeric && setFocusedLedgerField(fieldId)}
+                                        onBlur={() => setFocusedLedgerField(null)}
+                                        onChange={(e) => {
+                                            if (readOnly || isCalculatedField) return;
+                                            const val = isNumeric ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value;
+                                            setFormData(prev => {
+                                                const newList = [...(prev.manual_ledger || [])];
+                                                const targetIdx = newList.findIndex(li => li.id === item.id);
+                                                if (targetIdx > -1) {
+                                                    const row = { ...newList[targetIdx], [field]: val, isModified: true };
+                                                    
+                                                    if (['contract', 'base_incoming', 'incoming', 'prev_remain', 'planted'].includes(field)) {
+                                                        const cont = parseNumber(row.contract);
+                                                        const bInc = parseNumber(row.base_incoming);
+                                                        const inc = parseNumber(row.incoming);
+                                                        const pRem = parseNumber(row.prev_remain);
+                                                        const pl = parseNumber(row.planted);
+                                                        
+                                                        row.not_incoming = (row.contract || row.base_incoming || row.incoming) ? (cont - bInc - inc).toString() : '';
+                                                        row.final_remain = (row.prev_remain || row.incoming || row.planted) ? (pRem + inc - pl).toString() : '';
+                                                    }
+                                                    newList[targetIdx] = row;
+                                                }
+                                                return { ...prev, manual_ledger: newList };
+                                            });
+                                        }}
+                                    />
+                                );
+                            };
 
-                                    return (
-                                        <tr key={item.id} className="border-b border-slate-200 hover:bg-slate-50 group">
-                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('item')}</td>
-                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('spec')}</td>
-                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('contract')}</td>
-                                            <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true)}</td>
-                                            <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true)}</td>
-                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true)}</td>
-                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain')}</td>
-                                            <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, true)}</td>
-                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted')}</td>
-                                            <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true)}</td>
-                                            {!readOnly && (
-                                                <td className="text-center align-middle opacity-0 group-hover:opacity-100 border-r border-slate-200">
-                                                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, manual_ledger: prev.manual_ledger.filter(li => li.id !== item.id) }))} className="text-red-400 hover:text-red-600 font-bold px-1 w-full h-full min-h-[24px]">×</button>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    );
-                                })}
-
-                                {pastRows.length > 0 && !searchQuery.trim() && (
-                                    <tr className="h-8">
-                                        <td colSpan={colSpanTotal} className="bg-slate-50/50 p-0 text-center border-b border-slate-200 align-middle">
-                                            {isExpanded ? (
-                                                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(false); }} className="text-[10px] text-red-500 font-black hover:bg-red-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
-                                                    <ListMinus size={13} /> 전일 내역 접어놓기
-                                                </button>
-                                            ) : (
-                                                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(true); }} className="text-[10px] text-blue-600 font-black hover:bg-blue-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
-                                                    <ListFilter size={13} /> 전일 내역 {pastRows.length}건 펼쳐보기 (입력 시 저장 후 위로 정렬됨)
-                                                </button>
-                                            )}
+                            return (
+                                <tr key={item.id} className="border-b border-slate-200 hover:bg-slate-50 group">
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('item', false, false, false, false, false)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('spec', false, false, false, false, false)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('contract', false, false, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true, false, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true, false, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain', false, false, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, true, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted', false, false, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true, false, false, true)}</td>
+                                    {!readOnly && (
+                                        <td className="text-center align-middle opacity-0 group-hover:opacity-100 border-r border-slate-200">
+                                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, manual_ledger: prev.manual_ledger.filter(li => li.id !== item.id) }))} className="text-red-400 hover:text-red-600 font-bold px-1 w-full h-full min-h-[24px]">×</button>
                                         </td>
-                                    </tr>
-                                )}
-                            </tbody>
+                                    )}
+                                </tr>
+                            );
+                        })}
+
+                        {pastRows.length > 0 && !searchQuery.trim() && (
+                            <tr className="h-8">
+                                <td colSpan={colSpanTotal} className="bg-slate-50/50 p-0 text-center border-b border-slate-200 align-middle">
+                                    {isExpanded ? (
+                                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(false); }} className="text-[10px] text-red-500 font-black hover:bg-red-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
+                                            <ListMinus size={13} /> 전일 내역 접어놓기
+                                        </button>
+                                    ) : (
+                                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(true); }} className="text-[10px] text-blue-600 font-black hover:bg-blue-50 flex items-center justify-center gap-1 w-full h-full transition-all py-2">
+                                            <ListFilter size={13} /> 전일 내역 {pastRows.length}건 펼쳐보기 (입력 시 저장 후 위로 정렬됨)
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
                     
                     {(displayRows.length > 0 || pastRows.length > 0) && (
                         <tfoot className="bg-slate-100 font-black text-slate-800">
@@ -374,6 +381,13 @@ export default function DailyWorkPage() {
     const [todayPhotos, setTodayPhotos] = useState([]);
     const [tomorrowPhotos, setTomorrowPhotos] = useState([]);
     const maxPhotoRows = useMemo(() => Math.max(todayPhotos.length, tomorrowPhotos.length, 1), [todayPhotos, tomorrowPhotos]);
+
+    useEffect(() => {
+        if (isReadOnly) {
+            setExpandedSections({});
+            setSearchQueries({});
+        }
+    }, [isReadOnly]);
 
     useEffect(() => {
         const sidebar = document.querySelector('aside');
@@ -486,7 +500,7 @@ export default function DailyWorkPage() {
         updatedData.progress_plant_prev = historicalProgress.plant.toFixed(4);
         updatedData.progress_facility_prev = historicalProgress.facility.toFixed(4);
         
-       const processedLedger = [];
+        const processedLedger = [];
 
         (currentData.manual_ledger || []).forEach(row => {
             const uKey = (row.item || '').trim() + '_' + (row.spec || '').trim();
@@ -718,6 +732,10 @@ export default function DailyWorkPage() {
             const syncedData = await syncWithAllPastData(cleanDataToSave, false);
             setOriginalData(JSON.parse(JSON.stringify(syncedData)));
             setFormData(JSON.parse(JSON.stringify(syncedData)));
+            
+            setExpandedSections({});
+            setSearchQueries({});
+            
             toast.success("저장되었습니다."); 
             
             if (!targetId) {
@@ -915,7 +933,7 @@ export default function DailyWorkPage() {
                                         return (
                                             <td key={f} className={`p-0 align-middle font-sans ${idx !== config.fields.length - 1 || !isReadOnly ? 'border-r border-slate-200' : ''}`} style={{ width: widths[idx] ? `${widths[idx]}px` : 'auto' }}>
                                                 <input className={`block w-full h-full p-1 outline-none bg-transparent font-sans font-black rounded-none text-[8.5px] z-10 ${isNumeric ? 'text-right pr-2' : 'text-center px-1'}`}
-                                                    value={isNumeric && focusedField !== fieldId ? formatNumber(row[f]) : (isNumeric && (row[f] === "0" || row[f] === 0) ? "" : row[f])}
+                                                    value={isNumeric && focusedField !== fieldId ? formatNumber(row[f]) : (row[f] === 0 ? "" : row[f] || '')}
                                                     readOnly={isReadOnly}
                                                     onFocus={() => isNumeric && setFocusedField(fieldId)}
                                                     onBlur={() => setFocusedField(null)}
@@ -960,7 +978,7 @@ export default function DailyWorkPage() {
                                 <td className="text-center p-0 align-middle font-sans whitespace-nowrap border-r border-slate-200">합계</td>
                                 {config.fields.slice(1).map((f, idx) => (
                                     <td key={idx} className={`text-right pr-2 align-middle font-sans text-[8.5px] ${idx !== config.fields.slice(1).length - 1 || !isReadOnly ? 'border-r border-slate-200' : ''}`} style={{ width: widths[idx+1] ? `${widths[idx+1]}px` : 'auto' }}>
-                                        {config.sums.includes(f) ? formatNumber(allRows.reduce((acc, cur) => acc + parseNumber(cur[f]), 0)) : ''}
+                                        {config.sums.includes(f) ? formatNumber(filteredRows.reduce((acc, cur) => acc + parseNumber(cur[f]), 0)) : ''}
                                     </td>
                                 ))}
                                 {!isReadOnly && <td></td>}
