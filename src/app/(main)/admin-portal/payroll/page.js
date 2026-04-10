@@ -8,7 +8,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   Users, Search, Bell, ChevronDown, Wallet, ShieldAlert, 
-  CalendarDays, RefreshCw, Loader2, Eye, FileEdit, SendHorizontal, LayoutDashboard
+  CalendarDays, RefreshCw, Loader2, Eye, FileEdit, SendHorizontal, LayoutDashboard,
+  Save, X
 } from 'lucide-react';
 
 const formatCurrency = (num) => num ? Number(num).toLocaleString('ko-KR') : '';
@@ -22,6 +23,12 @@ export default function PayrollManagementPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [targetMonth, setTargetMonth] = useState('2026-03');
+
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [importSourceMonth, setImportSourceMonth] = useState('');
+    const [sourceRecords, setSourceRecords] = useState([]);
+    const [selectedImportIds, setSelectedImportIds] = useState([]);
+    const [isImporting, setIsImporting] = useState(false);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -51,6 +58,64 @@ export default function PayrollManagementPage() {
         return () => window.removeEventListener('focus', handleFocus);
     }, [fetchData]);
 
+    useEffect(() => {
+        const fetchSourceRecords = async () => {
+            if (!importSourceMonth) {
+                setSourceRecords([]);
+                setSelectedImportIds([]);
+                return;
+            }
+            const { data } = await supabase.from('payroll_records').select('*').eq('payment_month', importSourceMonth);
+            setSourceRecords(data || []);
+            setSelectedImportIds((data || []).map(r => r.employee_id));
+        };
+        fetchSourceRecords();
+    }, [importSourceMonth]);
+
+    const toggleImportSelection = (empId) => {
+        setSelectedImportIds(prev => prev.includes(empId) ? prev.filter(id => id !== empId) : [...prev, empId]);
+    };
+
+    const toggleAllImport = () => {
+        if (selectedImportIds.length === sourceRecords.length) setSelectedImportIds([]);
+        else setSelectedImportIds(sourceRecords.map(r => r.employee_id));
+    };
+
+    const executeImport = async () => {
+        if (selectedImportIds.length === 0) return toast.error('가져올 직원을 선택해주세요.');
+        setIsImporting(true);
+        try {
+            const recordsToImport = sourceRecords.filter(r => selectedImportIds.includes(r.employee_id));
+            const { data: targetRecords } = await supabase.from('payroll_records').select('id, employee_id').eq('payment_month', targetMonth);
+            
+            const payload = recordsToImport.map(record => {
+                const existing = targetRecords?.find(t => t.employee_id === record.employee_id);
+                const { id, created_at, payment_month, is_published, viewed_at, ...rest } = record;
+                
+                return {
+                    ...(existing ? { id: existing.id } : {}),
+                    ...rest,
+                    employee_id: record.employee_id,
+                    payment_month: targetMonth,
+                    is_published: false,
+                    viewed_at: null
+                };
+            });
+
+            const { error } = await supabase.from('payroll_records').upsert(payload);
+            if (error) throw error;
+            
+            toast.success('급여 데이터 불러오기 완료');
+            setIsImportModalOpen(false);
+            setImportSourceMonth('');
+            fetchData();
+        } catch (e) {
+            toast.error('불러오기 중 오류가 발생했습니다.');
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
     const publishOne = async (empId, isPublished) => {
         const confirmMsg = isPublished 
             ? '이미 발송된 명세서입니다. 직원에게 다시 알림을 보내고 재발송하시겠습니까?' 
@@ -59,7 +124,6 @@ export default function PayrollManagementPage() {
         if (!confirm(confirmMsg)) return;
         
         try {
-            // 발송 또는 재발송 시 직원 확인일시(viewed_at)를 초기화
             await supabase.from('payroll_records')
                 .update({ is_published: true, viewed_at: null })
                 .match({ employee_id: empId, payment_month: targetMonth });
@@ -94,6 +158,56 @@ export default function PayrollManagementPage() {
     return (
         <div className="flex flex-col h-screen bg-white font-sans text-slate-800 antialiased relative">
             <Toaster position="top-right" />
+
+            {isImportModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 font-sans">
+                    <div className="bg-white p-6 max-w-md w-full font-black border-4 border-slate-900 shadow-2xl flex flex-col max-h-[80vh]">
+                        <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-3">
+                            <h3 className="text-lg uppercase tracking-tight text-slate-900">전월 급여 불러오기</h3>
+                            <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={20}/></button>
+                        </div>
+                        
+                        <div className="mb-4">
+                            <label className="text-[11px] uppercase text-slate-500 block mb-1">불러올 기준 월 선택</label>
+                            <input type="month" className="w-full p-2.5 border border-slate-300 outline-none focus:border-blue-500 font-bold bg-slate-50" value={importSourceMonth} onChange={e=>setImportSourceMonth(e.target.value)} />
+                        </div>
+
+                        {importSourceMonth && (
+                            <div className="flex-1 overflow-y-auto min-h-[250px] border border-slate-200 mb-6 p-2 custom-scrollbar bg-slate-50/50">
+                                {sourceRecords.length === 0 ? (
+                                    <div className="flex items-center justify-center h-full text-slate-400 text-xs py-10">해당 월에 등록된 급여 데이터가 없습니다.</div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center gap-3 p-2.5 border-b border-slate-200 hover:bg-white cursor-pointer bg-slate-100 mb-1" onClick={toggleAllImport}>
+                                            <input type="checkbox" readOnly checked={selectedImportIds.length === sourceRecords.length} className="w-4 h-4 accent-slate-900" />
+                                            <span className="text-xs font-black">전체 선택 ({selectedImportIds.length}/{sourceRecords.length})</span>
+                                        </div>
+                                        {sourceRecords.map(record => {
+                                            const emp = employees.find(e => e.id === record.employee_id);
+                                            const name = emp ? `${emp.full_name} (${emp.department})` : '알 수 없는 직원';
+                                            return (
+                                                <div key={record.id} className="flex items-center gap-3 p-2 border-b border-slate-100 hover:bg-white cursor-pointer transition-colors" onClick={() => toggleImportSelection(record.employee_id)}>
+                                                    <input type="checkbox" readOnly checked={selectedImportIds.includes(record.employee_id)} className="w-4 h-4 accent-blue-600" />
+                                                    <span className="text-xs font-bold text-slate-700">{name}</span>
+                                                    <span className="text-xs text-blue-600 ml-auto font-mono">{formatCurrency(record.base_pay)}원</span>
+                                                </div>
+                                            )
+                                        })}
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 shrink-0">
+                            <button onClick={()=>setIsImportModalOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-black hover:bg-slate-200 transition-colors text-xs">취소</button>
+                            <button onClick={executeImport} disabled={isImporting || selectedImportIds.length === 0} className="flex-1 py-3 bg-slate-900 text-white font-black flex items-center justify-center gap-2 hover:bg-black disabled:bg-slate-300 disabled:text-slate-500 transition-colors text-xs">
+                                {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                                선택 데이터 가져오기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             <header className="bg-white border-b border-slate-200 shrink-0 z-10 flex flex-col">
               <div className="h-16 px-8 flex items-center justify-between">
@@ -141,7 +255,10 @@ export default function PayrollManagementPage() {
                 <div className="flex items-center gap-4">
                     <span className="font-black text-sm text-slate-800">정산 월 선택</span>
                     <input type="month" value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)} className="border border-slate-200 rounded px-3 py-1 text-xs font-bold outline-none focus:border-blue-500"/>
-                    <button onClick={fetchData} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="새로고침">
+                    <button onClick={() => setIsImportModalOpen(true)} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-black border border-indigo-200 rounded hover:bg-indigo-100 flex items-center gap-1.5 text-[11px] transition-colors shadow-sm ml-2">
+                        <RefreshCw size={12} /> 데이터 불러오기
+                    </button>
+                    <button onClick={fetchData} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors ml-2" title="새로고침">
                         <RefreshCw size={14} />
                     </button>
                 </div>
