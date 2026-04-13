@@ -160,7 +160,7 @@ function ShareModal({ isOpen, onClose, doc, currentUser, allEmployees }) {
 
 // --- 메인 위젯 컴포넌트 ---
 function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, currentUserId, currentUserFullName, allEmployees }) {
-    // 2-Depth State
+    // 🚀 초기 탭 상태를 submitted로 변경
     const [activeMainTab, setActiveMainTab] = useState('submitted');
     const [activeSubTab, setActiveSubTab] = useState('progress');
     const [lastViewed, setLastViewed] = useState({});
@@ -180,7 +180,7 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
 
     const handleMainTabClick = (key) => {
         setActiveMainTab(key);
-        setDocSearchTerm(''); // 탭 이동 시 검색어 초기화
+        setDocSearchTerm(''); 
         if (key === 'received') {
             setActiveSubTab('pending');
             updateLastViewed('pending');
@@ -194,11 +194,10 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
 
     const handleSubTabClick = (key) => {
         setActiveSubTab(key);
-        setDocSearchTerm(''); // 서브 탭 이동 시 검색어 초기화
+        setDocSearchTerm(''); 
         updateLastViewed(key);
     };
 
-    // 🚀 [신규] 전체 문서를 중복 없이 하나로 합친 배열 (통합 검색용)
     const allUniqueDocs = useMemo(() => {
         const map = new Map();
         [...toReview, ...submitted, ...approved, ...rejected, ...referred].forEach(doc => {
@@ -215,9 +214,7 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
     
     const cleanReferred = useMemo(() => referred.filter(doc => doc.creator_name !== currentUserFullName), [referred, currentUserFullName]);
 
-    // 🚀 [수정] 통합 검색 로직 반영
     const filteredData = useMemo(() => {
-        // 검색어가 있을 경우: 탭에 상관없이 전체 문서에서 통합 검색 수행
         if (docSearchTerm.trim() !== '') {
             const lowerTerm = docSearchTerm.toLowerCase();
             return allUniqueDocs.filter(doc => 
@@ -226,7 +223,6 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
             );
         }
 
-        // 검색어가 없을 경우: 기존 탭 기반 필터링 수행
         let currentData = [];
         if (activeMainTab === 'received') {
             if (activeSubTab === 'pending') currentData = toReview;
@@ -264,20 +260,21 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
         return list.some(doc => new Date(doc.created_at) > new Date(lastTime));
     };
 
+    // 🚀 메인 탭 순서 변경 (submitted -> received -> referred)
     const mainTabs = [
-        { 
-            key: 'received', 
-            label: '받은 결재', 
-            count: toReview.length + othersApproved.length + othersRejected.length, 
-            icon: Inbox, 
-            hasUpdate: hasNewUpdate('pending', toReview) || hasNewUpdate('completed', othersApproved) || hasNewUpdate('rejected', othersRejected) 
-        },
         { 
             key: 'submitted', 
             label: '상신한 결재', 
             count: submitted.length + myApproved.length + myRejected.length, 
             icon: FolderOpen,
             hasUpdate: hasNewUpdate('progress', submitted) || hasNewUpdate('completed', myApproved) || hasNewUpdate('rejected', myRejected)
+        },
+        { 
+            key: 'received', 
+            label: '받은 결재', 
+            count: toReview.length + othersApproved.length + othersRejected.length, 
+            icon: Inbox, 
+            hasUpdate: hasNewUpdate('pending', toReview) || hasNewUpdate('completed', othersApproved) || hasNewUpdate('rejected', othersRejected) 
         },
         { 
             key: 'referred', 
@@ -352,7 +349,7 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
                 </div>
             </div>
 
-            {/* 🚀 검색 중일 때: 하위 메뉴 숨김 및 검색 결과 안내 바 노출 */}
+            {/* 검색 중일 때: 하위 메뉴 숨김 및 검색 결과 안내 바 노출 */}
             {docSearchTerm.trim() !== '' ? (
                 <div className="px-4 py-2.5 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
                     <SearchIcon size={14} className="text-blue-500" />

@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
 import { X, Plus, Loader2, Database, CheckCircle, Users, Calendar, Wallet, ImageIcon, CreditCard, UserPlus, Info, Bold, Palette, Highlighter } from 'lucide-react';
 
-// 🚀 [핵심 수정 1] 사내 맞춤형 초경량 리치 텍스트 에디터 (글자색, 배경색, 굵게)
+// 🚀 사내 맞춤형 초경량 리치 텍스트 에디터 (캡처 사진 직접 삽입 및 엑셀 표 강제 비율 맞춤 완벽 지원)
 const SimpleRichTextEditor = ({ value, onChange }) => {
     const editorRef = useRef(null);
 
@@ -22,6 +22,80 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
         document.execCommand(cmd, false, arg);
         editorRef.current.focus();
         onChange(editorRef.current.innerHTML);
+    };
+
+    // 🎯 클립보드 붙여넣기 완벽 제어 로직 (이미지 노드 강제 삽입 및 엑셀 인라인 스타일 제거)
+    const handlePaste = (e) => {
+        const clipboardData = e.clipboardData;
+        if (!clipboardData) return;
+
+        const items = clipboardData.items;
+        let hasImage = false;
+
+        // 1. 캡처 이미지 감지 및 DOM 직접 삽입
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                hasImage = true;
+                e.preventDefault(); // 일반 텍스트 붙여넣기 방지
+                
+                const file = items[i].getAsFile();
+                if (!file) continue;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const base64Image = event.target.result;
+                    editorRef.current.focus();
+                    
+                    const selection = window.getSelection();
+                    if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        
+                        const imgNode = document.createElement('img');
+                        imgNode.src = base64Image;
+                        // 이미지 삐져나옴 방지 및 레이아웃 스타일
+                        imgNode.style.maxWidth = '100%';
+                        imgNode.style.height = 'auto';
+                        imgNode.style.borderRadius = '6px';
+                        imgNode.style.marginTop = '8px';
+                        imgNode.style.marginBottom = '8px';
+                        imgNode.style.border = '1px solid #e2e8f0';
+                        imgNode.style.display = 'block';
+                        
+                        range.deleteContents();
+                        range.insertNode(imgNode);
+                        
+                        // 커서를 이미지 바로 뒤로 이동
+                        range.setStartAfter(imgNode);
+                        range.setEndAfter(imgNode);
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                    }
+                    setTimeout(() => onChange(editorRef.current.innerHTML), 50);
+                };
+                reader.readAsDataURL(file);
+                return; // 이미지 처리 후 즉시 종료
+            }
+        }
+
+        // 2. 엑셀 표 또는 일반 텍스트 붙여넣기 후처리 (강제 너비 속성 제거)
+        if (!hasImage) {
+            setTimeout(() => {
+                if (editorRef.current) {
+                    // 엑셀 복사 시 딸려오는 width 강제 속성을 지워 삐져나옴 원천 차단
+                    const tables = editorRef.current.querySelectorAll('table');
+                    tables.forEach(t => {
+                        t.removeAttribute('width');
+                        t.style.width = '100%';
+                    });
+                    const tds = editorRef.current.querySelectorAll('td, th');
+                    tds.forEach(td => {
+                        td.removeAttribute('width');
+                    });
+                    
+                    onChange(editorRef.current.innerHTML);
+                }
+            }, 100);
+        }
     };
 
     return (
@@ -42,10 +116,12 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
             {/* 에디터 본문 영역 */}
             <div
                 ref={editorRef}
-                className="p-6 text-[13px] leading-relaxed min-h-[200px] outline-none focus:bg-slate-50/50 transition-all font-black whitespace-pre-wrap"
+                /* 🚀 !important 속성을 부여하여 엑셀 고유의 인라인 스타일을 강제 무력화 및 박스 안에 가둠 */
+                className="p-6 text-[13px] leading-relaxed min-h-[200px] outline-none focus:bg-slate-50/50 transition-all font-black whitespace-pre-wrap overflow-x-hidden w-full box-border [&_table]:!w-full [&_table]:!max-w-full [&_table]:!table-fixed [&_table]:!border-collapse [&_table]:my-2 [&_table]:text-[11px] [&_td]:!border [&_td]:!border-slate-400 [&_td]:!p-2 [&_td]:!break-all [&_td]:!whitespace-normal [&_th]:!border [&_th]:!border-slate-400 [&_th]:!p-2 [&_th]:!bg-slate-100"
                 contentEditable
                 onInput={() => onChange(editorRef.current.innerHTML)}
-                placeholder="상세 사유 기술 (글자 색상 및 형광펜 강조 가능)"
+                onPaste={handlePaste}
+                placeholder="상세 사유 기술 (스크린샷 캡처본 즉시 붙여넣기 지원 / 엑셀 표 삽입 시 100% 비율 자동 맞춤)"
             />
         </div>
     );
@@ -125,7 +201,6 @@ export default function ExpenseReportPage() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // 에디터 변경 감지 헬퍼
     const handleDescriptionChange = (content) => {
         setFormData(prev => ({ ...prev, description: content }));
     };
@@ -278,7 +353,6 @@ export default function ExpenseReportPage() {
                                     </td>
                                 </tr>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black font-black">
-                                    {/* 🚀 [핵심 수정 3] 문서번호 수동 입력 명확화 (참조인과 분리됨) */}
                                     <th className="bg-slate-50 p-3 text-left border-black font-black uppercase tracking-tighter w-24">문서번호 <HelpTooltip text="기안자가 직접 문서 번호를 기입하십시오." /></th>
                                     <td className="p-3 font-black">
                                         <input type="text" name="document_number" value={formData.document_number} onChange={handleChange} placeholder="예: EXP-202603-001 (직접 입력)" className="w-full outline-none bg-transparent font-black font-mono font-black font-black" />
@@ -318,7 +392,6 @@ export default function ExpenseReportPage() {
 
                         <section className="font-black font-black font-black">
                             <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black">02. 상세 내역 (적요) <HelpTooltip text="상세 사유 기술 (드래그 후 툴바를 이용해 글자색 변경 가능)" /></h2>
-                            {/* 🚀 [핵심 수정 1] 커스텀 리치 텍스트 에디터 렌더링 */}
                             <SimpleRichTextEditor value={formData.description} onChange={handleDescriptionChange} />
                         </section>
 
