@@ -158,9 +158,139 @@ function ShareModal({ isOpen, onClose, doc, currentUser, allEmployees }) {
     );
 }
 
-// --- 메인 위젯 컴포넌트 ---
-function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, currentUserId, currentUserFullName, allEmployees }) {
-    // 🚀 초기 탭 상태를 submitted로 변경
+// 🚀 최고 경영진 전용 1-Depth 위젯
+function ExecutiveApprovalsWidget({ toReview, approved, rejected, currentUserFullName, allEmployees }) {
+    const [activeTab, setActiveTab] = useState('pending');
+    const [docSearchTerm, setDocSearchTerm] = useState('');
+
+    const othersApproved = useMemo(() => approved.filter(doc => doc.creator_name !== currentUserFullName), [approved, currentUserFullName]);
+    const othersRejected = useMemo(() => rejected.filter(doc => doc.creator_name !== currentUserFullName), [rejected, currentUserFullName]);
+
+    const allUniqueDocs = useMemo(() => {
+        const map = new Map();
+        [...toReview, ...othersApproved, ...othersRejected].forEach(doc => {
+            if (!map.has(doc.id)) map.set(doc.id, doc);
+        });
+        return Array.from(map.values());
+    }, [toReview, othersApproved, othersRejected]);
+
+    const filteredData = useMemo(() => {
+        if (docSearchTerm.trim() !== '') {
+            const lowerTerm = docSearchTerm.toLowerCase();
+            return allUniqueDocs.filter(doc => 
+                (doc.title && doc.title.toLowerCase().includes(lowerTerm)) || 
+                (doc.creator_name && doc.creator_name.toLowerCase().includes(lowerTerm))
+            );
+        }
+
+        if (activeTab === 'pending') return toReview;
+        if (activeTab === 'completed') return othersApproved;
+        if (activeTab === 'rejected') return othersRejected;
+        return [];
+    }, [activeTab, toReview, othersApproved, othersRejected, docSearchTerm, allUniqueDocs]);
+
+    const tabs = [
+        { key: 'pending', label: '결재 대기', count: toReview.length, icon: FileClock },
+        { key: 'completed', label: '결재 완료', count: othersApproved.length, icon: CheckSquare },
+        { key: 'rejected', label: '반려 내역', count: othersRejected.length, icon: FileX2 },
+    ];
+
+    const getStatusChip = (status) => {
+        const statusMap = { 
+            'pending': { text: '대기중', style: 'bg-amber-50 text-amber-700 ring-1 ring-amber-500/30' }, 
+            '진행중': { text: '대기중', style: 'bg-amber-50 text-amber-700 ring-1 ring-amber-500/30' }, 
+            '대기': { text: '대기중', style: 'bg-amber-50 text-amber-700 ring-1 ring-amber-500/30' }, 
+            '승인': { text: '승인완료', style: 'bg-blue-50 text-blue-700 ring-1 ring-blue-500/30' }, 
+            '반려': { text: '반려됨', style: 'bg-rose-50 text-rose-700 ring-1 ring-rose-500/30' },
+            '완료': { text: '승인완료', style: 'bg-blue-50 text-blue-700 ring-1 ring-blue-500/30' },
+        };
+        const currentStatus = statusMap[status] || { text: status, style: 'bg-slate-50 text-slate-600 ring-1 ring-slate-500/30' };
+        return <span className={`text-[11px] font-black px-2.5 py-1 rounded-full ${currentStatus.style}`}>{currentStatus.text}</span>;
+    };
+
+    return (
+        <div className="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-hidden font-bold relative flex flex-col h-[700px]">
+            <div className="p-4 border-b border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <nav className="flex space-x-3 overflow-x-auto custom-scrollbar shrink-0">
+                    {tabs.map((tab) => {
+                        const Icon = tab.icon;
+                        const active = activeTab === tab.key;
+                        return (
+                            <button 
+                                key={tab.key} onClick={() => { setActiveTab(tab.key); setDocSearchTerm(''); }} 
+                                className={`flex items-center gap-2 whitespace-nowrap py-2.5 px-5 rounded-xl font-black text-[15px] transition-all duration-200 ${active ? 'bg-slate-900 text-white shadow-md' : 'bg-transparent text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-200'}`}
+                            >
+                                <Icon size={16} className={active ? 'text-blue-400' : 'text-slate-400'} />
+                                {tab.label}
+                                <span className={`ml-1.5 text-[12px] px-2.5 py-0.5 rounded-full font-black ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{tab.count}</span>
+                            </button>
+                        );
+                    })}
+                </nav>
+                
+                <div className="relative w-full sm:max-w-md shrink-0">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                        type="text" placeholder="문서 제목 또는 기안자 검색" 
+                        className="w-full pl-10 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder:text-slate-400"
+                        value={docSearchTerm} onChange={(e) => setDocSearchTerm(e.target.value)}
+                    />
+                    {docSearchTerm && <button onClick={() => setDocSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
+                </div>
+            </div>
+
+            {docSearchTerm.trim() !== '' && (
+                <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
+                    <SearchIcon size={14} className="text-blue-500" />
+                    <span className="text-[13px] font-black text-blue-700">검색 결과 ({filteredData.length}건)</span>
+                </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-slate-50/30">
+                {filteredData.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400 font-bold">
+                        <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                            {docSearchTerm ? <SearchIcon size={32} className="text-slate-300" /> : <FileText size={32} className="text-slate-300" />}
+                        </div>
+                        {docSearchTerm ? '검색 결과가 없습니다.' : '해당하는 문서가 없습니다.'}
+                    </div>
+                ) : (
+                    filteredData.map(doc => {
+                        const safeCreatorName = doc.creator_name || '알수없음';
+                        return (
+                            <Link href={`/approvals/${doc.id}`} key={doc.id} className="group bg-white border border-slate-200/60 rounded-2xl p-5 hover:border-blue-300 hover:shadow-md transition-all duration-200 flex items-center justify-between">
+                                <div className="flex-1 min-w-0 pr-4">
+                                    <div className="flex items-center gap-3 mb-2 font-bold">
+                                        <p className="font-black text-[16px] text-slate-800 truncate group-hover:text-blue-600 transition-colors">{doc.title}</p>
+                                    </div>
+                                    <div className="flex items-center text-[13px] text-slate-500 gap-3 font-bold">
+                                        <span className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-600 border border-slate-200">
+                                                {safeCreatorName.charAt(0)}
+                                            </div>
+                                            기안자: {safeCreatorName}
+                                        </span>
+                                        <span className="w-1 h-1 rounded-full bg-slate-300" />
+                                        <span className="flex items-center gap-1.5"><Clock size={14} className="text-slate-400"/>상신일: {new Date(doc.created_at).toLocaleDateString()}</span>
+                                    </div>
+                                </div>
+                                <div className="shrink-0 flex items-center gap-4">
+                                    {getStatusChip(doc.status)}
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-600 transition-all">
+                                        <ChevronRight size={20} />
+                                    </div>
+                                </div>
+                            </Link>
+                        );
+                    })
+                )}
+            </div>
+        </div>
+    );
+}
+
+// --- 일반 임직원용 기존 위젯 ---
+function StandardApprovalsWidget({ toReview, submitted, approved, rejected, referred, currentUserId, currentUserFullName, allEmployees }) {
     const [activeMainTab, setActiveMainTab] = useState('submitted');
     const [activeSubTab, setActiveSubTab] = useState('progress');
     const [lastViewed, setLastViewed] = useState({});
@@ -237,7 +367,6 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
         }
 
         return currentData;
-
     }, [activeMainTab, activeSubTab, toReview, submitted, othersApproved, othersRejected, myApproved, myRejected, cleanReferred, docSearchTerm, allUniqueDocs]);
 
     const getStatusChip = (status) => {
@@ -260,7 +389,6 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
         return list.some(doc => new Date(doc.created_at) > new Date(lastTime));
     };
 
-    // 🚀 메인 탭 순서 변경 (submitted -> received -> referred)
     const mainTabs = [
         { 
             key: 'submitted', 
@@ -308,7 +436,6 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
                 allEmployees={allEmployees}
             />
 
-            {/* 1-Depth: 메인 탭 네비게이션 및 검색창 */}
             <div className="p-3 border-b border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <nav className="flex space-x-2 overflow-x-auto custom-scrollbar shrink-0">
                     {mainTabs.map((tab) => {
@@ -328,37 +455,23 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
                     })}
                 </nav>
                 
-                {/* 통합 검색창 */}
                 <div className="relative w-full sm:max-w-xs shrink-0">
                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                     <input 
-                        type="text" 
-                        placeholder="전체 문서 제목 또는 기안자 검색" 
+                        type="text" placeholder="전체 문서 제목 또는 기안자 검색" 
                         className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[13px] font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder:text-slate-400"
-                        value={docSearchTerm} 
-                        onChange={(e) => setDocSearchTerm(e.target.value)}
+                        value={docSearchTerm} onChange={(e) => setDocSearchTerm(e.target.value)}
                     />
-                    {docSearchTerm && (
-                        <button 
-                            onClick={() => setDocSearchTerm('')} 
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                            <X size={14} />
-                        </button>
-                    )}
+                    {docSearchTerm && <button onClick={() => setDocSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={14} /></button>}
                 </div>
             </div>
 
-            {/* 검색 중일 때: 하위 메뉴 숨김 및 검색 결과 안내 바 노출 */}
             {docSearchTerm.trim() !== '' ? (
                 <div className="px-4 py-2.5 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
                     <SearchIcon size={14} className="text-blue-500" />
-                    <span className="text-[12px] font-black text-blue-700">
-                        전체 문서 통합 검색 결과 ({filteredData.length}건)
-                    </span>
+                    <span className="text-[12px] font-black text-blue-700">전체 문서 통합 검색 결과 ({filteredData.length}건)</span>
                 </div>
             ) : (
-                /* 평소(검색어 없음): 기존 하위 메뉴 노출 */
                 (activeMainTab === 'received' || activeMainTab === 'submitted') && (
                     <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-3 overflow-x-auto custom-scrollbar shrink-0">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><CornerDownRight size={12} className="text-slate-300"/> 폴더</span>
@@ -448,6 +561,7 @@ function MyApprovalsWidget({ toReview, submitted, approved, rejected, referred, 
     );
 }
 
+// --- 메인 페이지 조립부 ---
 export default function ApprovalsPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [], approved: [], rejected: [], referred: [] });
@@ -521,6 +635,9 @@ export default function ApprovalsPage() {
         { title: '시말서', href: '/approvals/apology', icon: '⚠️', color: 'bg-rose-50 text-rose-600' }
     ];
 
+    // 🚀 최고 경영진 부서 전체 적용으로 변경
+    const isExecutive = employee?.department === '최고 경영진';
+
     return (
         <div className="p-4 sm:p-8 bg-[#f8fafc] min-h-screen font-bold text-slate-800 selection:bg-blue-200">
             <header className="max-w-[1400px] mx-auto mb-8">
@@ -556,19 +673,28 @@ export default function ApprovalsPage() {
             </header>
             
             <main className="max-w-[1400px] mx-auto grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
-                <section className="xl:col-span-2 space-y-4">
+                {/* 최고 경영진인 경우 전체 영역(xl:col-span-3) 차지, 일반 직원은 기존대로(xl:col-span-2) */}
+                <section className={isExecutive ? "xl:col-span-3 space-y-4" : "xl:col-span-2 space-y-4"}>
                     <div className="flex items-center gap-3 px-2">
                         <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
                         <h2 className="text-xl font-black text-slate-800">결재 함 내역</h2>
                     </div>
                     
                     {!loadingApprovals ? (
-                        <MyApprovalsWidget 
-                            {...approvalsData}
-                            currentUserId={employee?.id} 
-                            currentUserFullName={employee?.full_name}
-                            allEmployees={allEmployees}
-                        />
+                        isExecutive ? (
+                            <ExecutiveApprovalsWidget 
+                                {...approvalsData} 
+                                currentUserFullName={employee?.full_name} 
+                                allEmployees={allEmployees}
+                            />
+                        ) : (
+                            <StandardApprovalsWidget 
+                                {...approvalsData}
+                                currentUserId={employee?.id} 
+                                currentUserFullName={employee?.full_name}
+                                allEmployees={allEmployees}
+                            />
+                        )
                     ) : (
                         <div className="bg-white border border-slate-200 rounded-3xl h-[600px] flex items-center justify-center">
                             <div className="flex flex-col items-center gap-3 opacity-50">
@@ -579,32 +705,35 @@ export default function ApprovalsPage() {
                     )}
                 </section>
 
-                <section className="space-y-4">
-                    <div className="flex items-center gap-3 px-2">
-                        <div className="w-2 h-6 bg-slate-800 rounded-full"></div>
-                        <h2 className="text-xl font-black text-slate-800">빠른 기안 작성</h2>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3">
-                        {quickDrafts.map((form) => (
-                            <Link 
-                                href={form.href} key={form.title} 
-                                className="group bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm hover:border-blue-400 hover:shadow-md transition-all duration-200 flex items-center gap-4"
-                            >
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-transform group-hover:scale-110 ${form.color}`}>
-                                    {form.icon}
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="font-black text-slate-700 group-hover:text-blue-600 transition-colors text-[14px] mb-0.5">{form.title}</h3>
-                                    <p className="text-[11px] font-bold text-slate-400">양식 작성하기</p>
-                                </div>
-                                <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                    <ArrowRight size={14} strokeWidth={3} />
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </section>
+                {/* 최고 경영진인 경우 우측 '빠른 기안 작성' 메뉴 완전 숨김 처리 */}
+                {!isExecutive && (
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-3 px-2">
+                            <div className="w-2 h-6 bg-slate-800 rounded-full"></div>
+                            <h2 className="text-xl font-black text-slate-800">빠른 기안 작성</h2>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3">
+                            {quickDrafts.map((form) => (
+                                <Link 
+                                    href={form.href} key={form.title} 
+                                    className="group bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm hover:border-blue-400 hover:shadow-md transition-all duration-200 flex items-center gap-4"
+                                >
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-transform group-hover:scale-110 ${form.color}`}>
+                                        {form.icon}
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="font-black text-slate-700 group-hover:text-blue-600 transition-colors text-[14px] mb-0.5">{form.title}</h3>
+                                        <p className="text-[11px] font-bold text-slate-400">양식 작성하기</p>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                        <ArrowRight size={14} strokeWidth={3} />
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                )}
             </main>
         </div>
     );
