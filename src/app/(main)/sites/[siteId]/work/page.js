@@ -289,16 +289,16 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
 
                             return (
                                 <tr key={item.id} className="border-b border-slate-200 hover:bg-slate-50 group">
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('item', false, false, false, false, false)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('spec', false, false, false, false, false)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('contract', false, false, false, false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true, false, false, false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true, false, false, false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true, false, false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain', false, false, false, false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, true, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted', false, false, false, false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('item', false, false, false, false)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('spec', false, false, false, false)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('contract', false, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain', false, false, false, false)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted', false, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true, false, true)}</td>
                                     {!readOnly && (
                                         <td className="text-center align-middle opacity-0 group-hover:opacity-100 border-r border-slate-200">
                                             <button type="button" onClick={() => setFormData(prev => ({ ...prev, manual_ledger: prev.manual_ledger.filter(li => li.id !== item.id) }))} className="text-red-400 hover:text-red-600 font-bold px-1 w-full h-full min-h-[24px]">×</button>

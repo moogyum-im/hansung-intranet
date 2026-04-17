@@ -8,9 +8,13 @@ import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
 import { X, Plus, Loader2, Database, CheckCircle, Users, Calendar, Wallet, ImageIcon, CreditCard, UserPlus, Info, Bold, Palette, Highlighter } from 'lucide-react';
 
-// 🚀 사내 맞춤형 초경량 리치 텍스트 에디터 (캡처 사진 직접 삽입 및 엑셀 표 강제 비율 맞춤 완벽 지원)
+// 🚀 사내 맞춤형 초경량 리치 텍스트 에디터
 const SimpleRichTextEditor = ({ value, onChange }) => {
     const editorRef = useRef(null);
+    const [showPalette, setShowPalette] = useState(false);
+
+    // 스크린샷과 동일한 10가지 표준 색상표
+    const highlightColors = ['#C00000', '#FF0000', '#FFC000', '#FFFF00', '#92D050', '#00B050', '#00B0F0', '#0070C0', '#002060', '#7030A0'];
 
     useEffect(() => {
         if (editorRef.current && value && editorRef.current.innerHTML !== value) {
@@ -24,7 +28,6 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
         onChange(editorRef.current.innerHTML);
     };
 
-    // 🎯 클립보드 붙여넣기 완벽 제어 로직 (이미지 노드 강제 삽입 및 엑셀 인라인 스타일 제거)
     const handlePaste = (e) => {
         const clipboardData = e.clipboardData;
         if (!clipboardData) return;
@@ -32,11 +35,10 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
         const items = clipboardData.items;
         let hasImage = false;
 
-        // 1. 캡처 이미지 감지 및 DOM 직접 삽입
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf('image') !== -1) {
                 hasImage = true;
-                e.preventDefault(); // 일반 텍스트 붙여넣기 방지
+                e.preventDefault(); 
                 
                 const file = items[i].getAsFile();
                 if (!file) continue;
@@ -52,7 +54,6 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
                         
                         const imgNode = document.createElement('img');
                         imgNode.src = base64Image;
-                        // 이미지 삐져나옴 방지 및 레이아웃 스타일
                         imgNode.style.maxWidth = '100%';
                         imgNode.style.height = 'auto';
                         imgNode.style.borderRadius = '6px';
@@ -64,7 +65,6 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
                         range.deleteContents();
                         range.insertNode(imgNode);
                         
-                        // 커서를 이미지 바로 뒤로 이동
                         range.setStartAfter(imgNode);
                         range.setEndAfter(imgNode);
                         selection.removeAllRanges();
@@ -73,15 +73,13 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
                     setTimeout(() => onChange(editorRef.current.innerHTML), 50);
                 };
                 reader.readAsDataURL(file);
-                return; // 이미지 처리 후 즉시 종료
+                return; 
             }
         }
 
-        // 2. 엑셀 표 또는 일반 텍스트 붙여넣기 후처리 (강제 너비 속성 제거)
         if (!hasImage) {
             setTimeout(() => {
                 if (editorRef.current) {
-                    // 엑셀 복사 시 딸려오는 width 강제 속성을 지워 삐져나옴 원천 차단
                     const tables = editorRef.current.querySelectorAll('table');
                     tables.forEach(t => {
                         t.removeAttribute('width');
@@ -99,8 +97,7 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
     };
 
     return (
-        <div className="border border-black flex flex-col font-black">
-            {/* 툴바 영역 */}
+        <div className="border border-black flex flex-col font-black relative">
             <div className="bg-slate-50 border-b border-black p-2 flex gap-3 items-center">
                 <button type="button" onClick={(e) => { e.preventDefault(); execCmd('bold'); }} className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-300 hover:bg-slate-200 text-[10px] font-black rounded-sm transition-colors">
                     <Bold size={12} /> 굵게
@@ -109,14 +106,59 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
                     <Palette size={12} /> 글자색
                     <input type="color" onChange={(e) => execCmd('foreColor', e.target.value)} className="w-4 h-4 p-0 border-0 cursor-pointer ml-1" />
                 </label>
-                <button type="button" onClick={(e) => { e.preventDefault(); execCmd('hiliteColor', 'yellow'); }} className="flex items-center gap-1 px-2 py-1 bg-yellow-100 border border-yellow-400 text-yellow-800 hover:bg-yellow-200 text-[10px] font-black rounded-sm transition-colors">
-                    <Highlighter size={12} /> 형광펜
-                </button>
+                
+                {/* 형광펜 팔레트 UI 적용 */}
+                <div className="relative">
+                    <button 
+                        type="button" 
+                        onMouseDown={(e) => { 
+                            e.preventDefault(); 
+                            setShowPalette(!showPalette); 
+                        }} 
+                        className="flex items-center gap-1 px-2 py-1 bg-yellow-100 border border-yellow-400 text-yellow-800 hover:bg-yellow-200 text-[10px] font-black rounded-sm transition-colors"
+                    >
+                        <Highlighter size={12} /> 형광펜
+                    </button>
+                    
+                    {showPalette && (
+                        <div className="absolute top-full left-0 mt-1 p-2 bg-white border border-slate-300 shadow-xl rounded-sm flex flex-col gap-2 z-50 w-max">
+                            {/* 🚀 색상 지우기 버튼 추가 */}
+                            <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    execCmd('backColor', 'transparent');
+                                    execCmd('hiliteColor', 'transparent');
+                                    setShowPalette(false);
+                                }}
+                                className="text-[10px] text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded w-full text-center border border-slate-200"
+                            >
+                                색상 없음 (지우기)
+                            </button>
+                            <div className="flex gap-1">
+                                {highlightColors.map(color => (
+                                    <button
+                                        key={color}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault(); 
+                                            execCmd('backColor', color);
+                                            execCmd('hiliteColor', color);
+                                            setShowPalette(false);
+                                        }}
+                                        className="w-5 h-5 border border-slate-200 hover:scale-110 transition-transform cursor-pointer"
+                                        style={{ backgroundColor: color }}
+                                        title={color}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
-            {/* 에디터 본문 영역 */}
+            
             <div
                 ref={editorRef}
-                /* 🚀 !important 속성을 부여하여 엑셀 고유의 인라인 스타일을 강제 무력화 및 박스 안에 가둠 */
                 className="p-6 text-[13px] leading-relaxed min-h-[200px] outline-none focus:bg-slate-50/50 transition-all font-black whitespace-pre-wrap overflow-x-hidden w-full box-border [&_table]:!w-full [&_table]:!max-w-full [&_table]:!table-fixed [&_table]:!border-collapse [&_table]:my-2 [&_table]:text-[11px] [&_td]:!border [&_td]:!border-slate-400 [&_td]:!p-2 [&_td]:!break-all [&_td]:!whitespace-normal [&_th]:!border [&_th]:!border-slate-400 [&_th]:!p-2 [&_th]:!bg-slate-100"
                 contentEditable
                 onInput={() => onChange(editorRef.current.innerHTML)}
@@ -391,7 +433,7 @@ export default function ExpenseReportPage() {
                         </section>
 
                         <section className="font-black font-black font-black">
-                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black">02. 상세 내역 (적요) <HelpTooltip text="상세 사유 기술 (드래그 후 툴바를 이용해 글자색 변경 가능)" /></h2>
+                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter font-black font-black font-black">02. 상세 내역 (적요) <HelpTooltip text="상세 사유 기술 (드래그 후 툴바를 이용해 글자/배경색 변경 가능)" /></h2>
                             <SimpleRichTextEditor value={formData.description} onChange={handleDescriptionChange} />
                         </section>
 
