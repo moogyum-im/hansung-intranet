@@ -163,6 +163,7 @@ function ExecutiveApprovalsWidget({ toReview, approved, rejected, currentUserFul
     const [activeTab, setActiveTab] = useState('pending');
     const [docSearchTerm, setDocSearchTerm] = useState('');
 
+    // 🚀 [수정] 본인이 처리 완료한(승인/반려) 문서를 정확히 필터링하도록 교정
     const othersApproved = useMemo(() => approved.filter(doc => doc.creator_name !== currentUserFullName), [approved, currentUserFullName]);
     const othersRejected = useMemo(() => rejected.filter(doc => doc.creator_name !== currentUserFullName), [rejected, currentUserFullName]);
 
@@ -336,6 +337,7 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
         return Array.from(map.values());
     }, [toReview, submitted, approved, rejected, referred]);
 
+    // 🚀 [수정] 본인이 처리 완료한(승인/반려) 문서를 정확히 필터링하도록 교정
     const othersApproved = useMemo(() => approved.filter(doc => doc.creator_name !== currentUserFullName), [approved, currentUserFullName]);
     const othersRejected = useMemo(() => rejected.filter(doc => doc.creator_name !== currentUserFullName), [rejected, currentUserFullName]);
     
@@ -572,6 +574,7 @@ export default function ApprovalsPage() {
         if (!currentEmployee) return;
         setLoadingApprovals(true);
         try {
+            // 🚀 [수정] DB에서 가져온 결재 목록 데이터 구조 개선
             const { data: appData } = await supabase.rpc('get_my_approvals', { p_user_id: currentEmployee.id });
             
             if (appData) {
@@ -599,11 +602,17 @@ export default function ApprovalsPage() {
                     return Array.from(uniqueMap.values());
                 };
 
+                // 🚀 [수정] 본인이 승인한 문서는 카테고리를 'approved'로 강제 분류하여 '완료된 결재' 탭으로 이동
                 setApprovalsData({
-                    toReview: getUniqueDocs(appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려')),
+                    toReview: getUniqueDocs(appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려' && doc.my_approval_status !== '승인')),
                     submitted: getUniqueDocs(appData.filter(doc => doc.category === 'submitted' && doc.status !== '반려' && doc.status !== '승인' && doc.status !== '완료')),
-                    approved: getUniqueDocs(appData.filter(doc => (doc.status === '승인' || doc.status === '완료') && doc.status !== '반려')),
-                    rejected: getUniqueDocs(appData.filter(doc => doc.status === '반려')),
+                    
+                    // 문서 전체가 완료되지 않았어도 내가 승인했으면 승인(완료) 탭에 표시
+                    approved: getUniqueDocs(appData.filter(doc => 
+                        (doc.status === '승인' || doc.status === '완료' || doc.my_approval_status === '승인') && doc.status !== '반려'
+                    )),
+                    
+                    rejected: getUniqueDocs(appData.filter(doc => doc.status === '반려' || doc.my_approval_status === '반려')),
                     referred: getUniqueDocs(appData.filter(doc => doc.category === 'referred')),
                 });
             }
@@ -635,7 +644,6 @@ export default function ApprovalsPage() {
         { title: '시말서', href: '/approvals/apology', icon: '⚠️', color: 'bg-rose-50 text-rose-600' }
     ];
 
-    // 🚀 최고 경영진 부서 전체 적용으로 변경
     const isExecutive = employee?.department === '최고 경영진';
 
     return (
@@ -673,7 +681,6 @@ export default function ApprovalsPage() {
             </header>
             
             <main className="max-w-[1400px] mx-auto grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
-                {/* 최고 경영진인 경우 전체 영역(xl:col-span-3) 차지, 일반 직원은 기존대로(xl:col-span-2) */}
                 <section className={isExecutive ? "xl:col-span-3 space-y-4" : "xl:col-span-2 space-y-4"}>
                     <div className="flex items-center gap-3 px-2">
                         <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
@@ -705,7 +712,6 @@ export default function ApprovalsPage() {
                     )}
                 </section>
 
-                {/* 최고 경영진인 경우 우측 '빠른 기안 작성' 메뉴 완전 숨김 처리 */}
                 {!isExecutive && (
                     <section className="space-y-4">
                         <div className="flex items-center gap-3 px-2">
