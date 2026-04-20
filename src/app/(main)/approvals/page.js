@@ -163,7 +163,6 @@ function ExecutiveApprovalsWidget({ toReview, approved, rejected, currentUserFul
     const [activeTab, setActiveTab] = useState('pending');
     const [docSearchTerm, setDocSearchTerm] = useState('');
 
-    // 🚀 [수정] 본인이 처리 완료한(승인/반려) 문서를 정확히 필터링하도록 교정
     const othersApproved = useMemo(() => approved.filter(doc => doc.creator_name !== currentUserFullName), [approved, currentUserFullName]);
     const othersRejected = useMemo(() => rejected.filter(doc => doc.creator_name !== currentUserFullName), [rejected, currentUserFullName]);
 
@@ -337,7 +336,6 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
         return Array.from(map.values());
     }, [toReview, submitted, approved, rejected, referred]);
 
-    // 🚀 [수정] 본인이 처리 완료한(승인/반려) 문서를 정확히 필터링하도록 교정
     const othersApproved = useMemo(() => approved.filter(doc => doc.creator_name !== currentUserFullName), [approved, currentUserFullName]);
     const othersRejected = useMemo(() => rejected.filter(doc => doc.creator_name !== currentUserFullName), [rejected, currentUserFullName]);
     
@@ -574,7 +572,6 @@ export default function ApprovalsPage() {
         if (!currentEmployee) return;
         setLoadingApprovals(true);
         try {
-            // 🚀 [수정] DB에서 가져온 결재 목록 데이터 구조 개선
             const { data: appData } = await supabase.rpc('get_my_approvals', { p_user_id: currentEmployee.id });
             
             if (appData) {
@@ -602,16 +599,12 @@ export default function ApprovalsPage() {
                     return Array.from(uniqueMap.values());
                 };
 
-                // 🚀 [수정] 본인이 승인한 문서는 카테고리를 'approved'로 강제 분류하여 '완료된 결재' 탭으로 이동
                 setApprovalsData({
                     toReview: getUniqueDocs(appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려' && doc.my_approval_status !== '승인')),
                     submitted: getUniqueDocs(appData.filter(doc => doc.category === 'submitted' && doc.status !== '반려' && doc.status !== '승인' && doc.status !== '완료')),
-                    
-                    // 문서 전체가 완료되지 않았어도 내가 승인했으면 승인(완료) 탭에 표시
                     approved: getUniqueDocs(appData.filter(doc => 
                         (doc.status === '승인' || doc.status === '완료' || doc.my_approval_status === '승인') && doc.status !== '반려'
                     )),
-                    
                     rejected: getUniqueDocs(appData.filter(doc => doc.status === '반려' || doc.my_approval_status === '반려')),
                     referred: getUniqueDocs(appData.filter(doc => doc.category === 'referred')),
                 });
@@ -648,35 +641,56 @@ export default function ApprovalsPage() {
 
     return (
         <div className="p-4 sm:p-8 bg-[#f8fafc] min-h-screen font-bold text-slate-800 selection:bg-blue-200">
+
+            {/* ✅ [수정] 헤더 영역 — 인사말 + 통계 + 회장님 결재 지연 공지 */}
             <header className="max-w-[1400px] mx-auto mb-8">
-                <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 rounded-2xl p-6 shadow-xl shadow-slate-950/20 relative overflow-hidden border border-slate-800">
-                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-5 rounded-full blur-3xl mix-blend-overlay"></div>
+                <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 rounded-2xl shadow-xl shadow-slate-950/30 relative overflow-hidden border border-slate-700/60">
                     
-                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-6">
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2 text-blue-400 font-black text-[10px] tracking-[0.2em] uppercase opacity-90">
-                                    <LayoutDashboard size={12} /> Smart Approval Portal
-                                </div>
-                                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">
-                                    안녕하세요, <span className="text-blue-400">{employee?.full_name}</span>님!
-                                </h1>
-                                <p className="text-[10px] font-bold text-slate-400 opacity-80 mt-1">신속한 결재 처리를 도와드립니다.</p>
+                    {/* 배경 장식 */}
+                    <div className="absolute top-0 right-0 -mt-12 -mr-12 w-48 h-48 bg-blue-500 opacity-[0.04] rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-36 h-36 bg-indigo-400 opacity-[0.05] rounded-full blur-2xl pointer-events-none" />
+
+                    {/* 상단 — 인사말 + 통계 */}
+                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 pt-6 pb-5">
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-blue-400 font-black text-[10px] tracking-[0.2em] uppercase opacity-80">
+                                <LayoutDashboard size={11} /> Smart Approval Portal
                             </div>
+                            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">
+                                안녕하세요, <span className="text-blue-400">{employee?.full_name}</span>님!
+                            </h1>
+                            <p className="text-[11px] font-bold text-slate-400 mt-0.5">신속한 결재 처리를 도와드립니다.</p>
                         </div>
-                        
-                        <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 shadow-inner">
-                            <div className="flex items-center gap-2.5 px-3">
-                                <span className="text-3xl font-black text-white">{approvalsData.toReview.length}</span>
-                                <span className="text-[11px] font-black text-blue-200 whitespace-nowrap tracking-tighter">결재 대기</span>
+
+                        <div className="flex items-center gap-1 bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-xl px-2 py-3 shadow-inner shrink-0">
+                            <div className="flex items-center gap-2 px-4">
+                                <span className="text-3xl font-black text-white tabular-nums">{approvalsData.toReview.length}</span>
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black text-blue-300 leading-tight tracking-tight">결재</span>
+                                    <span className="text-[10px] font-black text-blue-300 leading-tight tracking-tight">대기</span>
+                                </div>
                             </div>
                             <div className="w-px h-8 bg-white/10" />
-                            <div className="flex items-center gap-2.5 px-3">
-                                <span className="text-3xl font-black text-white">{approvalsData.submitted.length}</span>
-                                <span className="text-[11px] font-black text-slate-300 whitespace-nowrap tracking-tighter">진행 중</span>
+                            <div className="flex items-center gap-2 px-4">
+                                <span className="text-3xl font-black text-white tabular-nums">{approvalsData.submitted.length}</span>
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black text-slate-400 leading-tight tracking-tight">진행</span>
+                                    <span className="text-[10px] font-black text-slate-400 leading-tight tracking-tight">중</span>
+                                </div>
                             </div>
                         </div>
                     </div>
+
+                   {/* 하단 — 회장님 결재 지연 공지 (박스 없이 자연스럽게) */}
+<div className="relative z-10 flex items-center gap-3 px-6 pb-5 pt-1">
+    <div className="w-px h-7 bg-amber-400/40 rounded-full shrink-0" />
+    <AlertCircle size={13} className="text-amber-400/80 shrink-0" />
+    <p className="text-[12px] font-bold text-slate-400 leading-relaxed">
+        <span className="text-slate-200 font-black">회장님 최종결재</span> 기안의 경우, 결재가&nbsp;
+        <span className="text-amber-300 font-black">1일 이상 지연</span>될 시 반드시&nbsp;
+        <span className="text-white font-black">대면 보고</span> 바랍니다.
+    </p>
+</div>
                 </div>
             </header>
             
