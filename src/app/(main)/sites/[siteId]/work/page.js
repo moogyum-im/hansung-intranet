@@ -46,14 +46,14 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
         }
     }, [readOnly]);
 
-    // 🚀 수정: 전일미식재(prev_remain)가 1 이상 남아있거나 수기로 수정한 행이면 접지 않고 기본 화면에 띄움
+    // 🚀 수정: isPastRecord가 true라도, 전일미식재(prev_remain) 잔량이 1 이상이거나 방금 수정한(isModified) 항목이면 오늘(기본) 화면에 노출
     let todayRows = list?.filter(r => !r.isPastRecord || parseNumber(r.prev_remain) > 0 || r.isModified) || [];
     
     if (todayRows.length === 0 && (!list || list.length === 0)) {
         todayRows = [{id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false}];
     }
     
-    // 🚀 수정: 기본 화면에 띄운 행은 과거 기록(pastRows)에서 제외하여 중복 노출 방지
+    // 🚀 수정: 오늘(기본) 화면에 띄운 항목은 과거 내역(pastRows)에서 제외하여 중복 방지
     const pastRows = list?.filter(r => r.isPastRecord && parseNumber(r.prev_remain) === 0 && !r.isModified) || [];
 
     const effectiveExpanded = isExpanded || searchQuery.trim().length > 0;
@@ -291,17 +291,18 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                                 );
                             };
 
+                            // 🚀 수정: 주요 수량 입력 필드들의 forceReadOnly 인자를 false로 변경하여 수기 입력 허용
                             return (
                                 <tr key={item.id} className="border-b border-slate-200 hover:bg-slate-50 group">
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('item', false, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('spec', false, false, false, false)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('contract', false, false, false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true, false, false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('contract', false, false, false, false)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true, false, false, false)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true, false, true)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain', false, false, false, false)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted', false, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, false)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted', false, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true, false, true)}</td>
                                     {!readOnly && (
                                         <td className="text-center align-middle opacity-0 group-hover:opacity-100 border-r border-slate-200">
@@ -692,6 +693,7 @@ export default function DailyWorkPage() {
     const handleSave = async () => {
         if (isSaving) return; setIsSaving(true);
         try {
+            // 1. 사진 업로드 처리 (기존 동일)
             const uploadedPhotos = await Promise.all([...todayPhotos, ...tomorrowPhotos].map(async (p) => {
                 if (!p || p.url) return p;
                 const path = `${siteId}/${uuidv4()}.jpg`;
@@ -700,9 +702,9 @@ export default function DailyWorkPage() {
                 return { id: p.id, url: data.publicUrl, timeType: p.timeType, description: p.description };
             }));
 
+            // 2. 저장할 데이터 클렌징
             const cleanDataToSave = JSON.parse(JSON.stringify(formData));
 
-            // 🚀 수정: manual_ledger 저장 시 isModified 값이 true인 행은 무조건 보존하도록 로직 수정
             if (cleanDataToSave.manual_ledger) {
                 cleanDataToSave.manual_ledger = cleanDataToSave.manual_ledger.filter(row => {
                     if (row.isPastRecord) {
@@ -724,6 +726,7 @@ export default function DailyWorkPage() {
                 }
             });
 
+            // 3. 현재 날짜 보고서 저장
             const payload = {
                 site_id: siteId, report_date: formData.report_date, author_id: currentUser.id, photos: uploadedPhotos.filter(v => v !== null),
                 notes: JSON.stringify({ ...cleanDataToSave, savedVisibleSections: visibleSections, savedColumnWidths: columnWidths }), 
@@ -733,7 +736,31 @@ export default function DailyWorkPage() {
             const targetId = existing?.find(r => (safeParseJSON(r.notes)?.report_category || 'plant') === categoryType)?.id || reportId;
             
             await supabase.from('daily_site_reports').upsert(targetId ? { id: targetId, ...payload } : payload);
-            
+
+            // 🚀 4. 이후 날짜 자동 재계산 및 업데이트 (백그라운드 처리)
+            const { data: futureReports } = await supabase
+                .from('daily_site_reports')
+                .select('id, notes, report_date')
+                .eq('site_id', siteId)
+                .gt('report_date', formData.report_date) // 현재 저장한 날짜 이후의 모든 데이터 검색
+                .order('report_date', { ascending: true });
+
+            if (futureReports && futureReports.length > 0) {
+                for (const futureReport of futureReports) {
+                    const futureNotes = safeParseJSON(futureReport.notes);
+                    // 같은 카테고리(예: 'plant') 문서만 연동
+                    if ((futureNotes.report_category || 'plant') === categoryType) {
+                        const syncedFutureData = await syncWithAllPastData(futureNotes, false);
+                        
+                        await supabase.from('daily_site_reports').update({
+                            notes: JSON.stringify(syncedFutureData)
+                        }).eq('id', futureReport.id);
+                    }
+                }
+                toast.success("이후 날짜의 작업일보 데이터도 자동 업데이트 되었습니다.");
+            }
+
+            // 5. 화면 갱신 처리
             const syncedData = await syncWithAllPastData(cleanDataToSave, false);
             setOriginalData(JSON.parse(JSON.stringify(syncedData)));
             setFormData(JSON.parse(JSON.stringify(syncedData)));
@@ -752,7 +779,12 @@ export default function DailyWorkPage() {
 
             setView('detail'); 
             
-        } catch (e) { toast.error("저장 오류"); } finally { setIsSaving(false); }
+        } catch (e) { 
+            console.error(e);
+            toast.error("저장 중 오류가 발생했습니다."); 
+        } finally { 
+            setIsSaving(false); 
+        }
     };
 
     const handleDelete = async () => {
