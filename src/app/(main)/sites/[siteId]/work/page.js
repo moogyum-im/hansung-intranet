@@ -46,11 +46,15 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
         }
     }, [readOnly]);
 
-    let todayRows = list?.filter(r => !r.isPastRecord) || [];
+    // 🚀 수정: 전일미식재(prev_remain)가 1 이상 남아있거나 수기로 수정한 행이면 접지 않고 기본 화면에 띄움
+    let todayRows = list?.filter(r => !r.isPastRecord || parseNumber(r.prev_remain) > 0 || r.isModified) || [];
+    
     if (todayRows.length === 0 && (!list || list.length === 0)) {
         todayRows = [{id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false}];
     }
-    const pastRows = list?.filter(r => r.isPastRecord) || [];
+    
+    // 🚀 수정: 기본 화면에 띄운 행은 과거 기록(pastRows)에서 제외하여 중복 노출 방지
+    const pastRows = list?.filter(r => r.isPastRecord && parseNumber(r.prev_remain) === 0 && !r.isModified) || [];
 
     const effectiveExpanded = isExpanded || searchQuery.trim().length > 0;
     const displayRows = effectiveExpanded ? [...todayRows, ...pastRows] : todayRows;
@@ -698,6 +702,7 @@ export default function DailyWorkPage() {
 
             const cleanDataToSave = JSON.parse(JSON.stringify(formData));
 
+            // 🚀 수정: manual_ledger 저장 시 isModified 값이 true인 행은 무조건 보존하도록 로직 수정
             if (cleanDataToSave.manual_ledger) {
                 cleanDataToSave.manual_ledger = cleanDataToSave.manual_ledger.filter(row => {
                     if (row.isPastRecord) {
