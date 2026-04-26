@@ -46,14 +46,12 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
         }
     }, [readOnly]);
 
-    // 🚀 수정: isPastRecord가 true라도, 전일미식재(prev_remain) 잔량이 1 이상이거나 방금 수정한(isModified) 항목이면 오늘(기본) 화면에 노출
     let todayRows = list?.filter(r => !r.isPastRecord || parseNumber(r.prev_remain) > 0 || r.isModified) || [];
     
     if (todayRows.length === 0 && (!list || list.length === 0)) {
         todayRows = [{id:uuidv4(), item: '', spec: '', contract: '', base_incoming: '', incoming: '', not_incoming: '', prev_remain: '', planted: '', final_remain: '', isPastRecord: false}];
     }
     
-    // 🚀 수정: 오늘(기본) 화면에 띄운 항목은 과거 내역(pastRows)에서 제외하여 중복 방지
     const pastRows = list?.filter(r => r.isPastRecord && parseNumber(r.prev_remain) === 0 && !r.isModified) || [];
 
     const effectiveExpanded = isExpanded || searchQuery.trim().length > 0;
@@ -291,7 +289,6 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                                 );
                             };
 
-                            // 🚀 수정: 주요 수량 입력 필드들의 forceReadOnly 인자를 false로 변경하여 수기 입력 허용
                             return (
                                 <tr key={item.id} className="border-b border-slate-200 hover:bg-slate-50 group">
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('item', false, false, false, false)}</td>
@@ -375,8 +372,9 @@ export default function DailyWorkPage() {
 
     const isReadOnly = view === 'detail';
 
+    // 🚀 수정: visibleSections의 기본 상태에 'manual_ledger' 추가 (기본값 true)
     const [visibleSections, setVisibleSections] = useState({
-        labor_costs: true, material_costs: true, equipment_costs: true,
+        manual_ledger: true, labor_costs: true, material_costs: true, equipment_costs: true,
         tree_costs: true, transport_costs: true, subcontract_costs: true, etc_costs: true
     });
 
@@ -408,6 +406,12 @@ export default function DailyWorkPage() {
         transport_costs: { fields: ['item', 'spec', 'count', 'price', 'vendor', 'total'], labels: ['품명', '규격', '수량', '단가', '거래처', '금액'], title: '운반비투입현황', sums: ['count', 'total'] },
         subcontract_costs: { fields: ['item', 'spec', 'price', 'count', 'vendor', 'total'], labels: ['품명', '규격', '단가', '수량', '거래처', '금액'], title: '자재납품 및 시공', sums: ['count', 'total'] },
         etc_costs: { fields: ['category', 'content', 'usage', 'total'], labels: ['계정', '내용', '사용처', '금액'], title: '기타경비', sums: ['total'] }
+    };
+
+    // 🚀 수정: '식재 및 반입 수기 장부' 버튼을 메뉴에 띄우기 위해 MAPS에 임시 추가 (렌더링은 별도 컴포넌트 사용)
+    const EXTENDED_FIELD_MAPS = {
+        manual_ledger: { title: '식재 및 반입 수기 장부' },
+        ...FIELD_MAPS
     };
 
     const onResizeStart = (tableKey, colIndex, e) => {
@@ -660,7 +664,13 @@ export default function DailyWorkPage() {
 
                 setFormData(fullData); setOriginalData(fullData);
                 if (notes.savedColumnWidths) setColumnWidths(notes.savedColumnWidths);
-                if (notes.savedVisibleSections) setVisibleSections(notes.savedVisibleSections);
+                // 🚀 수정: 과거 저장 데이터에 manual_ledger 표시 여부가 없다면 기본적으로 true 할당
+                if (notes.savedVisibleSections) {
+                    setVisibleSections({
+                        ...notes.savedVisibleSections,
+                        manual_ledger: notes.savedVisibleSections.manual_ledger ?? true
+                    });
+                }
                 setTodayPhotos(rep.photos?.filter(p => p.timeType === 'today') || []);
                 setTomorrowPhotos(rep.photos?.filter(p => p.timeType === 'tomorrow') || []);
             } else {
@@ -693,7 +703,6 @@ export default function DailyWorkPage() {
     const handleSave = async () => {
         if (isSaving) return; setIsSaving(true);
         try {
-            // 1. 사진 업로드 처리 (기존 동일)
             const uploadedPhotos = await Promise.all([...todayPhotos, ...tomorrowPhotos].map(async (p) => {
                 if (!p || p.url) return p;
                 const path = `${siteId}/${uuidv4()}.jpg`;
@@ -702,7 +711,6 @@ export default function DailyWorkPage() {
                 return { id: p.id, url: data.publicUrl, timeType: p.timeType, description: p.description };
             }));
 
-            // 2. 저장할 데이터 클렌징
             const cleanDataToSave = JSON.parse(JSON.stringify(formData));
 
             if (cleanDataToSave.manual_ledger) {
@@ -726,7 +734,7 @@ export default function DailyWorkPage() {
                 }
             });
 
-            // 3. 현재 날짜 보고서 저장
+            // 🚀 수정: 저장 시 visibleSections 데이터(메뉴 on/off 상태)도 함께 저장
             const payload = {
                 site_id: siteId, report_date: formData.report_date, author_id: currentUser.id, photos: uploadedPhotos.filter(v => v !== null),
                 notes: JSON.stringify({ ...cleanDataToSave, savedVisibleSections: visibleSections, savedColumnWidths: columnWidths }), 
@@ -737,21 +745,18 @@ export default function DailyWorkPage() {
             
             await supabase.from('daily_site_reports').upsert(targetId ? { id: targetId, ...payload } : payload);
 
-            // 🚀 4. 이후 날짜 자동 재계산 및 업데이트 (백그라운드 처리)
             const { data: futureReports } = await supabase
                 .from('daily_site_reports')
                 .select('id, notes, report_date')
                 .eq('site_id', siteId)
-                .gt('report_date', formData.report_date) // 현재 저장한 날짜 이후의 모든 데이터 검색
+                .gt('report_date', formData.report_date)
                 .order('report_date', { ascending: true });
 
             if (futureReports && futureReports.length > 0) {
                 for (const futureReport of futureReports) {
                     const futureNotes = safeParseJSON(futureReport.notes);
-                    // 같은 카테고리(예: 'plant') 문서만 연동
                     if ((futureNotes.report_category || 'plant') === categoryType) {
                         const syncedFutureData = await syncWithAllPastData(futureNotes, false);
-                        
                         await supabase.from('daily_site_reports').update({
                             notes: JSON.stringify(syncedFutureData)
                         }).eq('id', futureReport.id);
@@ -760,7 +765,6 @@ export default function DailyWorkPage() {
                 toast.success("이후 날짜의 작업일보 데이터도 자동 업데이트 되었습니다.");
             }
 
-            // 5. 화면 갱신 처리
             const syncedData = await syncWithAllPastData(cleanDataToSave, false);
             setOriginalData(JSON.parse(JSON.stringify(syncedData)));
             setFormData(JSON.parse(JSON.stringify(syncedData)));
@@ -1059,7 +1063,8 @@ export default function DailyWorkPage() {
                         <div className="flex flex-col gap-1 border-l pl-4 border-slate-200">
                             <div className="flex gap-1 font-sans items-center">
                                 <div className="flex items-center gap-1 mr-2 text-slate-400 font-black"><MousePointerClick size={12} /><span className="text-[9px]">항목 켜기/끄기:</span></div>
-                                {Object.entries(FIELD_MAPS).map(([key, config]) => (
+                                {/* 🚀 수정: '식재 및 반입 수기 장부' 제어 버튼 동적 렌더링 */}
+                                {Object.entries(EXTENDED_FIELD_MAPS).map(([key, config]) => (
                                     <button key={key} onClick={() => setVisibleSections(p => ({...p, [key]: !visibleSections[key]}))} className={`px-2.5 py-1.5 text-[9px] transition-all font-black border ${visibleSections[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border border-slate-100 hover:border-slate-300'}`}>{config.title.split('(')[0]}</button>
                                 ))}
                             </div>
@@ -1317,11 +1322,15 @@ export default function DailyWorkPage() {
 
                             </div>
 
-                            <div className="col-span-5 border-r border-slate-400 bg-white flex flex-col overflow-hidden">
-                                <ManualLedgerTable list={formData?.manual_ledger || []} setFormData={setFormData} readOnly={isReadOnly} />
-                            </div>
+                            {/* 🚀 수정: 수기 장부 렌더링 조건을 visibleSections.manual_ledger 로 제어 */}
+                            {visibleSections.manual_ledger && (
+                                <div className="col-span-5 border-r border-slate-400 bg-white flex flex-col overflow-hidden">
+                                    <ManualLedgerTable list={formData?.manual_ledger || []} setFormData={setFormData} readOnly={isReadOnly} />
+                                </div>
+                            )}
 
-                            <div className="col-span-4 bg-white flex flex-col justify-start h-full">
+                            {/* 레이아웃 유지: 수기장부가 꺼져있으면 9칸 차지, 켜져있으면 4칸 차지하도록 조건부 렌더링 조정 */}
+                            <div className={`${visibleSections.manual_ledger ? 'col-span-4' : 'col-span-9'} bg-white flex flex-col justify-start h-full`}>
                                 <div className="bg-slate-800 text-white h-8 flex items-center justify-center text-[10px] uppercase font-black shrink-0">실시간 정산 내역 합계</div>
                                 <table className="w-full text-[10px] border-collapse" style={{ tableLayout: 'fixed' }}>
                                     <colgroup>
