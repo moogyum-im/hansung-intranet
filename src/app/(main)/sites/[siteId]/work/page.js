@@ -361,6 +361,11 @@ export default function DailyWorkPage() {
     const [originalData, setOriginalData] = useState(null);
     const [siteData, setSiteData] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
+    
+    // 🚀 수정: 업로드 진행 상태 관리를 위한 state 추가
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadTotal, setUploadTotal] = useState(0);
+
     const [zoomLevel, setZoomLevel] = useState(1.0);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importDate, setImportDate] = useState("");
@@ -372,7 +377,6 @@ export default function DailyWorkPage() {
 
     const isReadOnly = view === 'detail';
 
-    // 🚀 수정: visibleSections의 기본 상태에 'manual_ledger' 추가 (기본값 true)
     const [visibleSections, setVisibleSections] = useState({
         manual_ledger: true, labor_costs: true, material_costs: true, equipment_costs: true,
         tree_costs: true, transport_costs: true, subcontract_costs: true, etc_costs: true
@@ -408,7 +412,6 @@ export default function DailyWorkPage() {
         etc_costs: { fields: ['category', 'content', 'usage', 'total'], labels: ['계정', '내용', '사용처', '금액'], title: '기타경비', sums: ['total'] }
     };
 
-    // 🚀 수정: '식재 및 반입 수기 장부' 버튼을 메뉴에 띄우기 위해 MAPS에 임시 추가 (렌더링은 별도 컴포넌트 사용)
     const EXTENDED_FIELD_MAPS = {
         manual_ledger: { title: '식재 및 반입 수기 장부' },
         ...FIELD_MAPS
@@ -664,7 +667,6 @@ export default function DailyWorkPage() {
 
                 setFormData(fullData); setOriginalData(fullData);
                 if (notes.savedColumnWidths) setColumnWidths(notes.savedColumnWidths);
-                // 🚀 수정: 과거 저장 데이터에 manual_ledger 표시 여부가 없다면 기본적으로 true 할당
                 if (notes.savedVisibleSections) {
                     setVisibleSections({
                         ...notes.savedVisibleSections,
@@ -701,15 +703,28 @@ export default function DailyWorkPage() {
     };
 
     const handleSave = async () => {
-        if (isSaving) return; setIsSaving(true);
+        if (isSaving) return; 
+        setIsSaving(true);
+        
         try {
-            const uploadedPhotos = await Promise.all([...todayPhotos, ...tomorrowPhotos].map(async (p) => {
-                if (!p || p.url) return p;
-                const path = `${siteId}/${uuidv4()}.jpg`;
-                await supabase.storage.from('daily_reports').upload(path, p.file);
-                const { data } = supabase.storage.from('daily_reports').getPublicUrl(path);
-                return { id: p.id, url: data.publicUrl, timeType: p.timeType, description: p.description };
-            }));
+            // 🚀 수정: 사진 업로드를 순차적으로 처리하여 진행률을 계산
+            const photosToUpload = [...todayPhotos, ...tomorrowPhotos].filter(p => p !== null);
+            setUploadTotal(photosToUpload.length);
+            setUploadProgress(0);
+
+            const uploadedPhotos = [];
+            for (let i = 0; i < photosToUpload.length; i++) {
+                const p = photosToUpload[i];
+                if (p.url) {
+                    uploadedPhotos.push(p);
+                } else {
+                    const path = `${siteId}/${uuidv4()}.jpg`;
+                    await supabase.storage.from('daily_reports').upload(path, p.file);
+                    const { data } = supabase.storage.from('daily_reports').getPublicUrl(path);
+                    uploadedPhotos.push({ id: p.id, url: data.publicUrl, timeType: p.timeType, description: p.description });
+                }
+                setUploadProgress(i + 1); // 진행률 업데이트
+            }
 
             const cleanDataToSave = JSON.parse(JSON.stringify(formData));
 
@@ -734,9 +749,8 @@ export default function DailyWorkPage() {
                 }
             });
 
-            // 🚀 수정: 저장 시 visibleSections 데이터(메뉴 on/off 상태)도 함께 저장
             const payload = {
-                site_id: siteId, report_date: formData.report_date, author_id: currentUser.id, photos: uploadedPhotos.filter(v => v !== null),
+                site_id: siteId, report_date: formData.report_date, author_id: currentUser.id, photos: uploadedPhotos,
                 notes: JSON.stringify({ ...cleanDataToSave, savedVisibleSections: visibleSections, savedColumnWidths: columnWidths }), 
                 content: cleanDataToSave.today_work || '작업일보 세부 기록 참조'
             };
@@ -788,6 +802,8 @@ export default function DailyWorkPage() {
             toast.error("저장 중 오류가 발생했습니다."); 
         } finally { 
             setIsSaving(false); 
+            setUploadTotal(0);
+            setUploadProgress(0);
         }
     };
 
@@ -1037,7 +1053,38 @@ export default function DailyWorkPage() {
     const spendRate = contractAmt > 0 ? ((sTotals.total / contractAmt) * 100).toFixed(2) : "0.00";
 
     return (
-        <div className="h-screen bg-white font-bold font-sans flex flex-col overflow-hidden rounded-none">
+        <div className="h-screen bg-white font-bold font-sans flex flex-col overflow-hidden rounded-none relative">
+            
+            {/* 🚀 수정: 사진 업로드 및 데이터 저장 진행 상태를 알려주는 로딩 오버레이 추가 */}
+            {isSaving && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[999] flex flex-col items-center justify-center font-sans">
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4 border border-slate-200">
+                        <Loader2 className="animate-spin text-blue-600 mb-6" size={48} />
+                        <h2 className="text-xl font-black text-slate-800 mb-2 tracking-tight">작업일보 저장 중</h2>
+                        <p className="text-sm font-bold text-slate-500 mb-6 text-center">
+                            {uploadTotal > 0 
+                                ? `사진을 서버에 안전하게 업로드하고 있습니다.\n(${uploadProgress} / ${uploadTotal})` 
+                                : "데이터를 동기화하고 있습니다..."}
+                        </p>
+                        
+                        {/* 프로그레스 바 */}
+                        {uploadTotal > 0 && (
+                            <div className="w-full bg-slate-100 rounded-full h-3 mb-2 overflow-hidden shadow-inner border border-slate-200">
+                                <div 
+                                    className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+                                    style={{ width: `${Math.round((uploadProgress / uploadTotal) * 100)}%` }}
+                                ></div>
+                            </div>
+                        )}
+                        {uploadTotal > 0 && (
+                            <span className="text-xs font-black text-blue-600">
+                                {Math.round((uploadProgress / uploadTotal) * 100)}% 완료
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {selectedImage && (
                 <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setSelectedImage(null)}>
                     <div className="relative max-w-5xl w-full">
@@ -1063,7 +1110,6 @@ export default function DailyWorkPage() {
                         <div className="flex flex-col gap-1 border-l pl-4 border-slate-200">
                             <div className="flex gap-1 font-sans items-center">
                                 <div className="flex items-center gap-1 mr-2 text-slate-400 font-black"><MousePointerClick size={12} /><span className="text-[9px]">항목 켜기/끄기:</span></div>
-                                {/* 🚀 수정: '식재 및 반입 수기 장부' 제어 버튼 동적 렌더링 */}
                                 {Object.entries(EXTENDED_FIELD_MAPS).map(([key, config]) => (
                                     <button key={key} onClick={() => setVisibleSections(p => ({...p, [key]: !visibleSections[key]}))} className={`px-2.5 py-1.5 text-[9px] transition-all font-black border ${visibleSections[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border border-slate-100 hover:border-slate-300'}`}>{config.title.split('(')[0]}</button>
                                 ))}
@@ -1322,14 +1368,12 @@ export default function DailyWorkPage() {
 
                             </div>
 
-                            {/* 🚀 수정: 수기 장부 렌더링 조건을 visibleSections.manual_ledger 로 제어 */}
                             {visibleSections.manual_ledger && (
                                 <div className="col-span-5 border-r border-slate-400 bg-white flex flex-col overflow-hidden">
                                     <ManualLedgerTable list={formData?.manual_ledger || []} setFormData={setFormData} readOnly={isReadOnly} />
                                 </div>
                             )}
 
-                            {/* 레이아웃 유지: 수기장부가 꺼져있으면 9칸 차지, 켜져있으면 4칸 차지하도록 조건부 렌더링 조정 */}
                             <div className={`${visibleSections.manual_ledger ? 'col-span-4' : 'col-span-9'} bg-white flex flex-col justify-start h-full`}>
                                 <div className="bg-slate-800 text-white h-8 flex items-center justify-center text-[10px] uppercase font-black shrink-0">실시간 정산 내역 합계</div>
                                 <table className="w-full text-[10px] border-collapse" style={{ tableLayout: 'fixed' }}>
