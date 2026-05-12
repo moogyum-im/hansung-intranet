@@ -714,7 +714,7 @@ export default function GroupChatWindow({
                         <div className="flex-1 bg-[#F2F3F5] rounded-2xl px-3.5 py-2.5 min-h-[40px] flex items-center">
                             <input ref={messageInputRef} type="text" value={newMessage}
                                 onChange={handleInputChange}
-                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(e); } }}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSendMessage(e); } }}
                                 placeholder="메시지를 입력하세요"
                                 className="flex-1 bg-transparent text-[13.5px] text-[#1A1A1A] placeholder:text-[#AAA] outline-none" />
                         </div>
@@ -818,7 +818,7 @@ export default function GroupChatWindow({
                             </button>
                             <div className="flex-1 bg-[#F2F3F5] rounded-2xl px-3.5 py-2.5 flex items-center">
                                 <input ref={messageInputRef} type="text" value={newMessage} onChange={handleInputChange}
-                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(e); } }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSendMessage(e); } }}
                                     placeholder="메시지를 입력하세요"
                                     className="flex-1 bg-transparent text-[13.5px] text-[#1A1A1A] placeholder:text-[#AAA] outline-none" />
                             </div>
