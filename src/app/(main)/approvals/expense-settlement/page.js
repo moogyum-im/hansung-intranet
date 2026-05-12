@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
@@ -11,6 +11,8 @@ import { X, Plus, Loader2, CheckCircle, FileIcon, Trash2, ChevronRight, Users, I
 export default function ExpenseSettlementPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const editId = searchParams.get('editId');
     const [isRestored, setIsRestored] = useState(false);
     const [saveStatus, setSaveStatus] = useState('완료');
     const isInitialMount = useRef(true);
@@ -66,37 +68,52 @@ export default function ExpenseSettlementPage() {
         const init = async () => {
             const { data } = await supabase.from('profiles').select('id, full_name, department, position').eq('employment_status', '재직');
             if (data) setAllEmployees(data);
-            
-            const saved = localStorage.getItem('HANSUNG_DRAFT_EXPENSE_SETTLEMENT_FINAL_V3');
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    setFormData(parsed.formData);
-                    if (parsed.approvers) setApprovers(parsed.approvers);
-                    if (parsed.referrers) setReferrers(parsed.referrers);
-                    if (parsed.mapAttachments) setMapAttachments(parsed.mapAttachments);
-                    if (parsed.receiptAttachments) setReceiptAttachments(parsed.receiptAttachments);
-                } catch (e) { console.error("복구 실패", e); }
+
+            if (editId) {
+                // 수정 모드: DB에서 기존 문서 로드
+                const { data: doc } = await supabase.from('approval_documents').select('*').eq('id', editId).single();
+                const { data: approversData } = await supabase.from('approval_document_approvers').select('*, approver:profiles!approver_id(id, full_name, department, position)').eq('document_id', editId).order('sequence', { ascending: true });
+                const { data: referrersData } = await supabase.from('approval_document_referrers').select('*, referrer:profiles!referrer_id(id, full_name, department, position)').eq('document_id', editId);
+                if (doc) {
+                    const content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content || {};
+                    setFormData(prev => ({ ...prev, ...content }));
+                    if (content.mapAttachments) setMapAttachments(content.mapAttachments);
+                    if (content.receiptAttachments) setReceiptAttachments(content.receiptAttachments);
+                }
+                if (approversData) setApprovers(approversData.map(a => ({ id: a.approver_id, full_name: a.approver?.full_name, position: a.approver?.position })));
+                if (referrersData) setReferrers(referrersData.map(r => ({ id: r.referrer_id, full_name: r.referrer?.full_name, position: r.referrer?.position })));
+            } else {
+                const saved = localStorage.getItem('HANSUNG_DRAFT_EXPENSE_SETTLEMENT_FINAL_V3');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        setFormData(parsed.formData);
+                        if (parsed.approvers) setApprovers(parsed.approvers);
+                        if (parsed.referrers) setReferrers(parsed.referrers);
+                        if (parsed.mapAttachments) setMapAttachments(parsed.mapAttachments);
+                        if (parsed.receiptAttachments) setReceiptAttachments(parsed.receiptAttachments);
+                    } catch (e) { console.error("복구 실패", e); }
+                }
             }
             setIsRestored(true);
         };
         init();
-    }, []);
+    }, [editId]);
 
     useEffect(() => {
-        if (!isRestored) return;
+        if (!isRestored || editId) return;
         if (isInitialMount.current) { isInitialMount.current = false; return; }
         setSaveStatus('저장중');
         const timeout = setTimeout(() => {
             try {
-                localStorage.setItem('HANSUNG_DRAFT_EXPENSE_SETTLEMENT_FINAL_V3', JSON.stringify({ 
-                    formData, approvers, referrers, mapAttachments, receiptAttachments 
+                localStorage.setItem('HANSUNG_DRAFT_EXPENSE_SETTLEMENT_FINAL_V3', JSON.stringify({
+                    formData, approvers, referrers, mapAttachments, receiptAttachments
                 }));
                 setSaveStatus('완료');
             } catch (e) { setSaveStatus('에러'); }
         }, 300);
         return () => clearTimeout(timeout);
-    }, [formData, approvers, referrers, mapAttachments, receiptAttachments, isRestored]);
+    }, [editId, formData, approvers, referrers, mapAttachments, receiptAttachments, isRestored]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -158,11 +175,18 @@ export default function ExpenseSettlementPage() {
                 attachments: [...mapAttachments, ...receiptAttachments],
             };
 
-            const res = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData) });
-            if (!res.ok) throw new Error('상신 실패');
-            localStorage.removeItem('HANSUNG_DRAFT_EXPENSE_SETTLEMENT_FINAL_V3');
-            toast.success("결재 상신 완료!");
-            router.push('/mypage');
+            if (editId) {
+                const res = await fetch('/api/update-approval', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId: editId, ...submissionData }) });
+                if (!res.ok) { const d = await res.json(); throw new Error(d.error || '수정 실패'); }
+                toast.success("문서가 수정되었습니다.");
+                router.push(`/approvals/${editId}`);
+            } else {
+                const res = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData) });
+                if (!res.ok) throw new Error('상신 실패');
+                localStorage.removeItem('HANSUNG_DRAFT_EXPENSE_SETTLEMENT_FINAL_V3');
+                toast.success("결재 상신 완료!");
+                router.push('/mypage');
+            }
         } catch (error) { toast.error("오류: " + error.message); } finally { setLoading(false); }
     };
 
@@ -183,7 +207,7 @@ export default function ExpenseSettlementPage() {
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
                 <div className="flex items-center gap-2"></div>
                 <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : <><CheckCircle size={14} /> 결재 상신하기</>}
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 결재 상신하기</>}
                 </button>
             </div>
 

@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { notFound, useParams } from 'next/navigation';
+import { notFound, useParams, useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
+import { Edit3 } from 'lucide-react';
 
 import dynamic from 'next/dynamic';
 
@@ -18,9 +19,22 @@ const InternalApprovalView = dynamic(() => import('./InternalApprovalView'), { s
 const BusinessTripView = dynamic(() => import('./BusinessTripView'), { ssr: false });
 const ExpenseSettlementView = dynamic(() => import('./ExpenseSettlementView'), { ssr: false });
 
+const DOC_TYPE_TO_PATH = {
+    resignation: '/approvals/resignation',
+    apology: '/approvals/apology',
+    work_report: '/approvals/work-report',
+    leave_request: '/approvals/leave',
+    expense_report: '/approvals/expense',
+    '지출결의서': '/approvals/expense',
+    internal_approval: '/approvals/internal',
+    business_trip: '/approvals/business-trip',
+    expense_settlement: '/approvals/expense-settlement',
+};
+
 export default function ApprovalDetailPage() {
     const { id: documentId } = useParams();
-    const { employee, loading: employeeLoading } = useEmployee(); 
+    const router = useRouter();
+    const { employee, loading: employeeLoading } = useEmployee();
     const [document, setDocument] = useState(null); 
     const [approvalHistory, setApprovalHistory] = useState([]);
     const [referrerHistory, setReferrerHistory] = useState([]);
@@ -139,8 +153,23 @@ export default function ApprovalDetailPage() {
         }
     };
 
+    const isEditable =
+        document.status === 'pending' &&
+        (employee?.id === document.requester_id || employee?.id === document.author_id);
+    const editPath = DOC_TYPE_TO_PATH[document.document_type];
+
     return (
         <div className="min-h-screen bg-gray-50 overflow-y-auto">
+            {isEditable && editPath && (
+                <div className="flex justify-end px-6 pt-4 no-print">
+                    <button
+                        onClick={() => router.push(`${editPath}?editId=${documentId}`)}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black rounded shadow transition-colors"
+                    >
+                        <Edit3 size={13} /> 문서 수정
+                    </button>
+                </div>
+            )}
             {renderDocumentView()}
         </div>
     );

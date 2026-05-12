@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
@@ -11,6 +11,9 @@ import { X, Plus, Loader2, Database, CheckCircle, Users, Calendar, Plane, ImageI
 export default function LeaveRequestPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const editId = searchParams.get('editId');
+    const [editLoading, setEditLoading] = useState(!!searchParams.get('editId'));
 
     const [allEmployees, setAllEmployees] = useState([]);
     const [formData, setFormData] = useState({
@@ -69,6 +72,7 @@ export default function LeaveRequestPage() {
     }, [formData.startDate, formData.endDate, formData.leaveType]);
 
     useEffect(() => {
+        if (editId) return;
         const saved = localStorage.getItem('leave_draft_backup');
         if (saved) {
             try {
@@ -79,12 +83,31 @@ export default function LeaveRequestPage() {
                 setAttachments(parsed.attachments || []);
             } catch (e) { console.error("복구 실패", e); }
         }
-    }, []);
+    }, [editId]);
 
     useEffect(() => {
+        if (editId) return;
         const dataToSave = { formData, approvers, referrers, attachments };
         localStorage.setItem('leave_draft_backup', JSON.stringify(dataToSave));
-    }, [formData, approvers, referrers, attachments]);
+    }, [editId, formData, approvers, referrers, attachments]);
+
+    useEffect(() => {
+        if (!editId) return;
+        const loadDocument = async () => {
+            const { data: doc } = await supabase.from('approval_documents').select('*').eq('id', editId).single();
+            const { data: approversData } = await supabase.from('approval_document_approvers').select('*, approver:profiles!approver_id(id, full_name, department, position)').eq('document_id', editId).order('sequence', { ascending: true });
+            const { data: referrersData } = await supabase.from('approval_document_referrers').select('*, referrer:profiles!referrer_id(id, full_name, department, position)').eq('document_id', editId);
+            if (doc) {
+                const content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content || {};
+                setFormData(prev => ({ ...prev, ...content }));
+                setAttachments(doc.attachments || []);
+            }
+            if (approversData) setApprovers(approversData.map(a => ({ id: a.approver_id, full_name: a.approver?.full_name, position: a.approver?.position })));
+            if (referrersData) setReferrers(referrersData.map(r => ({ id: r.referrer_id, full_name: r.referrer?.full_name, position: r.referrer?.position })));
+            setEditLoading(false);
+        };
+        loadDocument();
+    }, [editId]);
 
     useEffect(() => {
         const fetchEmployees = async () => {
@@ -183,16 +206,18 @@ export default function LeaveRequestPage() {
                 attachments: attachments,
             };
 
-            const response = await fetch('/api/submit-approval', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(submissionData),
-            });
-
-            if (!response.ok) throw new Error('상신 실패');
-            localStorage.removeItem('leave_draft_backup');
-            toast.success("휴가 신청서 상신 완료!");
-            router.push('/mypage');
+            if (editId) {
+                const res = await fetch('/api/update-approval', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId: editId, ...submissionData }) });
+                if (!res.ok) { const d = await res.json(); throw new Error(d.error || '수정 실패'); }
+                toast.success("문서가 수정되었습니다.");
+                router.push(`/approvals/${editId}`);
+            } else {
+                const response = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData) });
+                if (!response.ok) throw new Error('상신 실패');
+                localStorage.removeItem('leave_draft_backup');
+                toast.success("휴가 신청서 상신 완료!");
+                router.push('/mypage');
+            }
         } catch (error) { toast.error(error.message); } finally { setLoading(false); }
     };
 
@@ -206,14 +231,14 @@ export default function LeaveRequestPage() {
         </div>
     );
 
-    if (employeeLoading) return <div className="p-10 text-black font-black text-xs h-screen flex items-center justify-center font-sans animate-pulse uppercase tracking-widest font-black">HANSUNG ERP SYNCING...</div>;
+    if (employeeLoading || editLoading) return <div className="p-10 text-black font-black text-xs h-screen flex items-center justify-center font-sans animate-pulse uppercase tracking-widest font-black">HANSUNG ERP SYNCING...</div>;
 
     return (
         <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none font-black">
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
                 <div className="flex items-center gap-2 font-black"></div>
                 <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "파일 업로드 중..." : <><CheckCircle size={14} /> 휴가 신청 상신</>}
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "파일 업로드 중..." : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 휴가 신청 상신</>}
                 </button>
             </div>
 
