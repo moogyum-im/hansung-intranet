@@ -170,7 +170,7 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
     );
 };
 
-export default function ExpenseReportPage() {
+function ExpenseReportPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -524,4 +524,8 @@ export default function ExpenseReportPage() {
             </div>
         </div>
     );
+}
+
+export default function ExpenseReportPageWrapper() {
+  return <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500 text-sm">HANSUNG ERP SYNCING...</div>}><ExpenseReportPage /></React.Suspense>;
 }

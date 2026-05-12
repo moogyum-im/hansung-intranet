@@ -51,7 +51,7 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, minHeight = "400px
     );
 };
 
-export default function InternalApprovalPage() {
+function InternalApprovalPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -361,4 +361,8 @@ export default function InternalApprovalPage() {
             </div>
         </div>
     );
+}
+
+export default function InternalApprovalPageWrapper() {
+  return <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500 text-sm">HANSUNG ERP SYNCING...</div>}><InternalApprovalPage /></React.Suspense>;
 }

@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
 import { X, Plus, Loader2, CheckCircle, FileIcon, Trash2, ChevronRight, Users, ImageIcon, Map, Info } from 'lucide-react';
 
-export default function ExpenseSettlementPage() {
+function ExpenseSettlementPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -434,4 +434,8 @@ export default function ExpenseSettlementPage() {
             </div>
         </div>
     );
+}
+
+export default function ExpenseSettlementPageWrapper() {
+  return <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500 text-sm">HANSUNG ERP SYNCING...</div>}><ExpenseSettlementPage /></React.Suspense>;
 }

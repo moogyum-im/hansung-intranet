@@ -50,7 +50,7 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, minHeight = "200px
     );
 };
 
-export default function WorkReportPage() {
+function WorkReportPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -565,4 +565,8 @@ export default function WorkReportPage() {
             </div>
         </div>
     );
+}
+
+export default function WorkReportPageWrapper() {
+  return <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500 text-sm">HANSUNG ERP SYNCING...</div>}><WorkReportPage /></React.Suspense>;
 }

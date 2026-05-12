@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
 import { X, Plus, Loader2, Database, CheckCircle, FileIcon, ChevronRight, Users, Calendar, AlertCircle, ImageIcon } from 'lucide-react';
 
-export default function ResignationPage() {
+function ResignationPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -283,4 +283,8 @@ export default function ResignationPage() {
             </div>
         </div>
     );
+}
+
+export default function ResignationPageWrapper() {
+  return <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500 text-sm">HANSUNG ERP SYNCING...</div>}><ResignationPage /></React.Suspense>;
 }

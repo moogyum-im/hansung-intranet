@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
 import { X, Plus, Loader2, Database, CheckCircle, Users, Calendar, Plane, ImageIcon, UserPlus, Info } from 'lucide-react';
 
-export default function LeaveRequestPage() {
+function LeaveRequestPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -417,4 +417,8 @@ export default function LeaveRequestPage() {
             </div>
         </div>
     );
+}
+
+export default function LeaveRequestPageWrapper() {
+  return <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500 text-sm">HANSUNG ERP SYNCING...</div>}><LeaveRequestPage /></React.Suspense>;
 }
