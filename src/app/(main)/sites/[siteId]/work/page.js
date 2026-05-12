@@ -759,6 +759,14 @@ export default function DailyWorkPage() {
             
             await supabase.from('daily_site_reports').upsert(targetId ? { id: targetId, ...payload } : payload);
 
+// 현장 카드 공정률 반영: construction_sites 테이블 동기화
+const totalPlant = parseNumber(formData.progress_plant_prev) + parseNumber(formData.progress_plant);
+const totalFacility = parseNumber(formData.progress_facility_prev) + parseNumber(formData.progress_facility);
+await supabase.from('construction_sites').update({
+    progress_plant: totalPlant,
+    progress_facility: totalFacility
+}).eq('id', siteId);
+
             const { data: futureReports } = await supabase
                 .from('daily_site_reports')
                 .select('id, notes, report_date')
@@ -871,9 +879,30 @@ export default function DailyWorkPage() {
         } catch (e) { toast.error("불러오기 실패"); }
     };
 
-    const handlePhotoUpload = (e, type, idx) => {
+    const compressImage = (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const MAX_WIDTH = 1200;
+                    let w = img.width, h = img.height;
+                    if (w > MAX_WIDTH) { h = Math.round((h * MAX_WIDTH) / w); w = MAX_WIDTH; }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    canvas.toBlob((blob) => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.75);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handlePhotoUpload = async (e, type, idx) => {
         const file = e.target.files[0]; if (!file) return;
-        const newPhoto = { id: uuidv4(), file, preview: URL.createObjectURL(file), timeType: type, description: "" };
+        const compressed = await compressImage(file);
+        const newPhoto = { id: uuidv4(), file: compressed, preview: URL.createObjectURL(compressed), timeType: type, description: "" };
         type === 'today' ? setTodayPhotos(prev => { const n = [...prev]; n[idx] = newPhoto; return n; }) : setTomorrowPhotos(prev => { const n = [...prev]; n[idx] = newPhoto; return n; });
     };
 
@@ -1228,7 +1257,7 @@ export default function DailyWorkPage() {
                                                     <td colSpan={2} className="bg-blue-50/30 text-center leading-tight p-0">
                                                         <div className="flex flex-col items-center justify-center h-full w-full">
                                                             <span className="text-[6px] text-blue-400 font-black">금일(입력)</span>
-                                                            <input className="w-full text-center text-[11px] text-blue-700 outline-none font-black bg-transparent" value={displayVal} readOnly={isReadOnly} onFocus={() => setFocusedField(fieldId)} onBlur={() => setFocusedField(null)} onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value.replace(/[^0-9.]/g, '')})} />
+                                                            <input className="w-full text-center text-[11px] text-blue-700 outline-none font-black bg-transparent" value={displayVal} readOnly={isReadOnly} onFocus={() => setFocusedField(fieldId)} onBlur={() => setFocusedField(null)} onChange={e=>setFormData({...formData, [`progress_${k}`]: e.target.value.replace(/[^0-9.\-]/g, '').replace(/(?!^)-/g, '')})} />
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1428,31 +1457,83 @@ export default function DailyWorkPage() {
                         </div>
 
                         <div className="p-6 bg-white">
-                            <h4 className="text-lg font-black flex items-center gap-3 font-sans mb-4"><ImageIcon size={24} className="text-slate-900"/> 시공 사진 대지</h4>
+                            <div className="flex items-center justify-between mb-5">
+                                <h4 className="text-[13px] font-black flex items-center gap-2 font-sans text-slate-800 uppercase tracking-widest">
+                                    <ImageIcon size={16} className="text-slate-600"/> 시공 사진 대지
+                                    <span className="text-[10px] font-bold text-slate-300 normal-case ml-1">{maxPhotoRows}건</span>
+                                </h4>
+                                {!isReadOnly && (
+                                    <button onClick={() => { setTodayPhotos([...todayPhotos, {id:uuidv4()}]); setTomorrowPhotos([...tomorrowPhotos, {id:uuidv4()}]); }}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white font-black text-[10px] hover:bg-blue-600 transition-all font-sans shadow-sm">
+                                        <Plus size={11} strokeWidth={3}/> 사진 대지 추가
+                                    </button>
+                                )}
+                            </div>
+
+                            {maxPhotoRows === 0 && !isReadOnly && (
+                                <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed border-slate-200 bg-slate-50/50">
+                                    <Camera size={32} className="text-slate-200 mb-3"/>
+                                    <p className="text-[11px] font-black text-slate-300">위 버튼을 눌러 사진 대지를 추가하세요</p>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-4 gap-4 font-black">
                                 {Array.from({ length: maxPhotoRows }).map((_, idx) => (
-                                    <div key={idx} className="grid grid-cols-2 gap-2 h-[260px] bg-white relative group">
-                                        {!isReadOnly && <button onClick={() => handleRemovePhotoRow(idx)} className="absolute -top-2 -right-2 bg-red-600 text-white p-1 rounded-full shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700" title="행 삭제"><Trash2 size={14} /></button>}
-                                        {['tomorrow', 'today'].map(type => {
-                                            const photo = (type === 'today' ? todayPhotos : tomorrowPhotos)[idx];
-                                            const imgSrc = photo?.preview || photo?.url;
-                                            return (
-                                                <div key={type} className="flex flex-col gap-2 h-full">
-                                                    <div className={`text-[8px] text-center font-black py-1.5 font-sans ${type==='today'?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-400'}`}>{type==='today'?'금일 현황':'전일 현황'}</div>
-                                                    <div className="flex-1 bg-slate-50 border border-slate-300 flex items-center justify-center cursor-zoom-in overflow-hidden relative shadow-inner" onClick={() => imgSrc && setSelectedImage(imgSrc)}>
-                                                        {imgSrc ? <img src={imgSrc} className="w-full h-full object-cover" alt="사진" /> : <Camera size={28} className="opacity-10" />}
-                                                        {!isReadOnly && <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handlePhotoUpload(e, type, idx)} />}
+                                    <div key={idx} className="bg-white border border-slate-200 shadow-sm relative group flex flex-col">
+                                        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50 shrink-0">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">NO. {String(idx + 1).padStart(2, '0')}</span>
+                                            {!isReadOnly && (
+                                                <button onClick={() => handleRemovePhotoRow(idx)}
+                                                    className="flex items-center gap-1 text-red-400 hover:text-red-600 text-[9px] font-black opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Trash2 size={9}/> 삭제
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-0 flex-1">
+                                            {['tomorrow', 'today'].map((type, typeIdx) => {
+                                                const photo = (type === 'today' ? todayPhotos : tomorrowPhotos)[idx];
+                                                const imgSrc = photo?.preview || photo?.url;
+                                                const isToday = type === 'today';
+                                                return (
+                                                    <div key={type} className={`flex flex-col ${typeIdx === 0 ? 'border-r border-slate-100' : ''}`}>
+                                                        <div className={`text-[8px] font-black text-center py-1.5 tracking-widest uppercase shrink-0
+                                                            ${isToday ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                            {isToday ? '금일' : '전일'}
+                                                        </div>
+                                                        <div className={`flex-1 flex items-center justify-center overflow-hidden relative min-h-[160px]
+                                                            ${imgSrc ? 'bg-black cursor-zoom-in' : isToday ? 'bg-blue-50/40 cursor-pointer' : 'bg-slate-50'}
+                                                            ${!imgSrc && !isReadOnly && isToday ? 'hover:bg-blue-50' : ''} transition-colors`}
+                                                            onClick={() => imgSrc && setSelectedImage(imgSrc)}>
+                                                            {imgSrc
+                                                                ? <img src={imgSrc} className="w-full h-full object-cover" alt="사진" />
+                                                                : <div className="flex flex-col items-center gap-1.5 pointer-events-none select-none">
+                                                                    <Camera size={20} className={isToday ? 'text-blue-200' : 'text-slate-200'} />
+                                                                    {!isReadOnly && isToday && <span className="text-[8px] font-black text-blue-300">사진 추가</span>}
+                                                                </div>
+                                                            }
+                                                            {!isReadOnly && isToday && <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handlePhotoUpload(e, type, idx)} />}
+                                                        </div>
+                                                        <input
+                                                            className={`px-2 py-1.5 text-[9px] font-black font-sans outline-none bg-transparent border-t transition-colors shrink-0
+                                                                ${isToday ? 'border-blue-100 focus:border-blue-400 placeholder:text-blue-200 text-blue-900' : 'border-slate-100 focus:border-slate-300 placeholder:text-slate-300 text-slate-600'}`}
+                                                            placeholder="설명 입력"
+                                                            value={photo?.description || ''}
+                                                            readOnly={isReadOnly}
+                                                            onChange={e => {
+                                                                const n = (type === 'today' ? [...todayPhotos] : [...tomorrowPhotos]);
+                                                                if (!n[idx]) n[idx] = { id: uuidv4() };
+                                                                n[idx].description = e.target.value;
+                                                                (type === 'today' ? setTodayPhotos : setTomorrowPhotos)(n);
+                                                            }}
+                                                        />
                                                     </div>
-                                                    <input className="border-b border-slate-300 p-1 text-[10px] text-center bg-transparent font-black font-sans focus:border-slate-900 outline-none transition-all" placeholder="기록 입력" value={photo?.description || ''} readOnly={isReadOnly} onChange={e => { const n = (type === 'today' ? [...todayPhotos] : [...tomorrowPhotos]); if(!n[idx]) n[idx]={id:uuidv4()}; n[idx].description = e.target.value; (type === 'today' ? setTodayPhotos : setTomorrowPhotos)(n); }} />
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
-                            {!isReadOnly && <div className="flex justify-center mt-6"><button onClick={() => { setTodayPhotos([...todayPhotos, {id:uuidv4()}]); setTomorrowPhotos([...tomorrowPhotos, {id:uuidv4()}]); }} className="flex items-center gap-2 px-6 py-1.5 bg-slate-900 text-white font-black text-[9px] hover:bg-blue-600 transition-all shadow-md font-sans"><Plus size={12} strokeWidth={3}/> 사진 대지 행 추가</button></div>}
                         </div>
-
                     </div>
                 </div>
             </div>
