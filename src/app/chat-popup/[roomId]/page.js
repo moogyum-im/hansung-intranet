@@ -1,4 +1,4 @@
-// src/app/(main)/chatrooms/[roomId]/page.js
+// src/app/chat-popup/[roomId]/page.js
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
@@ -8,6 +8,7 @@ async function getChatRoomData(roomId) {
     const supabase = createServerComponentClient({ cookies });
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect('/login');
+
     const { data: participantCheck } = await supabase
         .from('chat_room_participants')
         .select('room_id')
@@ -15,6 +16,7 @@ async function getChatRoomData(roomId) {
         .eq('user_id', user.id)
         .maybeSingle();
     if (!participantCheck) notFound();
+
     const { data: chatRoom, error } = await supabase
         .from('chat_rooms')
         .select(`
@@ -25,23 +27,22 @@ async function getChatRoomData(roomId) {
         .eq('id', roomId)
         .order('created_at', { foreignTable: 'chat_messages', ascending: true })
         .single();
-    if (error || !chatRoom) {
-        console.error("채팅방 데이터 로딩 실패:", error);
-        notFound();
-    }
+
+    if (error || !chatRoom) notFound();
     return { currentUser: user, chatRoom };
 }
 
-export default async function ChatRoomPage({ params }) {
+export default async function ChatPopupPage({ params }) {
     const { currentUser, chatRoom } = await getChatRoomData(params.roomId);
     return (
-        <div className="h-full">
+        <div className="h-screen overflow-hidden">
             <GroupChatWindow
                 currentUser={currentUser}
                 chatRoom={chatRoom}
                 initialMessages={chatRoom.messages}
                 initialParticipants={chatRoom.participants}
                 isPanel={true}
+                isPopup={true}
             />
         </div>
     );

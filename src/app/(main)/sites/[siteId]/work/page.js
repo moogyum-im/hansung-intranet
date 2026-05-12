@@ -1501,17 +1501,17 @@ await supabase.from('construction_sites').update({
                                                             {isToday ? '금일' : '전일'}
                                                         </div>
                                                         <div className={`flex-1 flex items-center justify-center overflow-hidden relative min-h-[160px]
-                                                            ${imgSrc ? 'bg-black cursor-zoom-in' : isToday ? 'bg-blue-50/40 cursor-pointer' : 'bg-slate-50'}
-                                                            ${!imgSrc && !isReadOnly && isToday ? 'hover:bg-blue-50' : ''} transition-colors`}
+                                                            ${imgSrc ? 'bg-black cursor-zoom-in' : isToday ? 'bg-blue-50/40 cursor-pointer' : !isReadOnly ? 'bg-slate-50 cursor-pointer' : 'bg-slate-50'}
+                                                            ${!imgSrc && !isReadOnly ? (isToday ? 'hover:bg-blue-50' : 'hover:bg-slate-100') : ''} transition-colors`}
                                                             onClick={() => imgSrc && setSelectedImage(imgSrc)}>
                                                             {imgSrc
                                                                 ? <img src={imgSrc} className="w-full h-full object-cover" alt="사진" />
                                                                 : <div className="flex flex-col items-center gap-1.5 pointer-events-none select-none">
-                                                                    <Camera size={20} className={isToday ? 'text-blue-200' : 'text-slate-200'} />
-                                                                    {!isReadOnly && isToday && <span className="text-[8px] font-black text-blue-300">사진 추가</span>}
+                                                                    <Camera size={20} className={isToday ? 'text-blue-200' : 'text-slate-300'} />
+                                                                    {!isReadOnly && <span className={`text-[8px] font-black ${isToday ? 'text-blue-300' : 'text-slate-400'}`}>사진 추가</span>}
                                                                 </div>
                                                             }
-                                                            {!isReadOnly && isToday && <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handlePhotoUpload(e, type, idx)} />}
+                                                            {!isReadOnly && <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handlePhotoUpload(e, type, idx)} />}
                                                         </div>
                                                         <input
                                                             className={`px-2 py-1.5 text-[9px] font-black font-sans outline-none bg-transparent border-t transition-colors shrink-0
