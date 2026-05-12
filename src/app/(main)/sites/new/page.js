@@ -25,6 +25,9 @@ function NewSiteContent() {
 
     const [allUsers, setAllUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [additionalAdminIds, setAdditionalAdminIds] = useState([]);
+    const [adminSearchTerm, setAdminSearchTerm] = useState('');
+    const [adminListOpen, setAdminListOpen] = useState(false);
 
     useEffect(() => {
         async function loadInitialData() {
@@ -35,11 +38,10 @@ function NewSiteContent() {
             if (profiles) setAllUsers(profiles);
 
             if (siteId) {
-                const { data: siteData, error } = await supabase
-                    .from('construction_sites')
-                    .select('*')
-                    .eq('id', siteId)
-                    .single();
+                const [{ data: siteData, error }, { data: extraAdmins }] = await Promise.all([
+                    supabase.from('construction_sites').select('*').eq('id', siteId).single(),
+                    supabase.from('site_members').select('user_id').eq('site_id', siteId).eq('role', '추가관리자')
+                ]);
 
                 if (error) {
                     toast.error('현장 정보를 불러오지 못했습니다.');
@@ -51,6 +53,7 @@ function NewSiteContent() {
                         end_date: siteData.end_date || '',
                     });
                 }
+                if (extraAdmins) setAdditionalAdminIds(extraAdmins.map(r => r.user_id));
             }
         }
         loadInitialData();
@@ -112,17 +115,24 @@ function NewSiteContent() {
 
             if (error) throw error;
 
-            // 참여자 정보 갱신 (PM만 등록되도록 수정)
-            const uniqueUserIds = Array.from(new Set([
-                formData.pm_id, 
+            // 기존 멤버 삭제 후 재등록
+            await supabase.from('site_members').delete().eq('site_id', currentId);
+
+            const baseMembers = Array.from(new Set([
+                formData.pm_id,
                 employee.id
             ].filter(id => id && id !== "")));
 
-            const membersToInsert = uniqueUserIds.map(uid => ({
-                site_id: currentId,
-                user_id: uid,
-                role: uid === formData.pm_id ? '현장소장' : '현장멤버'
-            }));
+            const membersToInsert = [
+                ...baseMembers.map(uid => ({
+                    site_id: currentId,
+                    user_id: uid,
+                    role: uid === formData.pm_id ? '현장소장' : '현장멤버'
+                })),
+                ...additionalAdminIds
+                    .filter(uid => uid && !baseMembers.includes(uid))
+                    .map(uid => ({ site_id: currentId, user_id: uid, role: '추가관리자' }))
+            ];
 
             if (membersToInsert.length > 0) {
                 await supabase.from('site_members').upsert(membersToInsert, { onConflict: 'site_id, user_id' });
@@ -246,7 +256,70 @@ function NewSiteContent() {
                                     {allUsers.map(user => <option key={user.id} value={user.id}>{user.full_name} ({user.department})</option>)}
                                 </select>
                             </div>
-                            {/* 담당자 선택 칸 삭제됨 */}
+                            <div className="md:col-span-2 font-sans">
+                                <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">추가 관리자 (현장 열람 허용)</label>
+                                <div className="border-2 border-slate-100 rounded-xl overflow-hidden">
+                                    {/* 선택된 태그 + 토글 버튼 */}
+                                    <button type="button" onClick={() => setAdminListOpen(v => !v)}
+                                        className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors text-left">
+                                        <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+                                            {additionalAdminIds.length === 0 ? (
+                                                <span className="text-[12px] text-slate-400 font-bold">클릭하여 추가 관리자 선택</span>
+                                            ) : (
+                                                additionalAdminIds.map(id => {
+                                                    const u = allUsers.find(u => u.id === id);
+                                                    return u ? (
+                                                        <span key={id} className="text-[10px] font-black bg-slate-800 text-white px-2 py-0.5 rounded-full">{u.full_name}</span>
+                                                    ) : null;
+                                                })
+                                            )}
+                                        </div>
+                                        <span className="text-slate-400 text-[11px] font-black ml-2 shrink-0">{adminListOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+                                    </button>
+
+                                    {/* 펼쳐지는 영역 */}
+                                    {adminListOpen && (
+                                        <>
+                                            <div className="border-t border-slate-100 px-2 pt-2">
+                                                <input
+                                                    type="text"
+                                                    value={adminSearchTerm}
+                                                    onChange={e => setAdminSearchTerm(e.target.value)}
+                                                    placeholder="이름 또는 부서 검색..."
+                                                    className="w-full px-3 py-1.5 text-[12px] border border-slate-200 rounded-lg outline-none font-bold placeholder:text-slate-300 mb-1"
+                                                />
+                                            </div>
+                                            <div className="max-h-44 overflow-y-auto p-2 space-y-0.5">
+                                                {allUsers
+                                                    .filter(u => u.id !== formData.pm_id)
+                                                    .filter(u => !adminSearchTerm.trim() ||
+                                                        u.full_name.includes(adminSearchTerm.trim()) ||
+                                                        (u.department || '').includes(adminSearchTerm.trim()))
+                                                    .map(user => {
+                                                        const checked = additionalAdminIds.includes(user.id);
+                                                        return (
+                                                            <label key={user.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors font-sans ${checked ? 'bg-slate-800 text-white' : 'hover:bg-slate-50'}`}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={checked}
+                                                                    onChange={() => setAdditionalAdminIds(prev =>
+                                                                        prev.includes(user.id)
+                                                                            ? prev.filter(id => id !== user.id)
+                                                                            : [...prev, user.id]
+                                                                    )}
+                                                                    className="accent-white w-4 h-4 shrink-0"
+                                                                />
+                                                                <span className="text-[12px] font-bold truncate">{user.full_name}</span>
+                                                                <span className={`text-[10px] ml-auto shrink-0 ${checked ? 'text-slate-300' : 'text-slate-400'}`}>{user.department}</span>
+                                                            </label>
+                                                        );
+                                                    })
+                                                }
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
                             <div className="col-span-full font-sans">
                                 <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">총 도급액</label>
                                 <div className="relative font-sans">

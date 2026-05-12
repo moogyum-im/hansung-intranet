@@ -130,7 +130,16 @@ export default function SitesPage() {
         .order('name', { ascending: true });
 
       if (profile?.department === CONSTRUCTION_DEPT) {
-        query = query.eq('pm_id', user.id);
+        const { data: extraAdminSites } = await supabase
+          .from('site_members')
+          .select('site_id')
+          .eq('user_id', user.id)
+          .eq('role', '추가관리자');
+        const extraSiteIds = (extraAdminSites || []).map(r => r.site_id);
+        const orFilter = extraSiteIds.length > 0
+          ? `pm_id.eq.${user.id},id.in.(${extraSiteIds.join(',')})`
+          : `pm_id.eq.${user.id}`;
+        query = query.or(orFilter);
       }
 
       const { data, error } = await query;
