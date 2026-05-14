@@ -36,5 +36,28 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(self.clients.openWindow(event.notification.data.url || '/'));
+
+  const url = event.notification.data.url || '/';
+  const chatMatch = url.match(/\/chatrooms\/([^/?#]+)/);
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      const appClient = clientList.find(c => new URL(c.url).origin === self.location.origin);
+
+      if (chatMatch) {
+        const roomId = chatMatch[1];
+        if (appClient) {
+          appClient.postMessage({ type: 'OPEN_CHAT_POPUP', roomId });
+          return appClient.focus();
+        }
+        return self.clients.openWindow(`/chat-popup/${roomId}`);
+      }
+
+      if (appClient) {
+        appClient.focus();
+        return appClient.navigate(url);
+      }
+      return self.clients.openWindow(url);
+    })
+  );
 });

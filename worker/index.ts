@@ -24,14 +24,31 @@ self.addEventListener('push', event => {
 
 // --- [추가] 알림을 클릭했을 때의 동작을 정의하는 코드 ---
 self.addEventListener('notificationclick', event => {
-  console.log('[Service Worker] Notification click Received.');
-  
-  event.notification.close(); // 알림 창을 닫습니다.
+  event.notification.close();
 
-  const urlToOpen = event.notification.data.url || '/';
-  
-  // 알림에 설정된 URL로 새 창이나 탭을 엽니다.
+  const url = event.notification.data.url || '/';
+  const chatMatch = url.match(/\/chatrooms\/([^/?#]+)/);
+
   event.waitUntil(
-    clients.openWindow(urlToOpen)
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      const appClient = clientList.find(c => new URL(c.url).origin === self.location.origin);
+
+      if (chatMatch) {
+        const roomId = chatMatch[1];
+        if (appClient) {
+          // 앱 탭이 열려있으면 메시지를 보내 팝업을 열게 함
+          appClient.postMessage({ type: 'OPEN_CHAT_POPUP', roomId });
+          return appClient.focus();
+        }
+        // 앱 탭이 없으면 chat-popup 페이지로 직접 이동
+        return self.clients.openWindow(`/chat-popup/${roomId}`);
+      }
+
+      if (appClient) {
+        appClient.focus();
+        return appClient.navigate(url);
+      }
+      return self.clients.openWindow(url);
+    })
   );
 });

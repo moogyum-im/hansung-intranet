@@ -38,6 +38,18 @@ export default function GlobalChatListener() {
         return () => document.removeEventListener('click', unlockAudio);
     }, [unlockAudio, NOTIFICATION_SOUND_URL]);
 
+    // 서비스 워커로부터 채팅 팝업 열기 요청 수신
+    useEffect(() => {
+        if (!('serviceWorker' in navigator)) return;
+        const handleSwMessage = (event) => {
+            if (event.data?.type === 'OPEN_CHAT_POPUP' && event.data.roomId) {
+                openChatPopup(event.data.roomId);
+            }
+        };
+        navigator.serviceWorker.addEventListener('message', handleSwMessage);
+        return () => navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+    }, []);
+
     const playNotificationSound = useCallback(() => {
         if (audioRef.current && audioUnlocked.current) {
             audioRef.current.muted = false;
