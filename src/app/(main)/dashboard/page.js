@@ -6,26 +6,60 @@ import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardCalendar from './DashboardCalendar';
-import PushSubscriptionButton from '@/components/PushSubscriptionButton'; 
+import PushSubscriptionButton from '@/components/PushSubscriptionButton';
 import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { openChatPopup } from '@/lib/chatPopup';
 import {
-  Bell,
-  FileCheck,
-  Megaphone,
-  Layers,
-  Trophy,
-  ShieldCheck,
-  MessageSquare,
-  ArrowUpRight,
-  Calendar,
-  ClipboardList,
-  CheckCircle2,
-  CheckCheck // 🚀 CheckAll에서 CheckCheck로 수정완료!
+    Bell,
+    FileCheck,
+    Megaphone,
+    Layers,
+    Trophy,
+    ShieldCheck,
+    MessageSquare,
+    ArrowUpRight,
+    Calendar,
+    ClipboardList,
+    CheckCircle2,
+    CheckCheck,
 } from 'lucide-react';
 
-// 🚀 현장 관리 스타일 위젯 프레임 (action 슬롯 추가로 확장성 확보)
+// --- 스켈레톤 ---
+const SkeletonList = ({ rows = 3 }) => (
+    <div className="space-y-2">
+        {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="animate-pulse p-3 rounded-lg">
+                <div className="h-3 bg-slate-200 rounded-full w-3/4 mb-2"></div>
+                <div className="h-2 bg-slate-100 rounded-full w-1/2"></div>
+            </div>
+        ))}
+    </div>
+);
+
+// --- KPI 카드 ---
+const KPICard = ({ label, value, icon: Icon, colorClass, loading }) => (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-4">
+        <div className={`w-12 h-12 rounded-xl ${colorClass} flex items-center justify-center shrink-0`}>
+            <Icon size={20} className="text-white" />
+        </div>
+        <div className="min-w-0">
+            {loading ? (
+                <div className="animate-pulse space-y-2">
+                    <div className="h-6 w-8 bg-slate-200 rounded"></div>
+                    <div className="h-2 w-16 bg-slate-100 rounded"></div>
+                </div>
+            ) : (
+                <>
+                    <p className="text-2xl font-black text-slate-800 leading-none">{value}</p>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-1">{label}</p>
+                </>
+            )}
+        </div>
+    </div>
+);
+
+// --- 위젯 프레임 ---
 const PremiumWidget = ({ title, icon: Icon, children, className, badge, action }) => (
     <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden ${className}`}>
         <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
@@ -51,28 +85,11 @@ const PremiumWidget = ({ title, icon: Icon, children, className, badge, action }
 );
 
 // --- 1. 내 결재 현황 위젯 ---
-function MyApprovalsWidget({ employee }) {
-    const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [] });
-    const [loading, setLoading] = useState(true);
+function MyApprovalsWidget({ approvalsData, loading }) {
     const [activeTab, setActiveTab] = useState('toReview');
 
-    useEffect(() => {
-        if (employee) {
-            const fetchData = async () => {
-                setLoading(true);
-                const { data, error } = await supabase.rpc('get_my_approvals', { p_user_id: employee.id });
-                if (error) console.error("결재 현황 로딩 실패:", error);
-                else setApprovalsData({ 
-                    toReview: data.filter(doc => doc.category === 'to_review'), 
-                    submitted: data.filter(doc => doc.category === 'submitted') 
-                });
-                setLoading(false);
-            };
-            fetchData();
-        }
-    }, [employee]);
-
     const renderList = (list) => {
+        if (loading) return <SkeletonList rows={3} />;
         if (!list || list.length === 0) return (
             <div className="flex flex-col items-center justify-center py-10 text-slate-300">
                 <CheckCircle2 size={32} strokeWidth={1.5} />
@@ -99,22 +116,22 @@ function MyApprovalsWidget({ employee }) {
     };
 
     return (
-        <PremiumWidget title="내 결재 현황" icon={FileCheck} badge={approvalsData[activeTab].length} className="h-[320px]">
+        <PremiumWidget title="내 결재 현황" icon={FileCheck} badge={loading ? 0 : approvalsData[activeTab].length} className="h-[320px]">
             <div className="flex bg-slate-100 p-1 rounded-lg mb-3">
-                <button 
-                    onClick={() => setActiveTab('toReview')} 
+                <button
+                    onClick={() => setActiveTab('toReview')}
                     className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-all ${activeTab === 'toReview' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                     미결재 문서
                 </button>
-                <button 
-                    onClick={() => setActiveTab('submitted')} 
+                <button
+                    onClick={() => setActiveTab('submitted')}
                     className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-all ${activeTab === 'submitted' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                     기안한 문서
                 </button>
             </div>
-            {loading ? <div className="text-[11px] text-slate-400 py-10 text-center animate-pulse italic">조회 중...</div> : renderList(approvalsData[activeTab])}
+            {renderList(approvalsData[activeTab])}
         </PremiumWidget>
     );
 }
@@ -124,9 +141,11 @@ function NotificationWidget() {
     const { employee } = useEmployee();
     const router = useRouter();
     const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     const fetchNotifications = useCallback(async () => {
         if (!employee) return;
+        setLoading(true);
         const { data } = await supabase
             .from('notifications')
             .select('*')
@@ -135,11 +154,11 @@ function NotificationWidget() {
             .order('created_at', { ascending: false })
             .limit(5);
         setNotifications(data || []);
+        setLoading(false);
     }, [employee]);
 
     useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-    // 🚀 알림 전체 읽음 처리 기능
     const handleMarkAllAsRead = async () => {
         if (!employee || notifications.length === 0) return;
         await supabase.from('notifications').update({ is_read: true }).eq('recipient_id', employee.id).eq('is_read', false);
@@ -153,13 +172,13 @@ function NotificationWidget() {
 
     const actionButton = notifications.length > 0 ? (
         <button onClick={handleMarkAllAsRead} className="text-[10px] font-black text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1">
-            <CheckCheck size={12}/> 모두 읽음
+            <CheckCheck size={12} /> 모두 읽음
         </button>
     ) : null;
 
     return (
         <PremiumWidget title="알림 센터" icon={Bell} badge={notifications.length} action={actionButton} className="h-[320px]">
-            {notifications.length > 0 ? (
+            {loading ? <SkeletonList rows={4} /> : notifications.length > 0 ? (
                 <div className="space-y-1">
                     {notifications.map(noti => (
                         <div key={noti.id} onClick={async () => {
@@ -174,7 +193,9 @@ function NotificationWidget() {
                         }} className="p-3 rounded-lg hover:bg-slate-50 cursor-pointer group transition-all border border-transparent hover:border-slate-200">
                             <div className="flex items-start gap-3">
                                 <div className="mt-1">
-                                    {noti.type === 'new_message' ? <MessageSquare size={14} className="text-blue-500" /> : <FileCheck size={14} className="text-amber-500" />}
+                                    {noti.type === 'new_message'
+                                        ? <MessageSquare size={14} className="text-blue-500" />
+                                        : <FileCheck size={14} className="text-amber-500" />}
                                 </div>
                                 <div className="flex-grow">
                                     <p className="text-[13px] text-slate-600 leading-snug font-medium group-hover:text-slate-900">{noti.content}</p>
@@ -199,11 +220,20 @@ function NotificationWidget() {
 // --- 3. 대시보드 메인 페이지 ---
 export default function DashboardPage() {
     const { employee: currentUser, loading: employeeLoading } = useEmployee();
-    const [notices, setNotices] = useState([]);
-    const [activeTasks, setActiveTasks] = useState([]);
     const [currentTime, setCurrentTime] = useState(new Date());
 
-    // 🚀 실시간 시계 연동
+    const [notices, setNotices] = useState([]);
+    const [noticesLoading, setNoticesLoading] = useState(true);
+
+    const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [] });
+    const [approvalsLoading, setApprovalsLoading] = useState(true);
+
+    const [activeTasks, setActiveTasks] = useState([]);
+    const [activeTasksLoading, setActiveTasksLoading] = useState(true);
+
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [statsLoading, setStatsLoading] = useState(true);
+
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
@@ -211,49 +241,76 @@ export default function DashboardPage() {
 
     useEffect(() => {
         const fetchNotices = async () => {
-            const { data } = await supabase.from('notices').select(`id, title, created_at`).order('created_at', { ascending: false }).limit(5);
+            setNoticesLoading(true);
+            const { data } = await supabase
+                .from('notices')
+                .select('id, title, created_at')
+                .order('created_at', { ascending: false })
+                .limit(5);
             setNotices(data || []);
+            setNoticesLoading(false);
         };
         fetchNotices();
     }, []);
 
-    // 🚀 진행 중인 업무 (내가 기안한 문서 중 아직 완료되지 않은 것) 연동
     useEffect(() => {
-        const fetchActiveTasks = async () => {
-            if (!currentUser) return;
-            const { data } = await supabase
-                .from('approval_documents')
-                .select('id, title, status, updated_at')
-                .eq('requester_id', currentUser.id)
-                .in('status', ['대기', '진행'])
-                .order('updated_at', { ascending: false })
-                .limit(5);
-            setActiveTasks(data || []);
+        if (!currentUser) return;
+        const fetchStats = async () => {
+            setStatsLoading(true);
+            setApprovalsLoading(true);
+            setActiveTasksLoading(true);
+
+            const [{ data: approvals }, { count: unread }, { data: tasks }] = await Promise.all([
+                supabase.rpc('get_my_approvals', { p_user_id: currentUser.id }),
+                supabase
+                    .from('notifications')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('recipient_id', currentUser.id)
+                    .eq('is_read', false),
+                supabase
+                    .from('approval_documents')
+                    .select('id, title, status, updated_at')
+                    .eq('requester_id', currentUser.id)
+                    .in('status', ['대기', '진행'])
+                    .order('updated_at', { ascending: false })
+                    .limit(5),
+            ]);
+
+            setApprovalsData({
+                toReview: approvals?.filter(d => d.category === 'to_review') ?? [],
+                submitted: approvals?.filter(d => d.category === 'submitted') ?? [],
+            });
+            setUnreadCount(unread ?? 0);
+            setActiveTasks(tasks ?? []);
+
+            setApprovalsLoading(false);
+            setActiveTasksLoading(false);
+            setStatsLoading(false);
         };
-        if (currentUser) fetchActiveTasks();
+        fetchStats();
     }, [currentUser]);
-    
+
     if (employeeLoading) return (
         <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
         </div>
     );
 
-    // 날짜 포맷 (예: 2026년 3월 31일 화요일 15:08:18)
-    const formattedDate = new Intl.DateTimeFormat('ko-KR', { 
-        year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' 
+    const formattedDate = new Intl.DateTimeFormat('ko-KR', {
+        year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
     }).format(currentTime);
-    const formattedTime = new Intl.DateTimeFormat('ko-KR', { 
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false 
+    const formattedTime = new Intl.DateTimeFormat('ko-KR', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
     }).format(currentTime);
+
+    const weeklyNoticesCount = notices.filter(n =>
+        (new Date() - new Date(n.created_at)) / (1000 * 60 * 60 * 24) < 7
+    ).length;
 
     return (
         <div className="bg-[#f1f5f9] min-h-screen pb-12">
-            {/* 상단 헤더 - 현장 관리 탭 스타일 (네이비 톤) */}
             <header className="bg-[#1e293b] pt-10 pb-24 px-6 sm:px-12 border-b border-white/5 relative overflow-hidden">
-                {/* 배경 꾸밈 요소 */}
                 <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
-
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
                     <div className="flex items-center gap-5">
                         <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/40">
@@ -277,28 +334,34 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </header>
-            
+
             <main className="max-w-7xl mx-auto px-6 sm:px-12 -mt-12 relative z-20">
+                {/* KPI 요약 카드 */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <KPICard label="미결재 문서" value={approvalsData.toReview.length} icon={FileCheck} colorClass="bg-amber-500" loading={statsLoading} />
+                    <KPICard label="진행 중 업무" value={activeTasks.length} icon={ClipboardList} colorClass="bg-blue-600" loading={statsLoading} />
+                    <KPICard label="미읽은 알림" value={unreadCount} icon={Bell} colorClass="bg-rose-500" loading={statsLoading} />
+                    <KPICard label="이번 주 공지" value={weeklyNoticesCount} icon={Megaphone} colorClass="bg-emerald-500" loading={noticesLoading} />
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                     {/* 왼쪽 컬럼 */}
                     <div className="space-y-6">
                         <NotificationWidget />
-                        <MyApprovalsWidget employee={currentUser} />
+                        <MyApprovalsWidget approvalsData={approvalsData} loading={approvalsLoading} />
                     </div>
 
                     {/* 중앙 컬럼 */}
                     <div className="space-y-6">
-                        {/* 🚀 공지사항 위젯 */}
-                        <PremiumWidget 
-                            title="전사 공지사항" 
-                            icon={Megaphone} 
-                            className="h-[320px]" 
+                        <PremiumWidget
+                            title="전사 공지사항"
+                            icon={Megaphone}
+                            className="h-[320px]"
                             action={<Link href="/notices" className="text-[10px] font-black text-blue-600 hover:underline">더보기</Link>}
                         >
-                            {notices.length > 0 ? (
+                            {noticesLoading ? <SkeletonList rows={4} /> : notices.length > 0 ? (
                                 <ul className="divide-y divide-slate-50">
                                     {notices.map(notice => {
-                                        // 3일 이내 작성된 글인지 확인
                                         const isNew = (new Date() - new Date(notice.created_at)) / (1000 * 60 * 60 * 24) < 3;
                                         return (
                                             <li key={notice.id}>
@@ -319,15 +382,14 @@ export default function DashboardPage() {
                             ) : <div className="text-center py-20 text-slate-300 text-[11px] font-bold">등록된 공지가 없습니다.</div>}
                         </PremiumWidget>
 
-                        {/* 🚀 진행 중인 업무 위젯 (실데이터 연동) */}
-                        <PremiumWidget 
-                            title="진행 중인 업무" 
-                            icon={ClipboardList} 
-                            badge={activeTasks.length}
+                        <PremiumWidget
+                            title="진행 중인 업무"
+                            icon={ClipboardList}
+                            badge={activeTasksLoading ? 0 : activeTasks.length}
                             className="h-[320px]"
                         >
-                             {activeTasks.length > 0 ? (
-                                 <div className="space-y-1">
+                            {activeTasksLoading ? <SkeletonList rows={3} /> : activeTasks.length > 0 ? (
+                                <div className="space-y-1">
                                     {activeTasks.map(task => (
                                         <Link key={task.id} href={`/approvals/${task.id}`} className="group flex flex-col p-3 rounded-lg hover:bg-blue-50/50 transition-all border border-transparent hover:border-blue-100">
                                             <div className="flex justify-between items-start">
@@ -341,13 +403,13 @@ export default function DashboardPage() {
                                             </p>
                                         </Link>
                                     ))}
-                                 </div>
-                             ) : (
+                                </div>
+                            ) : (
                                 <div className="h-full flex flex-col items-center justify-center text-slate-300">
                                     <Layers size={32} strokeWidth={1.5} />
                                     <p className="text-[11px] font-medium mt-2">할당되거나 진행 중인 업무가 없습니다.</p>
                                 </div>
-                             )}
+                            )}
                         </PremiumWidget>
                     </div>
 
