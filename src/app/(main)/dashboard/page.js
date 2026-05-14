@@ -9,12 +9,13 @@ import DashboardCalendar from './DashboardCalendar';
 import PushSubscriptionButton from '@/components/PushSubscriptionButton'; 
 import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { 
-  Bell, 
-  FileCheck, 
-  Megaphone, 
-  Layers, 
-  Trophy, 
+import { openChatPopup } from '@/lib/chatPopup';
+import {
+  Bell,
+  FileCheck,
+  Megaphone,
+  Layers,
+  Trophy,
   ShieldCheck,
   MessageSquare,
   ArrowUpRight,
@@ -164,7 +165,12 @@ function NotificationWidget() {
                         <div key={noti.id} onClick={async () => {
                             await supabase.from('notifications').update({ is_read: true }).eq('id', noti.id);
                             fetchNotifications();
-                            if (noti.link) router.push(noti.link);
+                            if (noti.type === 'new_message' && noti.link) {
+                                const roomId = noti.link.split('/').pop();
+                                openChatPopup(roomId);
+                            } else if (noti.link) {
+                                router.push(noti.link);
+                            }
                         }} className="p-3 rounded-lg hover:bg-slate-50 cursor-pointer group transition-all border border-transparent hover:border-slate-200">
                             <div className="flex items-start gap-3">
                                 <div className="mt-1">
