@@ -9,17 +9,19 @@ import { useEmployee } from '@/contexts/EmployeeContext';
 import Image from 'next/image';
 import { toast, Toaster } from 'react-hot-toast';
 import { openMainChatPopup } from '@/lib/chatPopup'; // ✅ 추가
-import { 
-  LayoutDashboard, 
-  Megaphone, 
-  Users2, 
-  Construction, 
-  FileCheck, 
-  MessagesSquare, 
-  UserCircle, 
-  LogOut, 
+import {
+  LayoutDashboard,
+  Megaphone,
+  Users2,
+  Construction,
+  FileCheck,
+  MessagesSquare,
+  UserCircle,
+  LogOut,
   Building2,
-  ChevronUp
+  ChevronUp,
+  Database,
+  ExternalLink
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -159,6 +161,10 @@ export default function Sidebar({ isOpen, onClose }) {
         { name: '내 정보',   href: '/mypage', icon: UserCircle }
     );
 
+    if (employee && employee.position === '회장') {
+        menuItems.push({ name: '카이 발전량 데이터', href: 'https://kaienergy-intranet-31fc.vercel.app/database/generation', icon: Database, isExternal: true });
+    }
+
     return (
         <>
             <Toaster />
@@ -204,6 +210,26 @@ export default function Sidebar({ isOpen, onClose }) {
                                         </span>
                                     )}
                                 </button>
+                            );
+                        }
+
+                        // 외부 링크 항목
+                        if (item.isExternal) {
+                            return (
+                                <a
+                                    key={item.name}
+                                    href={item.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={onClose}
+                                    className="flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-all group relative hover:bg-slate-800 hover:text-white"
+                                >
+                                    <div className="relative mr-3">
+                                        <item.icon size={18} className="text-slate-400 group-hover:text-white" />
+                                    </div>
+                                    <span className="flex-1">{item.name}</span>
+                                    <ExternalLink size={12} className="text-slate-500 group-hover:text-slate-300" />
+                                </a>
                             );
                         }
 
