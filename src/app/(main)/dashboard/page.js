@@ -277,7 +277,7 @@ export default function DashboardPage() {
             ]);
 
             setApprovalsData({
-                toReview: approvals?.filter(d => d.category === 'to_review') ?? [],
+                toReview: approvals?.filter(d => d.category === 'to_review' && d.my_approval_status !== '미결') ?? [],
                 submitted: approvals?.filter(d => d.category === 'submitted') ?? [],
             });
             setUnreadCount(unread ?? 0);

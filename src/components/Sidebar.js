@@ -92,8 +92,8 @@ export default function Sidebar({ isOpen, onClose }) {
         const { count, error } = await supabase
             .from('approval_documents')
             .select('*', { count: 'exact', head: true })
-            .eq('status', '대기')
-            .contains('current_approver_id', [employee.id]);
+            .eq('status', 'pending')
+            .eq('current_approver_id', employee.id);
         setPendingApprovals(error ? 0 : (count || 0));
     }, [employee]);
 
