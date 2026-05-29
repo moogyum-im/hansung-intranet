@@ -600,7 +600,7 @@ export default function ApprovalsPage() {
                 };
 
                 setApprovalsData({
-                    toReview: getUniqueDocs(appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려' && doc.my_approval_status === '대기')),
+                    toReview: getUniqueDocs(appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려' && doc.my_approval_status !== '미결')),
                     submitted: getUniqueDocs(appData.filter(doc => doc.category === 'submitted' && doc.status !== '반려' && doc.status !== '승인' && doc.status !== '완료')),
                     approved: getUniqueDocs(appData.filter(doc => 
                         (doc.status === '승인' || doc.status === '완료' || doc.my_approval_status === '승인') && doc.status !== '반려'
