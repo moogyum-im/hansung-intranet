@@ -104,6 +104,7 @@ export default function Sidebar({ isOpen, onClose }) {
             const channel = supabase.channel(`sidebar-listener-${employee.id}`)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, fetchTotalUnreadCount)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_participants' }, fetchTotalUnreadCount)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${employee.id}` }, fetchTotalUnreadCount)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_documents' }, fetchPendingApprovals)
                 .subscribe();
             return () => supabase.removeChannel(channel);

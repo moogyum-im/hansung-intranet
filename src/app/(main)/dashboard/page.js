@@ -146,6 +146,41 @@ function NotificationWidget() {
     const fetchNotifications = useCallback(async () => {
         if (!employee) return;
         setLoading(true);
+
+        // 내 차례가 아닌데 잘못 온 approval_request 알람 정리
+        const { data: staleNotiCandidates } = await supabase
+            .from('notifications')
+            .select('id, link')
+            .eq('recipient_id', employee.id)
+            .eq('type', 'approval_request')
+            .eq('is_read', false);
+
+        if (staleNotiCandidates && staleNotiCandidates.length > 0) {
+            const docIds = staleNotiCandidates
+                .map(n => n.link?.split('/approvals/')[1])
+                .filter(Boolean);
+
+            if (docIds.length > 0) {
+                const { data: docs } = await supabase
+                    .from('approval_documents')
+                    .select('id, current_approver_id, status')
+                    .in('id', docIds)
+                    .eq('status', 'pending');
+
+                const staleIds = staleNotiCandidates
+                    .filter(n => {
+                        const docId = n.link?.split('/approvals/')[1];
+                        const doc = docs?.find(d => d.id === docId);
+                        return doc && doc.current_approver_id !== employee.id;
+                    })
+                    .map(n => n.id);
+
+                if (staleIds.length > 0) {
+                    await supabase.from('notifications').delete().in('id', staleIds);
+                }
+            }
+        }
+
         const { data } = await supabase
             .from('notifications')
             .select('*')
