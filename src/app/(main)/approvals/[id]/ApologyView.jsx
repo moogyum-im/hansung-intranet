@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { 
-    Printer, FileText, CheckCircle, XCircle, Users, Download, Paperclip, ImageIcon, MessageSquare, ShieldAlert
+    Printer, FileText, CheckCircle, XCircle, Users, Download, Trash2, Paperclip, ImageIcon, MessageSquare, ShieldAlert
 } from 'lucide-react';
 
 export default function ApologyView({ doc, employee, approvalHistory, referrerHistory }) {
@@ -50,7 +50,7 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                             const cleanPath = filePath.replace('approval_attachments/', '').trim();
                             const { data } = await supabase.storage.from('approval_attachments').createSignedUrl(cleanPath, 3600);
                             if (data?.signedUrl) {
-                                return { url: data.signedUrl, name: typeof file === 'object' ? (file.name || cleanPath) : cleanPath };
+                                return { url: data.signedUrl, name: typeof file === 'object' ? (file.name || cleanPath) : cleanPath, path: cleanPath };
                             }
                             return null;
                         });

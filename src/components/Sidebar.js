@@ -20,8 +20,13 @@ import {
   LogOut,
   Building2,
   ChevronUp,
+  ChevronDown,
   Database,
-  ExternalLink
+  ExternalLink,
+  TreePine,
+  TrendingUp,
+  ClipboardList,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -165,6 +170,8 @@ export default function Sidebar({ isOpen, onClose }) {
         menuItems.push({ name: '카이 발전량 데이터', href: 'https://kaienergy-intranet-31fc.vercel.app/database/generation', icon: Database, isExternal: true });
     }
 
+    const canAccessDb = employee && employee.department === '전략기획부' && employee.full_name === '임아름';
+
     return (
         <>
             <Toaster />
@@ -254,6 +261,45 @@ export default function Sidebar({ isOpen, onClose }) {
                         );
                     })}
                 </nav>
+
+                {/* 데이터베이스 섹션 — 최고 경영진 / 전략기획부 / 공무부만 노출 */}
+                {canAccessDb && (
+                    <div className="mt-2">
+                        <button
+                            onClick={() => setIsDbMenuOpen(!isDbMenuOpen)}
+                            className="w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-all group hover:bg-slate-800 hover:text-white"
+                        >
+                            <Database size={18} className="text-slate-400 group-hover:text-white mr-3" />
+                            <span className="flex-1 text-left">데이터베이스</span>
+                            <ChevronDown size={14} className={`text-slate-500 transition-transform ${isDbMenuOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isDbMenuOpen && (
+                            <div className="ml-4 mt-1 space-y-0.5 border-l border-slate-700 pl-3">
+                                {[
+                                    { name: '전국 조경수 DB', href: '/database/tree-sales', icon: TreePine },
+                                    { name: '공사 예정 공정표', href: '/database/execution-plans', icon: ClipboardList },
+                                    { name: '계약 내역 관리', href: '/database/contract-estimates', icon: FileSpreadsheet },
+                                    { name: '수익 실행 관리', href: '/database/profit-management', icon: TrendingUp },
+                                ].map((item) => {
+                                    const isActive = pathname === item.href || pathname.startsWith(item.href);
+                                    return (
+                                        <Link
+                                            key={item.name}
+                                            href={item.href}
+                                            onClick={onClose}
+                                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all
+                                                ${isActive ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                                        >
+                                            <item.icon size={14} />
+                                            {item.name}
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* 하단 프로필 */}
                 <div className="p-4 border-t border-slate-700/50 bg-[#1e293b] relative">

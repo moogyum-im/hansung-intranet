@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { 
-    Printer, FileText, CheckCircle, XCircle, Hash, 
+    Printer, FileText, CheckCircle, XCircle, Hash, Trash2,
     Users, Loader2, Download, Paperclip, ImageIcon, MessageSquare, ShieldAlert
 } from 'lucide-react';
 
@@ -20,6 +20,7 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
 
     const isReferrer = referrerHistory?.some(ref => ref.referrer_id === employee?.id || ref.referrer?.id === employee?.id);
     const isMyTurn = employee && currentStep && currentStep.approver?.id === employee.id && currentStep.status === '대기';
+    const isEditable = doc.status === 'pending' && (employee?.id === doc.requester_id || employee?.id === doc.author_id);
 
     const formatDateShort = (dateString) => {
         if (!dateString) return "";
@@ -59,7 +60,8 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                             if (!error && data?.signedUrl) {
                                 return {
                                     url: data.signedUrl,
-                                    name: typeof file === 'object' ? (file.name || cleanPath) : cleanPath
+                                    name: typeof file === 'object' ? (file.name || cleanPath) : cleanPath,
+                                    path: cleanPath
                                 };
                             }
                             return null;
@@ -77,6 +79,22 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
         };
         setupPage();
     }, [doc, approvalHistory]);
+
+    const handleDeleteAttachment = async (filePath) => {
+        if (!confirm('첨부파일을 삭제하시겠습니까?')) return;
+        try {
+            await supabase.storage.from('approval_attachments').remove([filePath]);
+            let current = doc.attachments || [];
+            if (typeof current === 'string') { try { current = JSON.parse(current); } catch { current = []; } }
+            const updated = current.filter(f => {
+                const p = typeof f === 'object' ? f.path : f;
+                return p?.replace('approval_attachments/', '').trim() !== filePath;
+            });
+            await supabase.from('approval_documents').update({ attachments: updated }).eq('id', doc.id);
+            setAttachmentSignedUrls(prev => prev.filter(f => f.path !== filePath));
+            toast.success('첨부파일이 삭제되었습니다.');
+        } catch { toast.error('삭제 실패'); }
+    };
 
     const handleApprovalAction = async (newStatus) => {
         if (!currentStep) return;

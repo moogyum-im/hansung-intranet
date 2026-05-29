@@ -192,8 +192,9 @@ function ExpenseReportPage() {
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]); 
     const [loading, setLoading] = useState(false);
-    const [isUploading, setIsUploading] = useState(false); 
+    const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
+    const [existingAttachments, setExistingAttachments] = useState([]);
 
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
@@ -240,6 +241,7 @@ function ExpenseReportPage() {
                 const content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content || {};
                 setFormData(prev => ({ ...prev, ...content }));
                 setAttachments(doc.attachments || []);
+                setExistingAttachments(doc.attachments || []);
             }
             if (approversData) setApprovers(approversData.map(a => ({ id: a.approver_id, full_name: a.approver?.full_name, position: a.approver?.position })));
             if (referrersData) setReferrers(referrersData.map(r => ({ id: r.referrer_id, full_name: r.referrer?.full_name, position: r.referrer?.position })));
@@ -289,6 +291,11 @@ function ExpenseReportPage() {
             localStorage.setItem('expense_temp_attachments', JSON.stringify(updated));
             return updated;
         });
+    };
+
+    const handleRemoveExistingAttachment = (path) => {
+        setExistingAttachments(prev => prev.filter(f => (typeof f === 'object' ? f.path : f) !== path));
+        setAttachments(prev => prev.filter(f => (typeof f === 'object' ? f.path : f) !== path));
     };
 
     const addApprover = () => {
@@ -470,7 +477,12 @@ function ExpenseReportPage() {
 
                         <section className="font-black border-t border-black/5 pt-6 font-black font-black font-black font-black">
                             <h2 className="text-[10px] mb-4 uppercase tracking-tighter font-black font-black font-black font-black">03. 증빙 자료 첨부 <HelpTooltip text="영수증이나 카드 전표 사진을 반드시 첨부하십시오." /></h2>
-                            <FileUploadDnd onUploadComplete={handleUploadComplete} onUploadingStateChange={setIsUploading} />
+                            <FileUploadDnd
+                                onUploadComplete={handleUploadComplete}
+                                onUploadingStateChange={setIsUploading}
+                                initialFiles={editId ? existingAttachments : []}
+                                onRemoveInitialFile={editId ? handleRemoveExistingAttachment : undefined}
+                            />
                         </section>
                     </div>
                 </div>

@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import {
-    Printer, Download, Eye, Hash,
+    Printer, Download, Eye, Hash, Trash2,
     Paperclip, FileIcon, CheckCircle2, CheckCircle,
     Settings, Users, MapPin, Calendar, Car, ChevronRight, ImageIcon, ExternalLink, XCircle, FileText, MessageSquare, ShieldAlert, X
 } from 'lucide-react';
@@ -22,6 +22,7 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
 
     const isReferrer = referrerHistory?.some(ref => ref.referrer_id === employee?.id || ref.referrer?.id === employee?.id);
     const isMyTurn = employee && currentStep && currentStep.approver?.id === employee.id && (currentStep.status === 'pending' || currentStep.status === '대기');
+    const isEditable = doc.status === 'pending' && (employee?.id === doc.requester_id || employee?.id === doc.author_id);
 
     const formatDateShort = (dateString) => {
         if (!dateString) return "";
@@ -64,7 +65,7 @@ export default function WorkReportView({ doc, employee, approvalHistory, referre
                             const cleanPath = filePath.replace('approval_attachments/', '').trim();
                             const { data, error } = await supabase.storage.from('approval_attachments').createSignedUrl(cleanPath, 3600);
                             if (!error && data?.signedUrl) {
-                                return { url: data.signedUrl, name: file.name || cleanPath };
+                                return { url: data.signedUrl, name: file.name || cleanPath, path: cleanPath };
                             }
                             return null;
                         });

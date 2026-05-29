@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { 
-    Printer, FileText, CheckCircle, XCircle, Hash, 
+    Printer, FileText, CheckCircle, XCircle, Hash, Trash2,
     Users, Loader2, Download, ChevronRight, Settings, Paperclip, ImageIcon, ExternalLink, CreditCard, MessageSquare, ShieldAlert
 } from 'lucide-react';
 
@@ -55,7 +55,7 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                                 .createSignedUrl(cleanPath, 3600);
 
                             if (!error && data?.signedUrl) {
-                                return { url: data.signedUrl, name: (file.name || cleanPath).trim() };
+                                return { url: data.signedUrl, name: (file.name || cleanPath).trim(), path: cleanPath };
                             }
                             return null;
                         });

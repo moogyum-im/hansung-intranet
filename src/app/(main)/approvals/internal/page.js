@@ -69,6 +69,7 @@ function InternalApprovalPage() {
     const [loading, setLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
+    const [existingAttachments, setExistingAttachments] = useState([]);
 
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
@@ -115,6 +116,7 @@ function InternalApprovalPage() {
                 const content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content || {};
                 setFormData(prev => ({ ...prev, ...content }));
                 setAttachments(doc.attachments || []);
+                setExistingAttachments(doc.attachments || []);
             }
             if (approversData) setApprovers(approversData.map(a => ({ id: a.approver_id, full_name: a.approver?.full_name, position: a.approver?.position })));
             if (referrersData) setReferrers(referrersData.map(r => ({ id: r.referrer_id, full_name: r.referrer?.full_name, position: r.referrer?.position })));
@@ -144,12 +146,20 @@ function InternalApprovalPage() {
                 path: file.path,
                 size: file.size
             }));
-            setAttachments(prev => [...prev, ...formattedFiles]);
+            setAttachments(prev => {
+                const existingPaths = new Set(prev.map(f => typeof f === 'object' ? f.path : f));
+                return [...prev, ...formattedFiles.filter(f => !existingPaths.has(f.path))];
+            });
             setIsUploading(false);
         }
     }, []);
 
     const removeAttachment = (idx) => setAttachments(prev => prev.filter((_, i) => i !== idx));
+
+    const handleRemoveExistingAttachment = (path) => {
+        setExistingAttachments(prev => prev.filter(f => (typeof f === 'object' ? f.path : f) !== path));
+        setAttachments(prev => prev.filter(f => (typeof f === 'object' ? f.path : f) !== path));
+    };
 
     const addApprover = () => {
         if (approvers.length >= 4) return toast.error("결재선은 최대 4명까지 가능합니다.");
@@ -302,7 +312,12 @@ function InternalApprovalPage() {
 
                         <section className="font-black border-t border-black/5 pt-6 font-black font-black">
                             <h2 className="text-[10px] mb-4 uppercase tracking-tighter font-black font-black font-black">03. 증빙 자료 첨부 <HelpTooltip text="관련 도면, 공문, 비교 견적서 등 결재에 필요한 참고 자료를 첨부하십시오." /></h2>
-                            <FileUploadDnd onUploadComplete={handleUploadComplete} onUploadingStateChange={setIsUploading} />
+                            <FileUploadDnd
+                                onUploadComplete={handleUploadComplete}
+                                onUploadingStateChange={setIsUploading}
+                                initialFiles={editId ? existingAttachments : []}
+                                onRemoveInitialFile={editId ? handleRemoveExistingAttachment : undefined}
+                            />
                         </section>
 
                         <div className="pt-16 text-center space-y-6 font-black text-black font-black font-black">

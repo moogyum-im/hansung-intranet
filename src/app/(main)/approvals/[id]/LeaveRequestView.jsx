@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { 
-    Printer, FileText, CheckCircle, XCircle, Hash, 
+    Printer, FileText, CheckCircle, XCircle, Hash, Trash2,
     UserCheck, Users, Loader2, Download, ChevronRight, Settings, Paperclip, ImageIcon, MessageSquare, ShieldAlert
 } from 'lucide-react';
 
@@ -66,7 +66,7 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                             const { data, error } = await supabase.storage.from('approval_attachments').createSignedUrl(cleanPath, 3600);
 
                             if (!error && data?.signedUrl) {
-                                return { url: data.signedUrl, name: file.name || cleanPath };
+                                return { url: data.signedUrl, name: file.name || cleanPath, path: cleanPath };
                             }
                             return null;
                         });

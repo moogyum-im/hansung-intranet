@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { 
-    Printer, Download, Eye, Hash, 
+    Printer, Download, Eye, Hash, Trash2,
     Paperclip, FileIcon, CheckCircle2, CheckCircle,
     Settings, Users, MapPin, Calendar, Car, ChevronRight, ImageIcon, ExternalLink, XCircle, FileText, MessageSquare, ShieldAlert
 } from 'lucide-react';
@@ -48,7 +48,7 @@ export default function ExpenseSettlementView({ doc, employee, approvalHistory, 
                             if (!f || !f.path) return null;
                             const cleanPath = f.path.replace('approval_attachments/', '').replace('settlement_proofs/', '').trim();
                             const { data } = await supabase.storage.from('approval_attachments').createSignedUrl(cleanPath, 3600);
-                            return data?.signedUrl ? { url: data.signedUrl, name: f.name || cleanPath } : null;
+                            return data?.signedUrl ? { url: data.signedUrl, name: f.name || cleanPath, path: cleanPath } : null;
                         });
                         return (await Promise.all(promises)).filter(x => x !== null);
                     };
