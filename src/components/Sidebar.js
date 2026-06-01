@@ -27,6 +27,7 @@ import {
   TrendingUp,
   ClipboardList,
   FileSpreadsheet,
+  Gavel,
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -172,6 +173,7 @@ export default function Sidebar({ isOpen, onClose }) {
     }
 
     const canAccessDb = employee && employee.department === '전략기획부' && employee.full_name === '임아름';
+    const canAccessBidRecords = employee && (employee.full_name === '임아름' || employee.full_name === '임무겸');
 
     return (
         <>
@@ -262,6 +264,21 @@ export default function Sidebar({ isOpen, onClose }) {
                         );
                     })}
                 </nav>
+
+                {/* 입찰 기록 관리 섹션 — 임아름, 임무겸만 노출 */}
+                {canAccessBidRecords && (
+                    <div className="mt-2">
+                        <Link
+                            href="/database/bid-records"
+                            onClick={onClose}
+                            className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-all group relative
+                                ${pathname.startsWith('/database/bid-records') ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'hover:bg-slate-800 hover:text-white'}`}
+                        >
+                            <Gavel size={18} className={pathname.startsWith('/database/bid-records') ? 'text-white mr-3' : 'text-slate-400 group-hover:text-white mr-3'} />
+                            <span className="flex-1">입찰 기록 관리</span>
+                        </Link>
+                    </div>
+                )}
 
                 {/* 데이터베이스 섹션 — 최고 경영진 / 전략기획부 / 공무부만 노출 */}
                 {canAccessDb && (
