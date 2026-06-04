@@ -55,7 +55,11 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
     const pastRows = list?.filter(r => r.isPastRecord && parseNumber(r.prev_remain) === 0 && !r.isModified) || [];
 
     const effectiveExpanded = isExpanded || searchQuery.trim().length > 0;
-    const displayRows = effectiveExpanded ? [...todayRows, ...pastRows] : todayRows;
+    const sortedPastRows = [
+        ...pastRows.filter(r => parseNumber(r.prev_planted) > 0),
+        ...pastRows.filter(r => !(parseNumber(r.prev_planted) > 0))
+    ];
+    const displayRows = effectiveExpanded ? [...todayRows, ...sortedPastRows] : todayRows;
     
     const filteredRows = displayRows.filter(row => {
         if (!searchQuery.trim()) return true;
@@ -71,6 +75,7 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
     const incomingSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.incoming), 0);
     const notIncomingSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.not_incoming), 0);
     const prevRemainSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.prev_remain), 0);
+    const prevPlantedSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.prev_planted), 0);
     const plantedSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.planted), 0);
     const finalRemainSum = filteredRows.reduce((acc, cur) => acc + parseNumber(cur.final_remain), 0);
 
@@ -107,7 +112,7 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
         const rows = pasteData.split(/\r?\n/).filter(r => r.trim() !== '');
         if (rows.length === 0) return;
 
-        const EXCEL_FIELDS = ['item', 'spec', 'contract', 'base_incoming', 'incoming', 'not_incoming', 'prev_remain', 'incoming_dup', 'planted', 'final_remain'];
+        const EXCEL_FIELDS = ['item', 'spec', 'contract', 'base_incoming', 'incoming', 'not_incoming', 'prev_remain', 'prev_planted', 'planted', 'final_remain'];
         const targetColIndex = EXCEL_FIELDS.indexOf(targetField);
         
         if (targetColIndex === -1) return;
@@ -134,7 +139,7 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                 
                 cols.forEach((colData, j) => {
                     const fieldToUpdate = EXCEL_FIELDS[targetColIndex + j];
-                    if (fieldToUpdate && fieldToUpdate !== 'incoming_dup') {
+                    if (fieldToUpdate && fieldToUpdate !== 'prev_planted') {
                         const isNumeric = ['contract', 'base_incoming', 'incoming', 'not_incoming', 'prev_remain', 'planted', 'final_remain'].includes(fieldToUpdate);
                         rowToUpdate[fieldToUpdate] = isNumeric ? colData.replace(/,/g, '').trim() : colData.trim();
                     }
@@ -223,8 +228,8 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                                 전일미식재
                                 {!readOnly && <div onMouseDown={(e) => handleColResize(6, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
                             </th>
-                            <th className="bg-blue-50 p-1 border border-slate-300 border-t-0 align-middle text-blue-700 relative">
-                                금일반입
+                            <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle relative">
+                                전일식재량
                                 {!readOnly && <div onMouseDown={(e) => handleColResize(7, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
                             </th>
                             <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle relative">
@@ -241,7 +246,7 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                     <tbody>
                         {filteredRows.map((item, rowIndex) => {
                             const renderInput = (field, isHighlight = false, isRed = false, isBlue = false, forceReadOnly = false) => {
-                                const isCalculatedField = field === 'not_incoming' || field === 'final_remain' || forceReadOnly;
+                                const isCalculatedField = field === 'not_incoming' || field === 'final_remain' || field === 'prev_planted' || forceReadOnly;
                                 const isNumeric = ['contract', 'base_incoming', 'incoming', 'not_incoming', 'prev_remain', 'planted', 'final_remain'].includes(field);
                                 const fieldId = `ledger-${item.id}-${field}`;
 
@@ -298,7 +303,7 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                                     <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true, false, true)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain', false, false, false, false)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle bg-blue-50">{renderInput('incoming', false, false, true, false)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_planted', false, false, false, true)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted', false, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true, false, true)}</td>
                                     {!readOnly && (
@@ -336,7 +341,7 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                                 <td className="border-r border-t border-slate-300 text-right pr-2 p-2 bg-yellow-100/50 text-yellow-900">{formatNumber(incomingSum)}</td>
                                 <td className="border-r border-t border-slate-300 text-right pr-2 p-2 text-red-600">{formatNumber(notIncomingSum)}</td>
                                 <td className="border-r border-t border-slate-300 text-right pr-2 p-2">{formatNumber(prevRemainSum)}</td>
-                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2 bg-blue-50 text-blue-700">{formatNumber(incomingSum)}</td>
+                                <td className="border-r border-t border-slate-300 text-right pr-2 p-2">{formatNumber(prevPlantedSum)}</td>
                                 <td className="border-r border-t border-slate-300 text-right pr-2 p-2">{formatNumber(plantedSum)}</td>
                                 <td className="border-r border-t border-slate-300 text-right pr-2 p-2 text-red-600">{formatNumber(finalRemainSum)}</td>
                                 {!readOnly && <td className="border-t border-slate-300 border-r"></td>}
@@ -482,6 +487,7 @@ export default function DailyWorkPage() {
 
                     historicalLedgerMap[uKey].accum_inc += parseNumber(row.incoming);
                     historicalLedgerMap[uKey].accum_pl += parseNumber(row.planted);
+                    historicalLedgerMap[uKey].last_planted = parseNumber(row.planted);
                 });
             }
 
@@ -556,6 +562,7 @@ export default function DailyWorkPage() {
                 prev_remain: (pRem > 0 || row.prev_remain || row.total_remain) ? pRem.toString() : '',
                 not_incoming: (cont > 0 || bInc > 0 || inc > 0) ? notInc.toString() : '',
                 final_remain: (pRem > 0 || inc > 0 || pl > 0) ? finalRem.toString() : '',
+                prev_planted: pastInfo && pastInfo.last_planted > 0 ? pastInfo.last_planted.toString() : (row.prev_planted || ''),
                 isPastRecord: hasData && !hasActivity,
                 isTodayDbRecord: true
             });
@@ -579,6 +586,7 @@ export default function DailyWorkPage() {
                 incoming: '',
                 not_incoming: (cont > 0 || bInc > 0) ? (cont - bInc).toString() : '',
                 planted: '',
+                prev_planted: pastInfo.last_planted > 0 ? pastInfo.last_planted.toString() : '',
                 final_remain: pRem > 0 ? pRem.toString() : '',
                 isPastRecord: true
             };
@@ -856,9 +864,10 @@ await supabase.from('construction_sites').update({
                         base_incoming: newBaseInc > 0 ? newBaseInc.toString() : '',
                         incoming: '', 
                         not_incoming: (cont > 0 || newBaseInc > 0) ? (cont - newBaseInc).toString() : '',
-                        prev_remain: row.final_remain || '0', 
-                        planted: '', 
-                        final_remain: row.final_remain || '0', 
+                        prev_remain: row.final_remain || '0',
+                        prev_planted: row.planted || '',
+                        planted: '',
+                        final_remain: row.final_remain || '0',
                         isPastRecord: true
                     };
                 }),
