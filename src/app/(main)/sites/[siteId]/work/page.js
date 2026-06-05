@@ -225,11 +225,11 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                                 {!readOnly && <div onMouseDown={(e) => handleColResize(5, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
                             </th>
                             <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle relative">
-                                전일미식재
+                                전일식재량
                                 {!readOnly && <div onMouseDown={(e) => handleColResize(6, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
                             </th>
                             <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle relative">
-                                전일식재량
+                                전일미식재
                                 {!readOnly && <div onMouseDown={(e) => handleColResize(7, e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 bg-transparent z-10" />}
                             </th>
                             <th className="bg-slate-50 p-1 border border-slate-300 border-t-0 align-middle relative">
@@ -302,8 +302,8 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
                                     <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('base_incoming', true, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle bg-yellow-100/50">{renderInput('incoming', true, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('not_incoming', false, true, false, true)}</td>
-                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain', false, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_planted', false, false, false, true)}</td>
+                                    <td className="border-r border-slate-200 p-0 align-middle">{renderInput('prev_remain', false, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('planted', false, false, false, false)}</td>
                                     <td className="border-r border-slate-200 p-0 align-middle">{renderInput('final_remain', false, true, false, true)}</td>
                                     {!readOnly && (
