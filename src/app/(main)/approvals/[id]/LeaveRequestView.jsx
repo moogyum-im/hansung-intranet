@@ -39,8 +39,10 @@ export default function LeaveRequestView({ doc, employee, approvalHistory, refer
                     const content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content || {};
                     
                     let calculatedDuration = '';
-                    if (content.leaveType?.includes('반차')) { 
-                        calculatedDuration = '0.5일'; 
+                    if (content.leaveType?.includes('반반차')) {
+                        calculatedDuration = '0.25일';
+                    } else if (content.leaveType?.includes('반차')) {
+                        calculatedDuration = '0.5일';
                     } else if (content.startDate && content.endDate) {
                         const start = new Date(content.startDate);
                         const end = new Date(content.endDate);

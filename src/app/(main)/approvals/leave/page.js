@@ -55,10 +55,14 @@ function LeaveRequestPage() {
             .reduce((acc, key) => { acc[key] = groups[key]; return acc; }, {});
     }, [allEmployees]);
 
-    // 🚀 휴가 신청 일수 자동 계산 로직 (반차는 0.5일, 연차는 날짜 계산)
+    // 🚀 휴가 신청 일수 자동 계산 로직 (반반차는 0.25일, 반차는 0.5일, 연차는 날짜 계산)
     const requestedDays = useMemo(() => {
         if (!formData.startDate || !formData.endDate) return 0;
-        
+
+        if (formData.leaveType.includes('반반차')) {
+            return 0.25;
+        }
+
         if (formData.leaveType.includes('반차')) {
             return 0.5;
         }
@@ -326,12 +330,14 @@ function LeaveRequestPage() {
                             <table className="w-full border-collapse border-t border-l border-black text-[11px] font-black font-black">
                                 <tbody>
                                     <tr className="border-b border-r border-black divide-x divide-black font-black text-black">
-                                        <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black font-black">휴가종류 <HelpTooltip text="오전/오후 반차의 경우 정해진 시간을 확인하여 주십시오." /></th>
+                                        <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase font-black font-black">휴가종류 <HelpTooltip text="반차(0.5일) 및 반반차(0.25일)의 경우 정해진 시간을 확인하여 주십시오." /></th>
                                         <td className="p-3 font-black font-black">
                                             <select name="leaveType" value={formData.leaveType} onChange={handleChange} className="w-full bg-transparent outline-none font-black font-black">
                                                 <option value="연차">연차</option>
                                                 <option value="오전 반차 (09:00~12:00)">오전 반차 (09:00~12:00)</option>
                                                 <option value="오후 반차 (13:00~18:00)">오후 반차 (13:00~18:00)</option>
+                                                <option value="오전 반반차 (09:00~11:00)">오전 반반차 (09:00~11:00)</option>
+                                                <option value="오후 반반차 (16:00~18:00)">오후 반반차 (16:00~18:00)</option>
                                                 <option value="병가">병가</option>
                                                 <option value="경조사">경조사</option>
                                             </select>
