@@ -147,6 +147,11 @@
     text-align: center;
 }
 
+@keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
 .pt-4.text-center.text-sm.text-gray-500.min-h-\\[50px\\].flex.items-center.justify-center {
     padding-top: 1rem; /* pt-4 */
     text-align: center;

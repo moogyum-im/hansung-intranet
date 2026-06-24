@@ -236,82 +236,32 @@ function AIWidget() {
                     <Bot size={15} className="text-blue-300" />
                     <h3 className="font-black text-white text-[13px]">AI 데이터 검색</h3>
                 </div>
-                {history.length > 0 && (
-                    <button onClick={() => { setHistory([]); localStorage.removeItem('ai-chat-history'); }} className="text-[10px] font-bold text-slate-400 hover:text-white transition-colors">
-                        초기화
-                    </button>
-                )}
             </div>
 
-            <div ref={chatRef} className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-slate-50/30">
-                {history.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-4 text-center px-3 py-10">
-                        <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center">
-                            <Bot size={24} className="text-slate-400" />
-                        </div>
-                        <div>
-                            <p className="text-[12px] font-black text-slate-600 mb-1">인트라넷 통합 검색</p>
-                            <p className="text-[10px] text-slate-400 leading-relaxed">현장·결재·공지·연락처를 자연어로 질문</p>
-                        </div>
-                        <div className="w-full space-y-1.5 mt-1">
-                            {EXAMPLES.map((ex, i) => (
-                                <button key={i} onClick={() => handleSubmit(ex)}
-                                    className="w-full text-left text-[11px] font-medium text-slate-500 bg-white hover:bg-blue-50 hover:text-blue-700 px-3 py-2 rounded-xl transition-all shadow-sm flex items-center gap-2">
-                                    <span className="w-4 h-4 bg-slate-100 text-slate-500 rounded-md flex items-center justify-center text-[9px] font-black shrink-0">{i + 1}</span>
-                                    {ex}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        {history.map((msg, i) => (
-                            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                {msg.role === 'assistant' && (
-                                    <div className="w-5 h-5 bg-slate-200 rounded-full flex items-center justify-center mr-1.5 mt-1 shrink-0">
-                                        <Bot size={10} className="text-slate-500" />
-                                    </div>
-                                )}
-                                <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-[11px] leading-relaxed whitespace-pre-wrap ${
-                                    msg.role === 'user'
-                                        ? 'bg-slate-700 text-white font-medium rounded-br-sm'
-                                        : 'bg-white text-slate-600 shadow-sm rounded-bl-sm'
-                                }`}>
-                                    {msg.content}
-                                </div>
-                            </div>
-                        ))}
-                        {loading && (
-                            <div className="flex justify-start">
-                                <div className="w-5 h-5 bg-slate-200 rounded-full flex items-center justify-center mr-1.5 mt-1 shrink-0">
-                                    <Bot size={10} className="text-slate-500" />
-                                </div>
-                                <div className="bg-white px-3 py-2 rounded-2xl rounded-bl-sm flex items-center gap-2 shadow-sm">
-                                    <Loader size={10} className="animate-spin text-blue-400" />
-                                    <span className="text-[10px] text-slate-400">조회 중...</span>
-                                </div>
-                            </div>
-                        )}
-                    </>
-                )}
+            {/* 준비중 안내 */}
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-6 bg-slate-50/40">
+                <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center">
+                    <Bot size={26} className="text-slate-300" />
+                </div>
+                <div>
+                    <p className="text-[13px] font-black text-slate-500 mb-1.5">현재 사용 준비중입니다.</p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">AI 검색 기능이 곧 제공될 예정입니다.</p>
+                </div>
+                <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-600 text-[10px] font-black rounded-full">
+                    Coming Soon
+                </span>
             </div>
 
             <div className="p-3 bg-white border-t border-slate-50 shrink-0">
-                <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 focus-within:bg-white focus-within:shadow-sm transition-all">
+                <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 cursor-not-allowed">
                     <input
                         type="text"
-                        value={question}
-                        onChange={e => setQuestion(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                        placeholder="질문을 입력하세요..."
-                        className="flex-1 text-[12px] bg-transparent outline-none text-slate-700 placeholder:text-slate-400"
-                        disabled={loading}
+                        placeholder="현재 사용할 수 없습니다."
+                        className="flex-1 text-[12px] bg-transparent outline-none text-slate-400 placeholder:text-slate-400 cursor-not-allowed"
+                        disabled
+                        readOnly
                     />
-                    <button
-                        onClick={() => handleSubmit()}
-                        disabled={loading || !question.trim()}
-                        className="w-6 h-6 bg-slate-700 text-white rounded-lg flex items-center justify-center hover:bg-slate-900 disabled:opacity-30 transition-colors shrink-0"
-                    >
+                    <button disabled className="w-6 h-6 bg-slate-300 text-white rounded-lg flex items-center justify-center cursor-not-allowed shrink-0">
                         <Send size={10} />
                     </button>
                 </div>
@@ -337,11 +287,11 @@ const ALL_SHORTCUTS = [
     { id: 'bid-records',      name: '입찰 기록',        href: '/database/bid-records',              icon: Gavel },
 ];
 
-const SHORTCUT_COLORS = [
-    'from-blue-500 to-blue-600',
-    'from-violet-500 to-violet-600',
-    'from-emerald-500 to-emerald-600',
-    'from-rose-500 to-rose-600',
+const SHORTCUT_ICON_COLORS = [
+    'text-blue-500',
+    'text-violet-500',
+    'text-emerald-500',
+    'text-rose-500',
 ];
 
 function QuickAccessWidget({ currentUser }) {
@@ -426,11 +376,11 @@ function QuickAccessWidget({ currentUser }) {
                         <Settings size={13} />
                     </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="flex gap-2">
                     {shortcuts.length === 0 ? (
-                        <button onClick={openSetting} className="col-span-2 py-6 border-2 border-dashed border-slate-200 rounded-xl text-[11px] font-bold text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all flex flex-col items-center gap-1.5">
-                            <Settings size={16} />
-                            설정에서 바로가기를 추가하세요
+                        <button onClick={openSetting} className="flex-1 py-5 border-2 border-dashed border-slate-200 rounded-xl text-[11px] font-bold text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all flex flex-col items-center gap-1.5">
+                            <Settings size={15} />
+                            바로가기 추가
                         </button>
                     ) : shortcuts.map((s, idx) => {
                         const Icon = s.icon;
@@ -438,12 +388,12 @@ function QuickAccessWidget({ currentUser }) {
                             <Link
                                 key={s.id}
                                 href={s.href}
-                                className={`flex items-center gap-2.5 p-3 rounded-xl bg-gradient-to-br ${SHORTCUT_COLORS[idx % 4]} text-white hover:opacity-90 active:scale-95 transition-all shadow-sm`}
+                                className="flex-1 flex flex-col items-center gap-2 py-3 px-1 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-100 hover:border-slate-200 active:scale-95 transition-all"
                             >
-                                <div className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center shrink-0">
-                                    <Icon size={14} className="text-white" />
+                                <div className={`w-8 h-8 rounded-xl bg-white shadow-sm flex items-center justify-center border border-slate-100`}>
+                                    <Icon size={15} className={SHORTCUT_ICON_COLORS[idx % 4]} />
                                 </div>
-                                <span className="text-[12px] font-black truncate">{s.name}</span>
+                                <span className="text-[10px] font-bold text-slate-600 truncate w-full text-center leading-tight">{s.name}</span>
                             </Link>
                         );
                     })}
