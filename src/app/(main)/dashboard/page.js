@@ -24,7 +24,6 @@ import {
     Send,
     Loader,
     Settings,
-    Zap,
     X,
     Check,
     Construction,
