@@ -1,35 +1,28 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardCalendar from './DashboardCalendar';
 import './DashboardCalendar.css';
 import PushSubscriptionButton from '@/components/PushSubscriptionButton';
-import { formatDistanceToNow } from 'date-fns';
-import { ko } from 'date-fns/locale';
-import { openChatPopup } from '@/lib/chatPopup';
 import {
     Bell,
     FileCheck,
     Megaphone,
-    MessageSquare,
     ArrowUpRight,
     Calendar,
     CheckCircle2,
     Newspaper,
     Bot,
     Send,
-    Loader,
     Settings,
     X,
     Check,
     Construction,
     Users2,
     UserCircle,
-    MessagesSquare,
     Building2,
     TreePine,
     ClipboardList,
@@ -37,8 +30,6 @@ import {
     TrendingUp,
     BarChart3,
     Gavel,
-    FileText,
-    PlaneTakeoff,
 } from 'lucide-react';
 
 // --- 스켈레톤 ---
@@ -181,52 +172,6 @@ function LandscapeNewsTicker() {
 
 // --- 3. AI 검색 위젯 ---
 function AIWidget() {
-    const [question, setQuestion] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [history, setHistory] = useState(() => {
-        if (typeof window === 'undefined') return [];
-        try {
-            const saved = localStorage.getItem('ai-chat-history');
-            return saved ? JSON.parse(saved) : [];
-        } catch { return []; }
-    });
-    const chatRef = useRef(null);
-
-    useEffect(() => {
-        if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }, [history]);
-
-    useEffect(() => {
-        try { localStorage.setItem('ai-chat-history', JSON.stringify(history.slice(-30))); }
-        catch { /* 용량 초과 무시 */ }
-    }, [history]);
-
-    const EXAMPLES = [
-        '내 미결재 서류 몇 건이야?',
-        '총무팀 연락처 알려줘',
-        '이번 달 평택 현장 작업 인원',
-    ];
-
-    const handleSubmit = async (q) => {
-        const query = (q || question).trim();
-        if (!query || loading) return;
-        setLoading(true);
-        setHistory(prev => [...prev, { role: 'user', content: query }]);
-        setQuestion('');
-        try {
-            const res = await fetch('/api/ai-search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: query }),
-            });
-            const data = await res.json();
-            setHistory(prev => [...prev, { role: 'assistant', content: data.answer || data.error || '응답 없음' }]);
-        } catch {
-            setHistory(prev => [...prev, { role: 'assistant', content: '오류가 발생했습니다.' }]);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     return (
         <div className="bg-white rounded-2xl shadow-md flex flex-col overflow-hidden" style={{ height: '100%' }}>
@@ -270,31 +215,52 @@ function AIWidget() {
 }
 
 // --- 4. 나만의 바로가기 위젯 ---
-const ALL_SHORTCUTS = [
-    { id: 'notices',          name: '공지사항',        href: '/notices',                           icon: Megaphone },
-    { id: 'approvals',        name: '전자 결재',        href: '/approvals',                         icon: FileCheck },
-    { id: 'leave',            name: '휴가 신청서',      href: '/approvals/leave',                   icon: PlaneTakeoff },
-    { id: 'organization',     name: '조직도',          href: '/organization',                      icon: Users2 },
-    { id: 'sites',            name: '현장 관리',        href: '/sites',                             icon: Construction },
-    { id: 'mypage',           name: '내 정보',          href: '/mypage',                            icon: UserCircle },
-    { id: 'admin',            name: '경영 지원',        href: '/admin-portal',                      icon: Building2 },
-    { id: 'tree-sales',       name: '조경수 DB',        href: '/database/tree-sales',               icon: TreePine },
-    { id: 'exec-plans',       name: '공사 공정표',      href: '/database/execution-plans',          icon: ClipboardList },
-    { id: 'exec-estimates',   name: '내역 관리',        href: '/database/execution-estimates',      icon: FileSpreadsheet },
-    { id: 'profit',           name: '수익 실행',        href: '/database/profit-management',        icon: TrendingUp },
-    { id: 'work-analysis',    name: '작업일보 분석',    href: '/database/work-analysis',            icon: BarChart3 },
-    { id: 'bid-records',      name: '입찰 기록',        href: '/database/bid-records',              icon: Gavel },
+const BASE_SHORTCUTS = [
+    { id: 'notices',        name: '공지사항',  href: '/notices',      icon: Megaphone },
+    { id: 'approvals',      name: '전자 결재', href: '/approvals',    icon: FileCheck },
+    { id: 'organization',   name: '조직도',    href: '/organization', icon: Users2 },
+    { id: 'mypage',         name: '내 정보',   href: '/mypage',       icon: UserCircle },
 ];
 
-const SHORTCUT_ICON_COLORS = [
-    'text-blue-500',
-    'text-violet-500',
-    'text-emerald-500',
-    'text-rose-500',
+const SITE_SHORTCUTS = [
+    { id: 'sites', name: '현장 관리', href: '/sites', icon: Construction },
 ];
+
+const ADMIN_SHORTCUTS = [
+    { id: 'admin', name: '경영 지원', href: '/admin-portal', icon: Building2 },
+];
+
+const DB_SHORTCUTS = [
+    { id: 'tree-sales',     name: '조경수 DB',     href: '/database/tree-sales',           icon: TreePine },
+    { id: 'exec-plans',     name: '공사 공정표',   href: '/database/execution-plans',      icon: ClipboardList },
+    { id: 'exec-estimates', name: '내역 관리',     href: '/database/execution-estimates',  icon: FileSpreadsheet },
+    { id: 'profit',         name: '수익 실행',     href: '/database/profit-management',    icon: TrendingUp },
+    { id: 'work-analysis',  name: '작업일보 분석', href: '/database/work-analysis',        icon: BarChart3 },
+];
+
+const BID_SHORTCUTS = [
+    { id: 'bid-records', name: '입찰 기록', href: '/database/bid-records', icon: Gavel },
+];
+
+function getAvailableShortcuts(employee) {
+    if (!employee) return BASE_SHORTCUTS;
+    const allowedSiteDepts = ['공무부', '최고 경영진', '최고경영진', '공사부', '시스템관리부', '전략기획부'];
+    const canSite  = allowedSiteDepts.includes(employee.department);
+    const canAdmin = employee.department === '관리부' || employee.role === 'admin';
+    const canDb    = employee.department === '전략기획부' && employee.full_name === '임아름';
+    const canBid   = employee.full_name === '임아름' || employee.full_name === '임무겸';
+    return [
+        ...BASE_SHORTCUTS,
+        ...(canSite  ? SITE_SHORTCUTS  : []),
+        ...(canAdmin ? ADMIN_SHORTCUTS : []),
+        ...(canDb    ? DB_SHORTCUTS    : []),
+        ...(canBid   ? BID_SHORTCUTS   : []),
+    ];
+}
 
 function QuickAccessWidget({ currentUser }) {
     const LS_KEY = `quick_shortcuts_${currentUser?.id}`;
+    const availableShortcuts = getAvailableShortcuts(currentUser);
     const [selectedIds, setSelectedIds] = useState(() => {
         if (typeof window === 'undefined') return ['notices', 'approvals', 'leave', 'mypage'];
         try {
@@ -318,7 +284,7 @@ function QuickAccessWidget({ currentUser }) {
     };
 
     const shortcuts = selectedIds
-        .map(id => ALL_SHORTCUTS.find(s => s.id === id))
+        .map(id => availableShortcuts.find(s => s.id === id))
         .filter(Boolean);
 
     return (
@@ -338,7 +304,7 @@ function QuickAccessWidget({ currentUser }) {
                             </button>
                         </div>
                         <div className="p-4 grid grid-cols-2 gap-2 max-h-72 overflow-y-auto">
-                            {ALL_SHORTCUTS.map(s => {
+                            {availableShortcuts.map(s => {
                                 const Icon = s.icon;
                                 const selected = draft.includes(s.id);
                                 const disabled = !selected && draft.length >= 4;

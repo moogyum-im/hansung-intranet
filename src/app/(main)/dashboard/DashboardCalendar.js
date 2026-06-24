@@ -54,7 +54,7 @@ export default function DashboardCalendar() {
 
     // 일정 추가 모달
     const [modal, setModal] = useState(null);
-    const [form, setForm] = useState({ title: '', memo: '', color: '#3b82f6', visibility: 'private' });
+    const [form, setForm] = useState({ title: '', memo: '', color: '#3b82f6', visibility: 'private', start_date: '', end_date: '' });
     const [saving, setSaving] = useState(false);
 
     // 일정 상세 모달
@@ -109,12 +109,12 @@ export default function DashboardCalendar() {
         });
         setLeaves(leaveList);
 
-        // 내 일정 + 전사 공개 일정 (RLS: user_id = me OR visibility = 'public')
+        // 내 일정 + 전사 공개 일정 (멀티데이 포함: 이달과 겹치는 일정 조회)
         const { data: schedData } = await supabase
             .from('personal_schedules')
             .select('*')
-            .gte('schedule_date', format(monthStart, 'yyyy-MM-dd'))
             .lte('schedule_date', format(monthEnd, 'yyyy-MM-dd'))
+            .or(`end_date.gte.${format(monthStart, 'yyyy-MM-dd')},and(end_date.is.null,schedule_date.gte.${format(monthStart, 'yyyy-MM-dd')})`)
             .order('schedule_date', { ascending: true });
 
         setSchedules(schedData || []);
@@ -129,13 +129,15 @@ export default function DashboardCalendar() {
         if (!form.title.trim() || !modal || !employee) return;
         setSaving(true);
         try {
-            const dateStr = toKSTDateStr(modal.date);
+            const startDateStr = form.start_date || toKSTDateStr(modal.date);
+            const endDateStr = form.end_date && form.end_date >= startDateStr ? form.end_date : null;
             const { error } = await supabase.from('personal_schedules').insert({
                 user_id: employee.id,
                 title: form.title.trim(),
                 memo: form.memo.trim() || null,
                 color: form.color,
-                schedule_date: dateStr,
+                schedule_date: startDateStr,
+                end_date: endDateStr,
                 visibility: form.visibility,
                 employee_name: employee.full_name,
             });
@@ -144,7 +146,7 @@ export default function DashboardCalendar() {
             } else {
                 toast.success(form.visibility === 'public' ? '전사 공유 일정이 추가됐습니다.' : '개인 일정이 추가됐습니다.');
                 setModal(null);
-                setForm({ title: '', memo: '', color: '#3b82f6', visibility: 'private' });
+                setForm({ title: '', memo: '', color: '#3b82f6', visibility: 'private', start_date: '', end_date: '' });
                 fetchCalendarData();
             }
         } catch (e) {
@@ -185,7 +187,11 @@ export default function DashboardCalendar() {
     function getDayEvents(date) {
         const bdays = birthdays.filter(b => isSameDay(b.date, date));
         const lvs = leaves.filter(l => isWithinInterval(date, { start: l.start, end: l.end }));
-        const scheds = schedules.filter(s => s.schedule_date === format(date, 'yyyy-MM-dd'));
+        const scheds = schedules.filter(s => {
+            const start = parseISO(s.schedule_date);
+            const end = s.end_date ? parseISO(s.end_date) : start;
+            return isWithinInterval(date, { start, end });
+        });
         return { bdays, lvs, scheds };
     }
 
@@ -256,6 +262,27 @@ export default function DashboardCalendar() {
                                 placeholder="일정 제목 *"
                                 className="w-full text-[13px] border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                             />
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <p className="text-[10px] text-slate-400 font-bold mb-1.5">시작일</p>
+                                    <input
+                                        type="date"
+                                        value={form.start_date}
+                                        onChange={e => setForm(f => ({ ...f, start_date: e.target.value, end_date: f.end_date && f.end_date < e.target.value ? e.target.value : f.end_date }))}
+                                        className="w-full text-[12px] border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400"
+                                    />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-400 font-bold mb-1.5">종료일</p>
+                                    <input
+                                        type="date"
+                                        value={form.end_date}
+                                        min={form.start_date}
+                                        onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
+                                        className="w-full text-[12px] border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400"
+                                    />
+                                </div>
+                            </div>
                             <textarea
                                 value={form.memo}
                                 onChange={e => setForm(f => ({ ...f, memo: e.target.value }))}
@@ -390,7 +417,8 @@ export default function DashboardCalendar() {
                                         className={`min-h-[68px] p-1 flex flex-col cursor-pointer group ${!isCurrentMonth ? 'bg-slate-50/60' : ''} ${isCurrentMonth ? 'hover:bg-blue-50/40' : ''} transition-colors`}
                                         onClick={() => {
                                             if (!isCurrentMonth) return;
-                                            setForm({ title: '', memo: '', color: '#3b82f6', visibility: 'private' });
+                                            const dateStr = toKSTDateStr(date);
+                                            setForm({ title: '', memo: '', color: '#3b82f6', visibility: 'private', start_date: dateStr, end_date: '' });
                                             setModal({ date });
                                         }}
                                         onMouseEnter={(e) => {

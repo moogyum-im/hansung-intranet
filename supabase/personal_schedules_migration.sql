@@ -10,9 +10,10 @@ CREATE TABLE IF NOT EXISTS personal_schedules (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 공개 범위 및 작성자 이름 컬럼 추가
+-- 공개 범위, 작성자 이름, 종료일 컬럼 추가
 ALTER TABLE personal_schedules ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'private' CHECK (visibility IN ('public', 'private'));
 ALTER TABLE personal_schedules ADD COLUMN IF NOT EXISTS employee_name TEXT;
+ALTER TABLE personal_schedules ADD COLUMN IF NOT EXISTS end_date DATE;
 
 -- 기존 데이터는 모두 나만보기로 처리
 UPDATE personal_schedules SET visibility = 'private' WHERE visibility IS NULL;
@@ -23,7 +24,7 @@ ALTER TABLE personal_schedules ENABLE ROW LEVEL SECURITY;
 -- 기존 조회 정책 삭제 후 재생성 (본인 + 공개 일정 조회 허용)
 DROP POLICY IF EXISTS "본인 일정만 조회" ON personal_schedules;
 CREATE POLICY "일정 조회" ON personal_schedules
-    FOR SELECT USING (auth.uid() = user_id OR visibility = 'public');
+    FOR SELECT USING (auth.uid() = user_id OR visibility = 'public');\\저장 실패: Could not find the 'end_date' column of 'personal_schedules' in the schema cache
 
 DROP POLICY IF EXISTS "본인 일정만 삽입" ON personal_schedules;
 CREATE POLICY "본인 일정만 삽입" ON personal_schedules
