@@ -367,12 +367,12 @@ function QuickAccessWidget({ currentUser }) {
 
             {/* 바로가기 카드 */}
             <div className="bg-white rounded-2xl shadow-md p-4 mt-4">
-                <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-slate-50">
-                    <div className="flex items-center gap-2">
-                        <Zap size={14} className="text-amber-400" />
+                <div className="flex items-center justify-between mb-1 pb-2.5 border-b border-slate-50">
+                    <div>
                         <h3 className="font-bold text-slate-600 text-[13px]">바로가기</h3>
+                        <p className="text-[10px] text-slate-400 mt-0.5">⚙️ 버튼으로 자주 쓰는 메뉴 최대 4개 설정</p>
                     </div>
-                    <button onClick={openSetting} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600">
+                    <button onClick={openSetting} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600 shrink-0">
                         <Settings size={13} />
                     </button>
                 </div>
