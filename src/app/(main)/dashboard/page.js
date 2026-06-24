@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
+import { openChatPopup } from '@/lib/chatPopup';
 import DashboardCalendar from './DashboardCalendar';
 import './DashboardCalendar.css';
 import PushSubscriptionButton from '@/components/PushSubscriptionButton';
@@ -30,6 +31,7 @@ import {
     TrendingUp,
     BarChart3,
     Gavel,
+    ChevronRight,
 } from 'lucide-react';
 
 // --- 스켈레톤 ---
@@ -373,8 +375,11 @@ export default function DashboardPage() {
     const [noticesLoading, setNoticesLoading] = useState(true);
     const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [] });
     const [approvalsLoading, setApprovalsLoading] = useState(true);
-    const [unreadCount, setUnreadCount] = useState(0);
+    const [notifications, setNotifications] = useState([]);
+    const [showNotificationPanel, setShowNotificationPanel] = useState(false);
     const [statsLoading, setStatsLoading] = useState(true);
+    const notificationPanelRef = useRef(null);
+    const notificationButtonRef = useRef(null);
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -400,27 +405,69 @@ export default function DashboardPage() {
         const fetchStats = async () => {
             setStatsLoading(true);
             setApprovalsLoading(true);
-            const [{ data: approvals }, { count: unread }] = await Promise.all([
+            const [{ data: approvals }, { data: notifData }] = await Promise.all([
                 supabase.rpc('get_my_approvals', { p_user_id: currentUser.id }),
-                supabase.from('notifications').select('*', { count: 'exact', head: true })
-                    .eq('recipient_id', currentUser.id).eq('is_read', false),
+                supabase.from('notifications')
+                    .select('*')
+                    .eq('recipient_id', currentUser.id)
+                    .order('created_at', { ascending: false })
+                    .limit(20),
             ]);
             setApprovalsData({
                 toReview: approvals?.filter(d => d.category === 'to_review' && d.my_approval_status !== '미결') ?? [],
                 submitted: approvals?.filter(d => d.category === 'submitted') ?? [],
             });
-            setUnreadCount(unread ?? 0);
+            setNotifications(notifData || []);
             setApprovalsLoading(false);
             setStatsLoading(false);
         };
         fetchStats();
     }, [currentUser]);
 
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (
+                notificationPanelRef.current && !notificationPanelRef.current.contains(e.target) &&
+                notificationButtonRef.current && !notificationButtonRef.current.contains(e.target)
+            ) {
+                setShowNotificationPanel(false);
+            }
+        };
+        if (showNotificationPanel) document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showNotificationPanel]);
+
+    const handleMarkAllRead = async () => {
+        if (!notifications.some(n => !n.is_read)) return;
+        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+        await supabase.from('notifications').update({ is_read: true })
+            .eq('recipient_id', currentUser.id).eq('is_read', false);
+    };
+
+    const handleMarkOneRead = async (id) => {
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+        await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+    };
+
+    const handleNotificationClick = (n) => {
+        if (!n.is_read) handleMarkOneRead(n.id);
+        setShowNotificationPanel(false);
+        const link = n.link || '';
+        const chatroomMatch = link.match(/\/chatrooms\/([^/?#]+)/);
+        if (chatroomMatch) {
+            openChatPopup(chatroomMatch[1]);
+        } else if (link) {
+            window.location.href = link;
+        }
+    };
+
     if (employeeLoading) return (
         <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
     );
+
+    const unreadCount = notifications.filter(n => !n.is_read).length;
 
     const formattedTime = new Intl.DateTimeFormat('ko-KR', {
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
@@ -431,6 +478,54 @@ export default function DashboardPage() {
 
     return (
         <div className="bg-[#f0f2f5] min-h-screen pb-12">
+            {/* 알림 패널 — stacking context 문제 방지를 위해 DOM 최상위 렌더링 */}
+            {showNotificationPanel && (
+                <div ref={notificationPanelRef} className="fixed right-4 top-[88px] w-80 bg-white rounded-2xl shadow-2xl overflow-hidden z-[9999] border border-slate-100">
+                    <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Bell size={13} className="text-slate-500" />
+                            <span className="text-[13px] font-black text-slate-700">알림</span>
+                            {unreadCount > 0 && (
+                                <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">{unreadCount}</span>
+                            )}
+                        </div>
+                        {unreadCount > 0 && (
+                            <button onClick={handleMarkAllRead} className="text-[10px] font-bold text-blue-500 hover:text-blue-700 transition-colors">
+                                모두 읽음
+                            </button>
+                        )}
+                    </div>
+                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                        {notifications.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-10 text-slate-300">
+                                <Bell size={24} strokeWidth={1.5} />
+                                <p className="text-[11px] font-medium mt-2">새로운 알림이 없습니다.</p>
+                            </div>
+                        ) : (
+                            <ul className="divide-y divide-slate-50">
+                                {notifications.map(n => (
+                                    <li key={n.id}>
+                                        <button
+                                            onClick={() => handleNotificationClick(n)}
+                                            className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${!n.is_read ? 'bg-rose-50/60' : ''}`}
+                                        >
+                                            <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${!n.is_read ? 'bg-rose-500' : ''}`} />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[12px] font-semibold text-slate-700 leading-snug">{n.content}</p>
+                                                <p className="text-[10px] text-slate-400 mt-1">
+                                                    {new Date(n.created_at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </p>
+                                            </div>
+                                            <ChevronRight size={12} className="text-slate-300 shrink-0 mt-1" />
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* 뉴스 티커 */}
             <LandscapeNewsTicker />
 
@@ -448,9 +543,9 @@ export default function DashboardPage() {
                         </div>
 
                         {/* 오른쪽: 통계 카드 + 푸시 */}
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="flex items-center gap-2.5 shrink-0 relative">
                             {/* 미결재 카드 */}
-                            <div className="bg-amber-500/20 border border-amber-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3">
+                            <Link href="/approvals?tab=received" className="bg-amber-500/20 border border-amber-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3 hover:bg-amber-500/30 transition-all cursor-pointer">
                                 <div className="w-8 h-8 bg-amber-500 rounded-xl flex items-center justify-center">
                                     <FileCheck size={15} className="text-white" />
                                 </div>
@@ -460,9 +555,13 @@ export default function DashboardPage() {
                                     </p>
                                     <p className="text-[10px] text-amber-300/80 mt-0.5">미결재</p>
                                 </div>
-                            </div>
+                            </Link>
                             {/* 알림 카드 */}
-                            <div className="bg-rose-500/20 border border-rose-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3">
+                            <button
+                                ref={notificationButtonRef}
+                                onClick={() => setShowNotificationPanel(prev => !prev)}
+                                className="bg-rose-500/20 border border-rose-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3 hover:bg-rose-500/30 transition-all cursor-pointer"
+                            >
                                 <div className="w-8 h-8 bg-rose-500 rounded-xl flex items-center justify-center">
                                     <Bell size={15} className="text-white" />
                                 </div>
@@ -472,7 +571,7 @@ export default function DashboardPage() {
                                     </p>
                                     <p className="text-[10px] text-rose-300/80 mt-0.5">알림</p>
                                 </div>
-                            </div>
+                            </button>
                             {/* 시간 */}
                             <span className="text-[11px] font-mono text-slate-500 hidden md:block">{formattedTime}</span>
                             {/* 푸시 버튼 */}

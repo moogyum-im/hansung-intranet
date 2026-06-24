@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
@@ -290,8 +290,8 @@ function ExecutiveApprovalsWidget({ toReview, approved, rejected, currentUserFul
 }
 
 // --- 일반 임직원용 기존 위젯 ---
-function StandardApprovalsWidget({ toReview, submitted, approved, rejected, referred, currentUserId, currentUserFullName, allEmployees }) {
-    const [activeMainTab, setActiveMainTab] = useState('submitted');
+function StandardApprovalsWidget({ toReview, submitted, approved, rejected, referred, currentUserId, currentUserFullName, allEmployees, initialTab }) {
+    const [activeMainTab, setActiveMainTab] = useState(initialTab || 'submitted');
     const [activeSubTab, setActiveSubTab] = useState('progress');
     const [lastViewed, setLastViewed] = useState({});
     const [shareTarget, setShareTarget] = useState(null);
@@ -564,6 +564,8 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
 // --- 메인 페이지 조립부 ---
 export default function ApprovalsPage() {
     const { employee, loading: employeeLoading } = useEmployee();
+    const searchParams = useSearchParams();
+    const initialTab = searchParams.get('tab') === 'received' ? 'received' : undefined;
     const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [], approved: [], rejected: [], referred: [] });
     const [allEmployees, setAllEmployees] = useState([]);
     const [loadingApprovals, setLoadingApprovals] = useState(true);
@@ -709,11 +711,12 @@ export default function ApprovalsPage() {
                                 allEmployees={allEmployees}
                             />
                         ) : (
-                            <StandardApprovalsWidget 
+                            <StandardApprovalsWidget
                                 {...approvalsData}
-                                currentUserId={employee?.id} 
+                                currentUserId={employee?.id}
                                 currentUserFullName={employee?.full_name}
                                 allEmployees={allEmployees}
+                                initialTab={initialTab}
                             />
                         )
                     ) : (
