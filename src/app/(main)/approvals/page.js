@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
@@ -562,7 +562,7 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
 }
 
 // --- 메인 페이지 조립부 ---
-export default function ApprovalsPage() {
+function ApprovalsPageContent() {
     const { employee, loading: employeeLoading } = useEmployee();
     const searchParams = useSearchParams();
     const initialTab = searchParams.get('tab') === 'received' ? 'received' : undefined;
@@ -759,5 +759,17 @@ export default function ApprovalsPage() {
                 )}
             </main>
         </div>
+    );
+}
+
+export default function ApprovalsPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+                <div className="w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+        }>
+            <ApprovalsPageContent />
+        </Suspense>
     );
 }
