@@ -138,6 +138,8 @@ function LandscapeNewsTicker() {
         catch { return ''; }
     };
 
+    if (!loading && news.length === 0) return null;
+
     return (
         <div className="bg-[#1a2235]" style={{ height: '32px', overflow: 'hidden' }}>
             <div className="flex items-center h-full pl-16 lg:pl-4 pr-4 gap-3">

@@ -17,6 +17,7 @@ export default function MainLayoutClient({ children }) {
     const router = useRouter();
     // ✅ /chatrooms, /chatrooms/[roomId] 모두 포함
     const isChatRoomPage = pathname.startsWith('/chatrooms');
+    const isGanttPage   = pathname.startsWith('/database/execution-plans/site/');
 
     useEffect(() => {
         const checkSession = async () => {
@@ -30,20 +31,21 @@ export default function MainLayoutClient({ children }) {
         return () => { authListener.subscription.unsubscribe(); };
     }, [router]);
 
+    useEffect(() => {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                window.location.reload();
+            });
+        }
+    }, []);
+
     return (
         <EmployeeProvider>
             <Toaster position="bottom-right" reverseOrder={false} />
             <GlobalChatListener />
             <div className="flex h-screen bg-gray-100">
-                <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+                {!isGanttPage && <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} openSidebar={() => setSidebarOpen(true)} />}
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <header className="lg:hidden flex justify-between items-center bg-white p-4 border-b">
-                        <button onClick={() => setSidebarOpen(true)} className="text-gray-500 focus:outline-none" aria-label="Open sidebar">
-                            <MenuIcon />
-                        </button>
-                        <h1 className="text-xl font-semibold">HANSUNG</h1>
-                        <div className="w-6"></div>
-                    </header>
                     <main className={`flex-1 ${isChatRoomPage ? 'overflow-hidden' : 'overflow-y-auto bg-gray-50'}`}>
                         {children}
                     </main>
