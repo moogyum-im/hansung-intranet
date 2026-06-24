@@ -370,7 +370,7 @@ function QuickAccessWidget({ currentUser }) {
                 <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-slate-50">
                     <div className="flex items-center gap-2">
                         <Zap size={14} className="text-amber-400" />
-                        <h3 className="font-bold text-slate-600 text-[13px]">나만의 바로가기</h3>
+                        <h3 className="font-bold text-slate-600 text-[13px]">바로가기</h3>
                     </div>
                     <button onClick={openSetting} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600">
                         <Settings size={13} />
@@ -378,25 +378,19 @@ function QuickAccessWidget({ currentUser }) {
                 </div>
                 <div className="flex gap-2">
                     {shortcuts.length === 0 ? (
-                        <button onClick={openSetting} className="flex-1 py-5 border-2 border-dashed border-slate-200 rounded-xl text-[11px] font-bold text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all flex flex-col items-center gap-1.5">
-                            <Settings size={15} />
+                        <button onClick={openSetting} className="flex-1 py-5 border-2 border-dashed border-slate-200 rounded-xl text-[11px] font-bold text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-1.5">
+                            <Settings size={13} />
                             바로가기 추가
                         </button>
-                    ) : shortcuts.map((s, idx) => {
-                        const Icon = s.icon;
-                        return (
-                            <Link
-                                key={s.id}
-                                href={s.href}
-                                className="flex-1 flex flex-col items-center gap-2 py-3 px-1 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-100 hover:border-slate-200 active:scale-95 transition-all"
-                            >
-                                <div className={`w-8 h-8 rounded-xl bg-white shadow-sm flex items-center justify-center border border-slate-100`}>
-                                    <Icon size={15} className={SHORTCUT_ICON_COLORS[idx % 4]} />
-                                </div>
-                                <span className="text-[10px] font-bold text-slate-600 truncate w-full text-center leading-tight">{s.name}</span>
-                            </Link>
-                        );
-                    })}
+                    ) : shortcuts.map((s) => (
+                        <Link
+                            key={s.id}
+                            href={s.href}
+                            className="flex-1 flex items-center justify-center py-3 px-1 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-100 hover:border-slate-200 active:scale-95 transition-all"
+                        >
+                            <span className="text-[11px] font-bold text-slate-600 truncate text-center">{s.name}</span>
+                        </Link>
+                    ))}
                 </div>
             </div>
         </>
