@@ -88,7 +88,7 @@ export default function DashboardCalendar() {
         // 승인된 연차
         const { data: leaveData } = await supabase
             .from('approval_documents')
-            .select('id, requester_id, content, profiles!approval_documents_requester_id_fkey(full_name)')
+            .select('id, content')
             .in('status', ['승인', '완료'])
             .eq('document_type', 'leave_request');
 
@@ -101,7 +101,7 @@ export default function DashboardCalendar() {
                 const end = content.endDate ? parseISO(content.endDate) : start;
                 if (isBefore(end, monthStart) || isAfter(start, monthEnd)) return;
                 leaveList.push({
-                    name: doc.profiles?.full_name || '직원',
+                    name: content.requesterName || '직원',
                     start, end,
                     leaveType: content.leaveType || '연차',
                 });

@@ -75,7 +75,7 @@ export async function POST(request) {
         let nextCurrentApproverId = null;
 
         if (action === 'reject') {
-            nextDocumentStatus = 'rejected'; // 반려 처리
+            nextDocumentStatus = '반려';
             // 현재 결재선 상태 '대기' -> '반려'로 업데이트
             await supabase
                 .from('approval_document_approvers')
@@ -123,7 +123,7 @@ export async function POST(request) {
 
             } else {
                 // 모든 결재가 완료됨
-                nextDocumentStatus = 'approved';
+                nextDocumentStatus = '승인';
                 nextCurrentApproverId = null;
 
                 // 상신자에게 알림
