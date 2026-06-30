@@ -402,7 +402,7 @@ export default function MyPage() {
                                             type="text"
                                             value={hiworksEmail}
                                             onChange={e => setHiworksEmail(e.target.value.replace(/@.*/, ''))}
-                                            placeholder="l.mugyum"
+                                            placeholder="아이디 입력"
                                             className="flex-1 text-sm font-bold text-slate-700 px-4 py-3 placeholder:text-slate-300 focus:outline-none bg-transparent"
                                         />
                                         <span className="text-sm font-bold text-slate-400 pr-4 shrink-0">@han-sung.com</span>
