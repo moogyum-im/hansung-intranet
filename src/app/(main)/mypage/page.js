@@ -7,7 +7,7 @@ import MyAttendanceWidget from '@/components/MyAttendanceWidget';
 import LeaveCalendar from './LeaveCalendar.jsx';
 import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
 import { toast, Toaster } from 'react-hot-toast';
-import { Calendar, Clock, ShieldCheck, Coffee, Lock, Receipt, Loader2, FileText, UserCircle, CreditCard, CheckCircle2, Send } from 'lucide-react';
+import { Calendar, Clock, ShieldCheck, Coffee, Lock, Receipt, Loader2, FileText, UserCircle, CreditCard, CheckCircle2, Send, Mail, Eye, EyeOff, Unlink } from 'lucide-react';
 
 const getGreeting = () => `오늘도 활기찬 하루 보내세요.`;
 
@@ -21,6 +21,13 @@ export default function MyPage() {
     const [cardNotes, setCardNotes] = useState('');
     const [isSubmittingCard, setIsSubmittingCard] = useState(false);
     const [showCardModal, setShowCardModal] = useState(false);
+
+    // 하이웍스 메일 연동
+    const [hiworksEmail, setHiworksEmail] = useState('');
+    const [hiworksPassword, setHiworksPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
+    const [isConnecting, setIsConnecting] = useState(false);
 
     useEffect(() => {
         const fetchLatestData = async () => {
@@ -54,6 +61,17 @@ export default function MyPage() {
                     .order('created_at', { ascending: false })
                     .limit(5);
                 if (cRecords) setCardRequests(cRecords);
+
+                // 하이웍스 연동 상태
+                const { data: hw } = await supabase
+                    .from('profiles')
+                    .select('hiworks_email')
+                    .eq('id', employee.id)
+                    .single();
+                if (hw?.hiworks_email) {
+                    setIsConnected(true);
+                    setHiworksEmail(hw.hiworks_email);
+                }
             } catch (error) { console.error(error); }
         };
         fetchLatestData();
@@ -88,6 +106,45 @@ export default function MyPage() {
             toast.error('신청 중 오류가 발생했습니다. 다시 시도해주세요.');
         } finally {
             setIsSubmittingCard(false);
+        }
+    };
+
+    const connectHiworks = async () => {
+        if (!hiworksEmail || !hiworksPassword) return toast.error('이메일과 비밀번호를 모두 입력하세요.');
+        setIsConnecting(true);
+        try {
+            const res = await fetch('/api/hiworks/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: employee.id, email: hiworksEmail, password: hiworksPassword }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || '연동 실패');
+            setIsConnected(true);
+            setHiworksPassword('');
+            toast.success('하이웍스 메일이 연동되었습니다.');
+        } catch (e) {
+            toast.error(e.message);
+        } finally {
+            setIsConnecting(false);
+        }
+    };
+
+    const disconnectHiworks = async () => {
+        if (!confirm('하이웍스 메일 연동을 해제하시겠습니까?')) return;
+        try {
+            const res = await fetch('/api/hiworks/connect', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: employee.id }),
+            });
+            if (!res.ok) throw new Error('해제 실패');
+            setIsConnected(false);
+            setHiworksEmail('');
+            setHiworksPassword('');
+            toast.success('연동이 해제되었습니다.');
+        } catch {
+            toast.error('연동 해제 중 오류가 발생했습니다.');
         }
     };
 
@@ -266,6 +323,82 @@ export default function MyPage() {
                     </div>
                 </div>
 
+
+                {/* 하이웍스 메일 연동 섹션 */}
+                <div id="hiworks" className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+                        <Mail size={18} className="text-sky-500" />
+                        <div>
+                            <h3 className="text-sm font-black text-slate-800">하이웍스 메일 연동</h3>
+                            <p className="text-xs font-bold text-slate-400 mt-0.5">연동하면 대시보드 수신메일함에서 바로 확인할 수 있습니다.</p>
+                        </div>
+                        {isConnected && (
+                            <span className="ml-auto px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-lg text-[10px] font-black">연동됨</span>
+                        )}
+                    </div>
+                    <div className="p-6">
+                        {isConnected ? (
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center">
+                                        <Mail size={18} className="text-sky-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-black text-slate-700">{hiworksEmail}</p>
+                                        <p className="text-xs font-bold text-slate-400">IMAP 연동 중</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={disconnectHiworks}
+                                    className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-500 hover:border-red-200 hover:text-red-500 rounded-xl text-xs font-black transition-colors"
+                                >
+                                    <Unlink size={13} /> 연동 해제
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 max-w-md">
+                                <div>
+                                    <label className="text-xs font-black text-slate-500 block mb-1.5">하이웍스 이메일</label>
+                                    <input
+                                        type="email"
+                                        value={hiworksEmail}
+                                        onChange={e => setHiworksEmail(e.target.value)}
+                                        placeholder="example@han-sung.com"
+                                        className="w-full text-sm font-bold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 placeholder:text-slate-300 focus:outline-none focus:border-sky-400 transition-colors"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-slate-500 block mb-1.5">하이웍스 비밀번호</label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            value={hiworksPassword}
+                                            onChange={e => setHiworksPassword(e.target.value)}
+                                            placeholder="비밀번호"
+                                            className="w-full text-sm font-bold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 pr-10 placeholder:text-slate-300 focus:outline-none focus:border-sky-400 transition-colors"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(v => !v)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                        >
+                                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 font-bold mt-1.5">비밀번호는 암호화되어 저장되며, 이메일 수신 조회에만 사용됩니다.</p>
+                                </div>
+                                <button
+                                    onClick={connectHiworks}
+                                    disabled={isConnecting}
+                                    className="flex items-center gap-2 px-5 py-3 bg-sky-500 hover:bg-sky-600 text-white text-sm font-black rounded-xl transition-colors disabled:opacity-50"
+                                >
+                                    {isConnecting ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
+                                    {isConnecting ? '연동 확인 중...' : '연동하기'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
 
             </main>
 

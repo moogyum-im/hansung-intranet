@@ -34,6 +34,7 @@ import {
     ChevronRight,
     Mail,
     Send,
+    RefreshCw,
 } from 'lucide-react';
 
 // --- 스켈레톤 ---
@@ -220,7 +221,7 @@ function AIWidget() {
 function showMailToast(subject, from) {
     toast.custom((t) => (
         <div
-            onClick={() => { window.open('https://www.hiworks.com', '_blank'); toast.dismiss(t.id); }}
+            onClick={() => { window.open('https://mails.office.hiworks.com/list/inbox?page=1', '_blank'); toast.dismiss(t.id); }}
             className={`${t.visible ? 'animate-enter' : 'animate-leave'}
                 w-80 bg-white shadow-xl rounded-2xl pointer-events-auto flex items-start gap-3 p-4
                 ring-1 ring-black/5 cursor-pointer hover:bg-slate-50 transition-colors`}
@@ -255,24 +256,34 @@ function showMailToast(subject, from) {
     }
 }
 
-function HiworksMailWidget() {
+function HiworksMailWidget({ userId }) {
     const [mails, setMails] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [connected, setConnected] = useState(null);
+    const [fetchError, setFetchError] = useState(false);
     const prevCountRef = useRef(0);
 
-    // 알림 권한 요청
     useEffect(() => {
         if (typeof window !== 'undefined' && Notification.permission === 'default') {
             Notification.requestPermission();
         }
     }, []);
 
-    const fetchMails = useCallback(async () => {
+    const fetchMails = useCallback(async ({ manual = false } = {}) => {
+        if (!userId) return;
+        if (manual) setRefreshing(true);
         try {
-            const res = await fetch('/api/hiworks/mail');
-            if (!res.ok) return;
+            const res = await fetch(`/api/hiworks/mail?userId=${userId}`);
             const data = await res.json();
+            if (data.notConnected) {
+                setConnected(false);
+                setLoading(false);
+                return;
+            }
+            setConnected(true);
+            setFetchError(!!data.fetchError);
             const newMails = data.mails || [];
             const newUnread = data.unreadCount ?? newMails.filter(m => !m.isRead).length;
             setMails(newMails);
@@ -282,17 +293,19 @@ function HiworksMailWidget() {
                 showMailToast(newest?.subject, newest?.from);
             }
             prevCountRef.current = newUnread;
-        } catch {}
-    }, []);
+        } catch {
+            setFetchError(true);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, [userId]);
 
-    // 최초 로드 + 60초 폴링
     useEffect(() => {
         fetchMails();
         const interval = setInterval(fetchMails, 60_000);
         return () => clearInterval(interval);
     }, [fetchMails]);
-
-    const isConnected = mails.length > 0;
 
     return (
         <div className="bg-white rounded-2xl shadow-md flex flex-col overflow-hidden h-full">
@@ -306,14 +319,24 @@ function HiworksMailWidget() {
                         </span>
                     )}
                 </div>
-                <a
-                    href="https://www.hiworks.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] font-bold text-sky-500 hover:underline flex items-center gap-0.5"
-                >
-                    메일 열기 <ArrowUpRight size={10} />
-                </a>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => fetchMails({ manual: true })}
+                        disabled={refreshing}
+                        className="text-slate-400 hover:text-sky-500 transition-colors disabled:opacity-40"
+                        title="새로고침"
+                    >
+                        <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+                    </button>
+                    <a
+                        href="https://mails.office.hiworks.com/list/inbox?page=1"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-bold text-sky-500 hover:underline flex items-center gap-0.5"
+                    >
+                        메일 열기 <ArrowUpRight size={10} />
+                    </a>
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
@@ -326,12 +349,52 @@ function HiworksMailWidget() {
                             </div>
                         ))}
                     </div>
-                ) : isConnected ? (
+                ) : connected === false ? (
+                    // 미연동 상태
+                    <div className="flex flex-col items-center justify-center h-full text-center gap-4 px-4 py-8">
+                        <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center">
+                            <Mail size={26} className="text-sky-200" />
+                        </div>
+                        <div>
+                            <p className="text-[13px] font-black text-slate-500 mb-1.5">메일 미연동</p>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                                마이페이지에서 하이웍스 계정을<br />연동하면 메일이 여기에 표시됩니다.
+                            </p>
+                        </div>
+                        <a
+                            href="/mypage#hiworks"
+                            className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-[11px] font-black rounded-xl transition-colors"
+                        >
+                            <Mail size={12} /> 메일 연동하기
+                        </a>
+                    </div>
+                ) : fetchError ? (
+                    // 연동됐지만 IMAP 오류
+                    <div className="flex flex-col items-center justify-center h-full text-center gap-3 px-4 py-8">
+                        <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center">
+                            <Mail size={26} className="text-amber-300" />
+                        </div>
+                        <div>
+                            <p className="text-[13px] font-black text-slate-500 mb-1">메일 로딩 실패</p>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                                IMAP 서버에 연결할 수 없습니다.<br />하이웍스 설정에서 IMAP을 활성화해 주세요.
+                            </p>
+                        </div>
+                        <a
+                            href="https://mails.office.hiworks.com/list/inbox?page=1"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-black rounded-xl transition-colors"
+                        >
+                            <Mail size={12} /> 메일 직접 열기
+                        </a>
+                    </div>
+                ) : mails.length > 0 ? (
                     <ul className="space-y-0.5">
                         {mails.map((mail, i) => (
                             <li key={i}>
                                 <a
-                                    href={mail.link || 'https://www.hiworks.com'}
+                                    href={mail.link || 'https://mails.office.hiworks.com/list/inbox?page=1'}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="group flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-sky-50 transition-all"
@@ -355,32 +418,18 @@ function HiworksMailWidget() {
                         ))}
                     </ul>
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-center gap-4 px-4 py-8">
-                        <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center">
-                            <Mail size={26} className="text-sky-200" />
-                        </div>
-                        <div>
-                            <p className="text-[13px] font-black text-slate-500 mb-1.5">API 연동 준비중</p>
-                            <p className="text-[11px] text-slate-400 leading-relaxed">
-                                하이웍스 API 키 발급 후<br />수신메일이 여기에 표시됩니다.
-                            </p>
-                        </div>
-                        <a
-                            href="https://www.hiworks.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-[11px] font-black rounded-xl transition-colors"
-                        >
-                            <Mail size={12} /> 메일 열기
-                        </a>
+                    // 연동됐지만 메일 없음
+                    <div className="flex flex-col items-center justify-center h-full text-center gap-2 px-4 py-8">
+                        <Mail size={28} className="text-slate-200" />
+                        <p className="text-[12px] font-bold text-slate-400">받은 메일이 없습니다.</p>
                     </div>
                 )}
             </div>
 
-            {isConnected && (
+            {connected && (
                 <div className="p-3 border-t border-slate-50 shrink-0">
                     <a
-                        href="https://www.hiworks.com"
+                        href="https://mails.office.hiworks.com/list/inbox?page=1"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center justify-center gap-1.5 w-full py-2 text-[11px] font-bold text-sky-500 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors"
@@ -824,7 +873,7 @@ export default function DashboardPage() {
                             </button>
                             {/* 하이웍스 메일 */}
                             <a
-                                href="https://www.hiworks.com"
+                                href="https://mails.office.hiworks.com/list/inbox?page=1"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="bg-sky-500/20 border border-sky-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3 hover:bg-sky-500/30 transition-all"
@@ -905,7 +954,7 @@ export default function DashboardPage() {
                         </Widget>
 
                         <div className="flex-1 min-h-0">
-                            <HiworksMailWidget />
+                            <HiworksMailWidget userId={currentUser?.id} />
                         </div>
                     </div>
 

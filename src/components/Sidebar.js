@@ -28,9 +28,12 @@ import {
   ClipboardList,
   FileSpreadsheet,
   Gavel,
+  BarChart3,
+  Mail,
+  BookOpen,
 } from 'lucide-react';
 
-export default function Sidebar({ isOpen, onClose }) {
+export default function Sidebar({ isOpen, onClose, openSidebar }) {
     const pathname = usePathname();
     const router = useRouter();
     
@@ -44,8 +47,11 @@ export default function Sidebar({ isOpen, onClose }) {
 
     const [totalUnreadCount, setTotalUnreadCount] = useState(0);
     const [pendingApprovals, setPendingApprovals] = useState(0);
+    const [mailUnreadCount, setMailUnreadCount] = useState(0); // 하이웍스 API 연동 후 fetch 예정
     const [statusMenuOpen, setStatusMenuOpen] = useState(false);
     const [currentStatus, setCurrentStatus] = useState('근무 중');
+    // undefined = 아직 로딩 중 | null = 설정 없음(부서 기반 기본 규칙 적용) | Set = 허용된 메뉴 키 목록
+    const [menuPermissions, setMenuPermissions] = useState(undefined);
 
     useEffect(() => {
         setIsWorkMenuOpen(pathname.startsWith('/work'));
@@ -60,6 +66,21 @@ export default function Sidebar({ isOpen, onClose }) {
         };
         fetchDepartments();
     }, []);
+
+    useEffect(() => {
+        if (!employee || loading) return;
+        supabase
+            .from('menu_permissions')
+            .select('menu_key')
+            .eq('user_id', employee.id)
+            .then(({ data }) => {
+                if (data && data.length > 0) {
+                    setMenuPermissions(new Set(data.map(d => d.menu_key)));
+                } else {
+                    setMenuPermissions(null); // 설정 없음 → 부서 기반 기본 규칙 사용
+                }
+            });
+    }, [employee, loading]);
 
     useEffect(() => {
         const fetchAccessibleBoards = async () => {
@@ -144,6 +165,16 @@ export default function Sidebar({ isOpen, onClose }) {
 
     const currentStatusConfig = statusOptions.find(s => s.label === currentStatus) || statusOptions[0];
 
+    // ── 메뉴 권한 헬퍼 ──
+    // menuPermissions=undefined: 로딩 중 → false 반환
+    // menuPermissions=null: 설정 없음 → legacyCheck(부서 기반) 사용
+    // menuPermissions=Set: 허용 목록으로 판단
+    const checkMenu = (key, legacyCheck) => {
+        if (menuPermissions === undefined) return false;
+        if (menuPermissions === null) return legacyCheck;
+        return menuPermissions.has(key);
+    };
+
     // ── 메뉴 구성 ──
     const menuItems = [
         { name: '대시보드', href: '/dashboard', icon: LayoutDashboard },
@@ -152,36 +183,59 @@ export default function Sidebar({ isOpen, onClose }) {
     ];
 
     const allowedSiteDepts = ['공무부', '최고 경영진', '최고경영진', '공사부', '시스템관리부', '전략기획부'];
-    if (employee && allowedSiteDepts.includes(employee.department)) {
+    if (employee && checkMenu('sites', allowedSiteDepts.includes(employee.department))) {
         menuItems.push({ name: '현장 관리', href: '/sites', icon: Construction });
     }
 
-    menuItems.push({ name: '전자 결재', href: '/approvals', icon: FileCheck, hasAlert: pendingApprovals > 0 });
+    if (!employee || checkMenu('mail', true)) {
+        menuItems.push({ name: '메일함', href: 'https://mails.office.hiworks.com/list/inbox?page=1', icon: Mail, isExternal: true, unreadCount: mailUnreadCount });
+    }
 
-    if (employee && (employee.department === '관리부' || employee.role === 'admin')) {
+    if (!employee || checkMenu('approvals', true)) {
+        menuItems.push({ name: '전자 결재', href: '/approvals', icon: FileCheck, hasAlert: pendingApprovals > 0 });
+    }
+
+    if (employee && checkMenu('admin', employee.department === '관리부' || employee.role === 'admin')) {
         menuItems.push({ name: '경영 지원', href: '/admin-portal', icon: Building2 });
     }
 
-    menuItems.push(
-        // ✅ isPopup: true 추가 — Link 대신 팝업 버튼으로 렌더링
-        { name: '사내 채팅', icon: MessagesSquare, hasAlert: totalUnreadCount > 0, isPopup: true },
-        { name: '내 정보',   href: '/mypage', icon: UserCircle }
-    );
+    if (!employee || checkMenu('chat', true)) {
+        menuItems.push({ name: '사내 채팅', icon: MessagesSquare, hasAlert: totalUnreadCount > 0, isPopup: true });
+    }
+
+    menuItems.push({ name: '내 정보', href: '/mypage', icon: UserCircle });
+
+    if (employee && checkMenu('onboarding', false)) {
+        menuItems.push({ name: '입사 안내', href: '/onboarding', icon: BookOpen, isOnboarding: true });
+    }
 
     if (employee && employee.position === '회장') {
         menuItems.push({ name: '카이 발전량 데이터', href: 'https://kaienergy-intranet-31fc.vercel.app/database/generation', icon: Database, isExternal: true });
     }
 
-    const canAccessDb = employee && employee.department === '전략기획부' && employee.full_name === '임아름';
-    const canAccessBidRecords = employee && (employee.full_name === '임아름' || employee.full_name === '임무겸');
+    const canAccessDb = employee && checkMenu('db', employee.department === '전략기획부' && employee.full_name === '임아름');
+    const canAccessBidRecords = employee && checkMenu('bid_records', employee.full_name === '임아름' || employee.full_name === '임무겸');
 
     return (
         <>
             <Toaster />
+            {/* 모바일 오버레이 */}
             <div
                 className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden ${isOpen ? 'block' : 'hidden'}`}
                 onClick={onClose}
             />
+            {/* 모바일 햄버거 버튼 — 사이드바 닫혔을 때만 표시 */}
+            {!isOpen && (
+                <button
+                    onClick={openSidebar}
+                    className="fixed top-3 left-3 z-50 lg:hidden w-9 h-9 bg-[#1e293b] text-white rounded-lg flex items-center justify-center shadow-lg"
+                    aria-label="메뉴 열기"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+            )}
 
             <aside className={`fixed top-0 left-0 w-64 h-full bg-[#1e293b] text-slate-300 flex flex-col z-50 transform
                 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -236,8 +290,16 @@ export default function Sidebar({ isOpen, onClose }) {
                                 >
                                     <div className="relative mr-3">
                                         <item.icon size={18} className="text-slate-400 group-hover:text-white" />
+                                        {item.unreadCount > 0 && (
+                                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-sky-500 border-2 border-[#1e293b] rounded-full" />
+                                        )}
                                     </div>
                                     <span className="flex-1">{item.name}</span>
+                                    {item.unreadCount > 0 && (
+                                        <span className="bg-sky-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center mr-1">
+                                            {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                                        </span>
+                                    )}
                                     <ExternalLink size={12} className="text-slate-500 group-hover:text-slate-300" />
                                 </a>
                             );
@@ -245,6 +307,23 @@ export default function Sidebar({ isOpen, onClose }) {
 
                         // 일반 항목: Link 유지
                         const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+
+                        if (item.isOnboarding) {
+                            return (
+                                <Link
+                                    key={item.name}
+                                    href={item.href}
+                                    onClick={onClose}
+                                    className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-all group relative
+                                        ${isActive ? 'bg-blue-600 text-white' : 'bg-blue-600/10 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-600/30'}`}
+                                >
+                                    <item.icon size={18} className="mr-3 shrink-0" />
+                                    <span className="flex-1">{item.name}</span>
+                                    <span className="text-[9px] font-black bg-blue-500/30 text-blue-200 px-1.5 py-0.5 rounded-full">NEW</span>
+                                </Link>
+                            );
+                        }
+
                         return (
                             <Link
                                 key={item.name}
@@ -297,8 +376,9 @@ export default function Sidebar({ isOpen, onClose }) {
                                 {[
                                     { name: '전국 조경수 DB', href: '/database/tree-sales', icon: TreePine },
                                     { name: '공사 예정 공정표', href: '/database/execution-plans', icon: ClipboardList },
-                                    { name: '계약 내역 관리', href: '/database/contract-estimates', icon: FileSpreadsheet },
+                                    { name: '내역 관리', href: '/database/execution-estimates', icon: FileSpreadsheet },
                                     { name: '수익 실행 관리', href: '/database/profit-management', icon: TrendingUp },
+                                    { name: '작업일보 분석', href: '/database/work-analysis', icon: BarChart3 },
                                 ].map((item) => {
                                     const isActive = pathname === item.href || pathname.startsWith(item.href);
                                     return (
