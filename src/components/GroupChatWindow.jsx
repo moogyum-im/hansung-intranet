@@ -21,6 +21,21 @@ const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 const previewCache = new Map();
 
 // ── 링크 미리보기 ────────────────────────────────────────────
+const downloadFile = async (url, name) => {
+    try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+    } catch {
+        window.open(url, '_blank');
+    }
+};
+
 const URLPreview = ({ url }) => {
     const [preview, setPreview] = useState(previewCache.get(url) || null);
 
@@ -107,8 +122,8 @@ const MessageContent = ({ msg, allMessages, searchQuery = '' }) => {
                 return (
                     <div className="space-y-1">
                         <RepliedPreview />
-                        <a href={fi.url} download={fi.name} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-2.5 p-2 bg-black/10 rounded-xl hover:bg-black/15 transition-colors">
+                        <button onClick={() => downloadFile(fi.url, fi.name)}
+                            className="flex items-center gap-2.5 p-2 bg-black/10 rounded-xl hover:bg-black/15 transition-colors w-full text-left">
                             <div className="w-8 h-8 bg-black/10 rounded-lg flex items-center justify-center shrink-0">
                                 <FileText size={14} />
                             </div>
@@ -117,7 +132,7 @@ const MessageContent = ({ msg, allMessages, searchQuery = '' }) => {
                                 <p className="text-[10px] opacity-60">다운로드</p>
                             </div>
                             <Download size={13} className="opacity-50 shrink-0" />
-                        </a>
+                        </button>
                     </div>
                 );
             } catch { return <p className="text-xs opacity-60">파일 오류</p>; }
@@ -183,9 +198,8 @@ const GalleryPanel = ({ messages, onClose }) => {
                                     const fi = JSON.parse(msg.content);
                                     const ext = fi.name?.split('.').pop()?.toUpperCase() || 'FILE';
                                     return (
-                                        <a key={msg.id} href={fi.url} download={fi.name}
-                                            target="_blank" rel="noopener noreferrer"
-                                            className="flex items-center gap-3 p-3 bg-[#F9F9F9] rounded-xl hover:bg-[#F2F3F5] transition-colors group">
+                                        <button key={msg.id} onClick={() => downloadFile(fi.url, fi.name)}
+                                            className="flex items-center gap-3 p-3 bg-[#F9F9F9] rounded-xl hover:bg-[#F2F3F5] transition-colors group w-full text-left">
                                             <div className="w-10 h-10 bg-[#E8E8E8] rounded-xl flex items-center justify-center shrink-0">
                                                 <span className="text-[9px] font-black text-[#555]">{ext}</span>
                                             </div>
@@ -197,7 +211,7 @@ const GalleryPanel = ({ messages, onClose }) => {
                                                 </p>
                                             </div>
                                             <Download size={14} className="text-[#AAA] group-hover:text-[#555] transition-colors shrink-0" />
-                                        </a>
+                                        </button>
                                     );
                                 } catch { return null; }
                             })}

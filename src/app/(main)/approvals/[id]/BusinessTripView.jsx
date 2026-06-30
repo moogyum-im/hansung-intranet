@@ -16,6 +16,7 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [approvalComment, setApprovalComment] = useState('');
+    const [printWithOpinions, setPrintWithOpinions] = useState(false);
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
 
     const isReferrer = referrerHistory?.some(ref => ref.referrer_id === employee?.id || ref.referrer?.id === employee?.id);
@@ -128,16 +129,18 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
         <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none print:bg-white print:p-0 font-black">
             <style dangerouslySetInnerHTML={{ __html: `
                 @media print {
-                    @page { size: A4; margin: 0; }
-                    body { margin: 15mm 15mm; -webkit-print-color-adjust: exact; }
-                    .no-print { display: none !important; }
-                    .print-container { width: 100% !important; margin: 0 !important; border: none !important; box-shadow: none !important; }
+                    .print-container { width: 210mm !important; margin: 0 auto !important; padding: 20mm 15mm !important; border: none !important; box-shadow: none !important; box-sizing: border-box !important; }
                     .approval-table { border-collapse: collapse !important; width: auto !important; margin-left: auto !important; }
                     .approval-table th, .approval-table td { border: 1px solid black !important; }
+                    .print-section { page-break-inside: avoid !important; break-inside: avoid-page !important; }
                 }
             `}} />
             
-            <div className="w-full max-w-[1100px] mb-4 flex justify-end items-center no-print px-2 font-black">
+            <div className="w-full max-w-[1100px] mb-4 flex justify-end items-center gap-4 no-print px-2 font-black">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-black text-slate-600">
+                    <input type="checkbox" checked={printWithOpinions} onChange={e => setPrintWithOpinions(e.target.checked)} className="w-3.5 h-3.5 accent-slate-700" />
+                    결재 의견 포함
+                </label>
                 <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-black text-white hover:bg-slate-800 text-[11px] transition-all font-black shadow-lg font-black font-black">
                     <Printer size={14} /> 인쇄 및 PDF 저장
                 </button>
@@ -265,6 +268,27 @@ export default function BusinessTripView({ doc, employee, approvalHistory, refer
                                 <p className="text-3xl font-black uppercase tracking-[0.5em] mt-10 font-black font-black font-black font-black font-black">신청인: {doc.requester_name}</p>
                             </div>
                         </div>
+                        {printWithOpinions && (approvalHistory?.some(s => s.comment) || referrerHistory?.length > 0) && (
+                            <div className="mt-10 pt-8 border-t-2 border-black print-section">
+                                <h2 className="text-[11px] font-black uppercase tracking-widest border-l-4 border-black pl-2 mb-5">결재 의견 및 참조인</h2>
+                                <div className="space-y-3">
+                                    {approvalHistory?.filter(s => s.comment).map((step, idx) => (
+                                        <div key={idx} className="border border-slate-300 p-3 text-[12px]">
+                                            <p className="text-[10px] text-slate-500 font-bold mb-1">{step.approver?.full_name || step.approver_name} {step.approver?.position}</p>
+                                            <p className="font-black leading-snug">{step.comment}</p>
+                                        </div>
+                                    ))}
+                                    {referrerHistory?.length > 0 && (
+                                        <div className="mt-4 pt-4 border-t border-dashed border-slate-400">
+                                            <p className="text-[10px] font-black uppercase mb-2 text-blue-700 tracking-widest">참조인</p>
+                                            {referrerHistory.map((r, i) => (
+                                                <p key={i} className="text-[11px] font-black">[{r.referrer?.department || '소속미정'}] {r.referrer?.full_name || r.referrer_name} {r.referrer?.position || ''}</p>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

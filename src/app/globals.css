@@ -116,3 +116,44 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* ── 전자결재 인쇄/PDF 저장 전역 스타일 ── */
+@media print {
+  /* 높이·오버플로우 제약 해제 — h-screen/overflow-hidden 때문에 긴 문서가 잘리는 현상 방지 */
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  /* 사이드바·헤더·no-print 요소 숨김 */
+  aside, header, .no-print {
+    display: none !important;
+  }
+
+  /* 레이아웃 컨테이너 제약 해제 */
+  #__next > div,
+  #__next > div > div {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  main {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* min-h-screen / h-screen 이 인쇄 영역을 한 페이지로 고정하는 현상 방지 */
+  .min-h-screen, .h-screen {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* 배경색·테두리 색상 인쇄 보장 */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+}

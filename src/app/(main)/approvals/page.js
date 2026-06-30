@@ -636,6 +636,7 @@ function ApprovalsPageContent() {
         { title: '지출 결의서', href: '/approvals/expense', icon: '💳', color: 'bg-amber-50 text-amber-600' },
         { title: '내부 결재서', href: '/approvals/internal', icon: '📑', color: 'bg-purple-50 text-purple-600' },
         { title: '업무 보고서', href: '/approvals/work-report', icon: '📈', color: 'bg-cyan-50 text-cyan-600' },
+        { title: '회의록', href: '/approvals/meeting-minutes', icon: '📝', color: 'bg-teal-50 text-teal-600' },
         { title: '시말서', href: '/approvals/apology', icon: '⚠️', color: 'bg-rose-50 text-rose-600' }
     ];
 

@@ -7,7 +7,7 @@ import MyAttendanceWidget from '@/components/MyAttendanceWidget';
 import LeaveCalendar from './LeaveCalendar.jsx';
 import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
 import { toast, Toaster } from 'react-hot-toast';
-import { Calendar, Clock, ShieldCheck, Coffee, Lock, Receipt, Loader2, FileText, UserCircle } from 'lucide-react';
+import { Calendar, Clock, ShieldCheck, Coffee, Lock, Receipt, Loader2, FileText, UserCircle, CreditCard, CheckCircle2, Send } from 'lucide-react';
 
 const getGreeting = () => `오늘도 활기찬 하루 보내세요.`;
 
@@ -16,6 +16,11 @@ export default function MyPage() {
 
     const [leaveData, setLeaveData] = useState({ total: 0, used: 0, remaining: 0 });
     const [payRecords, setPayRecords] = useState([]);
+    const [cardRequests, setCardRequests] = useState([]);
+    const [cardQty, setCardQty] = useState(100);
+    const [cardNotes, setCardNotes] = useState('');
+    const [isSubmittingCard, setIsSubmittingCard] = useState(false);
+    const [showCardModal, setShowCardModal] = useState(false);
 
     useEffect(() => {
         const fetchLatestData = async () => {
@@ -40,6 +45,15 @@ export default function MyPage() {
                 if (pRecords && pRecords.length > 0) {
                     setPayRecords(pRecords);
                 }
+
+                // 명함 신청 내역
+                const { data: cRecords } = await supabase
+                    .from('business_card_requests')
+                    .select('id, quantity, notes, status, created_at')
+                    .eq('user_id', employee.id)
+                    .order('created_at', { ascending: false })
+                    .limit(5);
+                if (cRecords) setCardRequests(cRecords);
             } catch (error) { console.error(error); }
         };
         fetchLatestData();
@@ -54,6 +68,27 @@ export default function MyPage() {
         
         window.open(`/admin-portal/payroll/${recordId}`, `Payroll_${month}`, `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`);
         setPayRecords(prev => prev.map(p => p.id === recordId ? { ...p, viewed_at: new Date().toISOString() } : p));
+    };
+
+    const submitCardRequest = async () => {
+        if (!employee?.id) return;
+        setIsSubmittingCard(true);
+        try {
+            const { data, error } = await supabase
+                .from('business_card_requests')
+                .insert({ user_id: employee.id, quantity: cardQty, notes: cardNotes || null })
+                .select()
+                .single();
+            if (error) throw error;
+            setCardRequests(prev => [data, ...prev].slice(0, 5));
+            setCardNotes('');
+            setShowCardModal(false);
+            toast.success('명함 신청이 완료되었습니다. 관리부에서 확인 후 제작됩니다.');
+        } catch {
+            toast.error('신청 중 오류가 발생했습니다. 다시 시도해주세요.');
+        } finally {
+            setIsSubmittingCard(false);
+        }
     };
 
     const handleOpenSecurity = () => {
@@ -89,8 +124,14 @@ export default function MyPage() {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                        <button 
-                            onClick={handleOpenSecurity} 
+                        <button
+                            onClick={() => setShowCardModal(true)}
+                            className="bg-white px-5 py-3 rounded-xl text-slate-700 font-black text-xs flex items-center gap-2 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
+                        >
+                            <CreditCard size={14} className="text-slate-400"/> 명함 신청
+                        </button>
+                        <button
+                            onClick={handleOpenSecurity}
                             className="bg-white px-5 py-3 rounded-xl text-slate-700 font-black text-xs flex items-center gap-2 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
                         >
                             <Lock size={14} className="text-slate-400"/> 계정 및 보안 설정
@@ -225,7 +266,83 @@ export default function MyPage() {
                     </div>
                 </div>
 
+
             </main>
+
+            {/* 명함 신청 모달 */}
+            {showCardModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowCardModal(false)} />
+                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+                            <CreditCard size={18} className="text-slate-600" />
+                            <h2 className="text-sm font-black text-slate-800">명함 신청</h2>
+                            <button onClick={() => setShowCardModal(false)} className="ml-auto text-slate-400 hover:text-slate-600 text-lg font-bold leading-none">×</button>
+                        </div>
+                        <div className="p-6 space-y-5">
+                            <p className="text-xs font-bold text-slate-400">첫 명함은 입사 시 회사에서 제작합니다. 재발급이 필요할 경우 신청하세요.</p>
+                            <div>
+                                <label className="text-xs font-black text-slate-500 block mb-2">수량</label>
+                                <div className="flex gap-2">
+                                    {[100, 200, 300].map(qty => (
+                                        <button
+                                            key={qty}
+                                            onClick={() => setCardQty(qty)}
+                                            className={`flex-1 py-3 rounded-xl text-sm font-black border transition-all ${
+                                                cardQty === qty
+                                                    ? 'bg-slate-800 text-white border-slate-800'
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                                            }`}
+                                        >
+                                            {qty}장
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-black text-slate-500 block mb-2">추가 요청사항 (선택)</label>
+                                <textarea
+                                    value={cardNotes}
+                                    onChange={e => setCardNotes(e.target.value)}
+                                    placeholder="직함 수정, 연락처 변경 등 특이사항을 입력하세요."
+                                    rows={3}
+                                    className="w-full text-sm font-bold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 resize-none placeholder:text-slate-300 focus:outline-none focus:border-slate-400 transition-colors"
+                                />
+                            </div>
+                            {cardRequests.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-black text-slate-400 mb-2">최근 신청 내역</p>
+                                    <ul className="space-y-1.5">
+                                        {cardRequests.slice(0, 3).map(r => {
+                                            const statusMap = {
+                                                pending:    { label: '검토 중', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+                                                processing: { label: '제작 중', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+                                                completed:  { label: '완료',    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                                            };
+                                            const st = statusMap[r.status] || statusMap.pending;
+                                            return (
+                                                <li key={r.id} className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5">
+                                                    <span className="text-sm font-bold text-slate-700 flex-1">{r.quantity}장</span>
+                                                    <span className="text-[10px] font-bold text-slate-400">{new Date(r.created_at).toLocaleDateString('ko-KR')}</span>
+                                                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${st.cls}`}>{st.label}</span>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+                            )}
+                            <button
+                                onClick={submitCardRequest}
+                                disabled={isSubmittingCard}
+                                className="w-full flex items-center justify-center gap-2 bg-slate-800 text-white py-3.5 rounded-xl text-sm font-black hover:bg-slate-700 transition-colors disabled:opacity-50"
+                            >
+                                {isSubmittingCard ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                                신청하기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

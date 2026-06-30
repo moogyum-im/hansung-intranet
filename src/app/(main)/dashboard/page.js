@@ -5,6 +5,7 @@ import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { openChatPopup } from '@/lib/chatPopup';
+import { toast } from 'react-hot-toast';
 import DashboardCalendar from './DashboardCalendar';
 import './DashboardCalendar.css';
 import PushSubscriptionButton from '@/components/PushSubscriptionButton';
@@ -16,8 +17,7 @@ import {
     Calendar,
     CheckCircle2,
     Newspaper,
-    Bot,
-    Send,
+
     Settings,
     X,
     Check,
@@ -32,6 +32,8 @@ import {
     BarChart3,
     Gavel,
     ChevronRight,
+    Mail,
+    Send,
 } from 'lucide-react';
 
 // --- 스켈레톤 ---
@@ -176,20 +178,17 @@ function LandscapeNewsTicker() {
 
 // --- 3. AI 검색 위젯 ---
 function AIWidget() {
-
     return (
-        <div className="bg-white rounded-2xl shadow-md flex flex-col overflow-hidden" style={{ height: '100%' }}>
+        <div className="bg-white rounded-2xl shadow-md flex flex-col overflow-hidden h-full">
             <div className="px-4 py-3 bg-gradient-to-r from-slate-700 to-slate-800 flex items-center justify-between shrink-0 rounded-t-2xl">
                 <div className="flex items-center gap-2">
-                    <Bot size={15} className="text-blue-300" />
+                    <span className="text-blue-300 text-[14px]">✦</span>
                     <h3 className="font-black text-white text-[13px]">AI 데이터 검색</h3>
                 </div>
             </div>
-
-            {/* 준비중 안내 */}
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-6 bg-slate-50/40">
                 <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center">
-                    <Bot size={26} className="text-slate-300" />
+                    <span className="text-slate-300 text-2xl">✦</span>
                 </div>
                 <div>
                     <p className="text-[13px] font-black text-slate-500 mb-1.5">현재 사용 준비중입니다.</p>
@@ -199,7 +198,6 @@ function AIWidget() {
                     Coming Soon
                 </span>
             </div>
-
             <div className="p-3 bg-white border-t border-slate-50 shrink-0">
                 <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 cursor-not-allowed">
                     <input
@@ -209,11 +207,188 @@ function AIWidget() {
                         disabled
                         readOnly
                     />
-                    <button disabled className="w-6 h-6 bg-slate-300 text-white rounded-lg flex items-center justify-center cursor-not-allowed shrink-0">
-                        <Send size={10} />
-                    </button>
+                    <div className="w-6 h-6 bg-slate-300 text-white rounded-lg flex items-center justify-center cursor-not-allowed shrink-0">
+                        <Send size={10} className="text-white" />
+                    </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// --- 4. 하이웍스 수신메일함 위젯 ---
+function showMailToast(subject, from) {
+    toast.custom((t) => (
+        <div
+            onClick={() => { window.open('https://www.hiworks.com', '_blank'); toast.dismiss(t.id); }}
+            className={`${t.visible ? 'animate-enter' : 'animate-leave'}
+                w-80 bg-white shadow-xl rounded-2xl pointer-events-auto flex items-start gap-3 p-4
+                ring-1 ring-black/5 cursor-pointer hover:bg-slate-50 transition-colors`}
+        >
+            <div className="w-10 h-10 rounded-2xl bg-sky-500 flex items-center justify-center shrink-0">
+                <Mail size={18} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                    <p className="text-[11px] font-black text-sky-500">새 메일 도착</p>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); toast.dismiss(t.id); }}
+                        className="text-slate-300 hover:text-slate-500 ml-2 shrink-0 text-xs"
+                    >✕</button>
+                </div>
+                <p className="text-[13px] font-black text-slate-800 truncate">{subject || '(제목 없음)'}</p>
+                {from && <p className="text-[11px] text-slate-500 truncate mt-0.5">{from}</p>}
+            </div>
+        </div>
+    ), { duration: 6000, position: 'bottom-right' });
+
+    // 브라우저 창 내려도 OS 알림으로 표시
+    if (typeof window !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('📬 새 메일 도착', {
+            body: `${from ? `[${from}] ` : ''}${subject || '새 메일이 도착했습니다.'}`,
+            icon: '/hansung_logo.png',
+            badge: '/icons/icon-192x192.png',
+            tag: 'hiworks-mail',
+            renotify: true,
+            silent: true,
+        });
+    }
+}
+
+function HiworksMailWidget() {
+    const [mails, setMails] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const prevCountRef = useRef(0);
+
+    // 알림 권한 요청
+    useEffect(() => {
+        if (typeof window !== 'undefined' && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    }, []);
+
+    const fetchMails = useCallback(async () => {
+        try {
+            const res = await fetch('/api/hiworks/mail');
+            if (!res.ok) return;
+            const data = await res.json();
+            const newMails = data.mails || [];
+            const newUnread = data.unreadCount ?? newMails.filter(m => !m.isRead).length;
+            setMails(newMails);
+            setUnreadCount(newUnread);
+            if (newUnread > prevCountRef.current) {
+                const newest = newMails.find(m => !m.isRead);
+                showMailToast(newest?.subject, newest?.from);
+            }
+            prevCountRef.current = newUnread;
+        } catch {}
+    }, []);
+
+    // 최초 로드 + 60초 폴링
+    useEffect(() => {
+        fetchMails();
+        const interval = setInterval(fetchMails, 60_000);
+        return () => clearInterval(interval);
+    }, [fetchMails]);
+
+    const isConnected = mails.length > 0;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-md flex flex-col overflow-hidden h-full">
+            <div className="px-4 py-3 border-b border-slate-50 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                    <Mail size={15} className="text-sky-400" />
+                    <h3 className="font-bold text-slate-600 text-[13px] tracking-tight">수신메일함</h3>
+                    {unreadCount > 0 && (
+                        <span className="bg-sky-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                    )}
+                </div>
+                <a
+                    href="https://www.hiworks.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-bold text-sky-500 hover:underline flex items-center gap-0.5"
+                >
+                    메일 열기 <ArrowUpRight size={10} />
+                </a>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
+                {loading ? (
+                    <div className="space-y-1.5">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className="animate-pulse p-2.5 rounded-lg">
+                                <div className="h-3 bg-slate-100 rounded-full w-3/4 mb-1.5" />
+                                <div className="h-2 bg-slate-50 rounded-full w-1/2" />
+                            </div>
+                        ))}
+                    </div>
+                ) : isConnected ? (
+                    <ul className="space-y-0.5">
+                        {mails.map((mail, i) => (
+                            <li key={i}>
+                                <a
+                                    href={mail.link || 'https://www.hiworks.com'}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="group flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-sky-50 transition-all"
+                                >
+                                    {!mail.isRead && (
+                                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[12px] font-bold text-slate-700 truncate group-hover:text-sky-600">
+                                            {mail.subject || '(제목 없음)'}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                            <span className="font-semibold text-slate-500">{mail.from}</span>
+                                            <span className="mx-1">·</span>
+                                            <span>{mail.date}</span>
+                                        </p>
+                                    </div>
+                                    <ArrowUpRight size={11} className="text-slate-300 group-hover:text-sky-400 shrink-0 mt-0.5" />
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center gap-4 px-4 py-8">
+                        <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center">
+                            <Mail size={26} className="text-sky-200" />
+                        </div>
+                        <div>
+                            <p className="text-[13px] font-black text-slate-500 mb-1.5">API 연동 준비중</p>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                                하이웍스 API 키 발급 후<br />수신메일이 여기에 표시됩니다.
+                            </p>
+                        </div>
+                        <a
+                            href="https://www.hiworks.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-[11px] font-black rounded-xl transition-colors"
+                        >
+                            <Mail size={12} /> 메일 열기
+                        </a>
+                    </div>
+                )}
+            </div>
+
+            {isConnected && (
+                <div className="p-3 border-t border-slate-50 shrink-0">
+                    <a
+                        href="https://www.hiworks.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 w-full py-2 text-[11px] font-bold text-sky-500 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors"
+                    >
+                        <Mail size={11} /> 전체 메일함 열기
+                    </a>
+                </div>
+            )}
         </div>
     );
 }
@@ -377,9 +552,13 @@ export default function DashboardPage() {
     const [approvalsLoading, setApprovalsLoading] = useState(true);
     const [notifications, setNotifications] = useState([]);
     const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+    const [showApprovalsPanel, setShowApprovalsPanel] = useState(false);
+    const [approvalsPanelTab, setApprovalsPanelTab] = useState('toReview');
     const [statsLoading, setStatsLoading] = useState(true);
     const notificationPanelRef = useRef(null);
     const notificationButtonRef = useRef(null);
+    const approvalsPanelRef = useRef(null);
+    const approvalsPanelButtonRef = useRef(null);
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -432,10 +611,16 @@ export default function DashboardPage() {
             ) {
                 setShowNotificationPanel(false);
             }
+            if (
+                approvalsPanelRef.current && !approvalsPanelRef.current.contains(e.target) &&
+                approvalsPanelButtonRef.current && !approvalsPanelButtonRef.current.contains(e.target)
+            ) {
+                setShowApprovalsPanel(false);
+            }
         };
-        if (showNotificationPanel) document.addEventListener('mousedown', handleClickOutside);
+        if (showNotificationPanel || showApprovalsPanel) document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [showNotificationPanel]);
+    }, [showNotificationPanel, showApprovalsPanel]);
 
     const handleMarkAllRead = async () => {
         if (!notifications.some(n => !n.is_read)) return;
@@ -478,6 +663,67 @@ export default function DashboardPage() {
 
     return (
         <div className="bg-[#f0f2f5] min-h-screen pb-12">
+            {/* 결재 현황 패널 */}
+            {showApprovalsPanel && (
+                <div ref={approvalsPanelRef} className="fixed right-4 top-[88px] w-80 bg-white rounded-2xl shadow-2xl overflow-hidden z-[9999] border border-slate-100">
+                    <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <FileCheck size={13} className="text-amber-500" />
+                            <span className="text-[13px] font-black text-slate-700">내 결재 현황</span>
+                        </div>
+                        <Link href="/approvals" onClick={() => setShowApprovalsPanel(false)} className="text-[10px] font-bold text-blue-500 hover:underline">
+                            전체보기
+                        </Link>
+                    </div>
+                    <div className="flex bg-slate-50 p-1 mx-3 mt-3 rounded-xl mb-2">
+                        <button
+                            onClick={() => setApprovalsPanelTab('toReview')}
+                            className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all ${approvalsPanelTab === 'toReview' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400'}`}
+                        >
+                            미결재 {approvalsData.toReview.length > 0 && `(${approvalsData.toReview.length})`}
+                        </button>
+                        <button
+                            onClick={() => setApprovalsPanelTab('submitted')}
+                            className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all ${approvalsPanelTab === 'submitted' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                        >
+                            기안 {approvalsData.submitted.length > 0 && `(${approvalsData.submitted.length})`}
+                        </button>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto custom-scrollbar px-2 pb-3">
+                        {approvalsLoading ? (
+                            <SkeletonList rows={3} />
+                        ) : (approvalsData[approvalsPanelTab] || []).length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-8 text-slate-300">
+                                <CheckCircle2 size={22} strokeWidth={1.5} />
+                                <p className="text-[11px] font-medium mt-2">대기 중인 문서가 없습니다.</p>
+                            </div>
+                        ) : (
+                            <ul>
+                                {approvalsData[approvalsPanelTab].map(doc => (
+                                    <li key={doc.id}>
+                                        <Link
+                                            href={`/approvals/${doc.id}`}
+                                            onClick={() => setShowApprovalsPanel(false)}
+                                            className="group flex items-center justify-between px-2 py-2.5 rounded-xl hover:bg-amber-50 transition-all"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[12px] font-bold text-slate-700 truncate group-hover:text-amber-600">{doc.title}</p>
+                                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                                    <span className="font-semibold text-slate-500">{doc.creator_name}</span>
+                                                    <span className="mx-1">·</span>
+                                                    <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                                                </p>
+                                            </div>
+                                            <ChevronRight size={12} className="text-slate-300 group-hover:text-amber-400 shrink-0 ml-2" />
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* 알림 패널 — stacking context 문제 방지를 위해 DOM 최상위 렌더링 */}
             {showNotificationPanel && (
                 <div ref={notificationPanelRef} className="fixed right-4 top-[88px] w-80 bg-white rounded-2xl shadow-2xl overflow-hidden z-[9999] border border-slate-100">
@@ -545,7 +791,11 @@ export default function DashboardPage() {
                         {/* 오른쪽: 통계 카드 + 푸시 */}
                         <div className="flex items-center gap-2.5 shrink-0 relative">
                             {/* 미결재 카드 */}
-                            <Link href="/approvals?tab=received" className="bg-amber-500/20 border border-amber-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3 hover:bg-amber-500/30 transition-all cursor-pointer">
+                            <button
+                                ref={approvalsPanelButtonRef}
+                                onClick={() => { setShowApprovalsPanel(prev => !prev); setShowNotificationPanel(false); }}
+                                className="bg-amber-500/20 border border-amber-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3 hover:bg-amber-500/30 transition-all cursor-pointer"
+                            >
                                 <div className="w-8 h-8 bg-amber-500 rounded-xl flex items-center justify-center">
                                     <FileCheck size={15} className="text-white" />
                                 </div>
@@ -555,11 +805,11 @@ export default function DashboardPage() {
                                     </p>
                                     <p className="text-[10px] text-amber-300/80 mt-0.5">미결재</p>
                                 </div>
-                            </Link>
+                            </button>
                             {/* 알림 카드 */}
                             <button
                                 ref={notificationButtonRef}
-                                onClick={() => setShowNotificationPanel(prev => !prev)}
+                                onClick={() => { setShowNotificationPanel(prev => !prev); setShowApprovalsPanel(false); }}
                                 className="bg-rose-500/20 border border-rose-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3 hover:bg-rose-500/30 transition-all cursor-pointer"
                             >
                                 <div className="w-8 h-8 bg-rose-500 rounded-xl flex items-center justify-center">
@@ -572,6 +822,21 @@ export default function DashboardPage() {
                                     <p className="text-[10px] text-rose-300/80 mt-0.5">알림</p>
                                 </div>
                             </button>
+                            {/* 하이웍스 메일 */}
+                            <a
+                                href="https://www.hiworks.com"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="bg-sky-500/20 border border-sky-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3 hover:bg-sky-500/30 transition-all"
+                            >
+                                <div className="w-8 h-8 bg-sky-500 rounded-xl flex items-center justify-center">
+                                    <Mail size={15} className="text-white" />
+                                </div>
+                                <div>
+                                    <p className="text-[13px] font-black text-white leading-none">메일</p>
+                                    <p className="text-[10px] text-sky-300/80 mt-0.5">하이웍스</p>
+                                </div>
+                            </a>
                             {/* 시간 */}
                             <span className="text-[11px] font-mono text-slate-500 hidden md:block">{formattedTime}</span>
                             {/* 푸시 버튼 */}
@@ -594,7 +859,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* 3컬럼 그리드 (화면 꽉 채움) */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:items-stretch">
 
                     {/* 왼쪽: 캘린더 + 바로가기 */}
                     <div className="hidden lg:flex flex-col gap-0">
@@ -608,13 +873,13 @@ export default function DashboardPage() {
                         <QuickAccessWidget currentUser={currentUser} />
                     </div>
 
-                    {/* 가운데: 공지사항 + 결재현황 */}
-                    <div className="flex flex-col gap-4">
+                    {/* 가운데: 공지사항 + 수신메일함 */}
+                    <div className="flex flex-col gap-4 h-full">
                         {/* 공지사항 */}
                         <Widget
                             title="전사 공지사항"
                             icon={Megaphone}
-                            className="h-[260px]"
+                            className="h-[300px] shrink-0"
                             action={<Link href="/notices" className="text-[10px] font-bold text-blue-500 hover:underline">더보기</Link>}
                         >
                             {noticesLoading ? <SkeletonList rows={5} /> : notices.length > 0 ? (
@@ -639,11 +904,13 @@ export default function DashboardPage() {
                             ) : <div className="flex items-center justify-center h-full text-slate-300 text-[11px]">등록된 공지가 없습니다.</div>}
                         </Widget>
 
-                        <MyApprovalsWidget approvalsData={approvalsData} loading={approvalsLoading} />
+                        <div className="flex-1 min-h-0">
+                            <HiworksMailWidget />
+                        </div>
                     </div>
 
                     {/* 오른쪽: AI */}
-                    <div className="h-[560px]">
+                    <div className="h-full">
                         <AIWidget />
                     </div>
                 </div>

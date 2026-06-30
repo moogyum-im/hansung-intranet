@@ -16,6 +16,7 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [approvalComment, setApprovalComment] = useState('');
+    const [printWithOpinions, setPrintWithOpinions] = useState(false);
     const [currentStep, setCurrentStep] = useState(null);
     const [attachmentSignedUrls, setAttachmentSignedUrls] = useState([]);
 
@@ -122,7 +123,11 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                 }
             `}} />
             
-            <div className="w-full max-w-[1100px] mb-4 flex justify-end items-center no-print px-2 font-black">
+            <div className="w-full max-w-[1100px] mb-4 flex justify-end items-center gap-4 no-print px-2 font-black">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-black text-slate-600">
+                    <input type="checkbox" checked={printWithOpinions} onChange={e => setPrintWithOpinions(e.target.checked)} className="w-3.5 h-3.5 accent-slate-700" />
+                    결재 의견 포함
+                </label>
                 <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-black text-white hover:bg-slate-800 text-[11px] transition-all font-black shadow-lg"><Printer size={14} /> 인쇄 및 PDF 저장</button>
             </div>
 
@@ -229,6 +234,27 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                                 <p className="text-2xl font-black uppercase tracking-[0.4em] mt-6 font-black font-black font-black font-black font-black">기안자: {doc.requester_name} (인)</p>
                             </div>
                         </div>
+                        {printWithOpinions && (approvalHistory?.some(s => s.comment) || referrerHistory?.length > 0) && (
+                            <div className="mt-10 pt-8 border-t-2 border-black print-section">
+                                <h2 className="text-[11px] font-black uppercase tracking-widest border-l-4 border-black pl-2 mb-5">결재 의견 및 참조인</h2>
+                                <div className="space-y-3">
+                                    {approvalHistory?.filter(s => s.comment).map((step, idx) => (
+                                        <div key={idx} className="border border-slate-300 p-3 text-[12px]">
+                                            <p className="text-[10px] text-slate-500 font-bold mb-1">{step.approver?.full_name} {step.approver?.position}</p>
+                                            <p className="font-black leading-snug">{step.comment}</p>
+                                        </div>
+                                    ))}
+                                    {referrerHistory?.length > 0 && (
+                                        <div className="mt-4 pt-4 border-t border-dashed border-slate-400">
+                                            <p className="text-[10px] font-black uppercase mb-2 text-blue-700 tracking-widest">참조인</p>
+                                            {referrerHistory.map((r, i) => (
+                                                <p key={i} className="text-[11px] font-black">[{r.referrer?.department || '소속미정'}] {r.referrer?.full_name} {r.referrer?.position || ''}</p>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
