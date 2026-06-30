@@ -7,7 +7,7 @@ import MyAttendanceWidget from '@/components/MyAttendanceWidget';
 import LeaveCalendar from './LeaveCalendar.jsx';
 import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
 import { toast, Toaster } from 'react-hot-toast';
-import { Calendar, Clock, ShieldCheck, Coffee, Lock, Receipt, Loader2, FileText, UserCircle, CreditCard, CheckCircle2, Send, Mail, Eye, EyeOff, Unlink } from 'lucide-react';
+import { Calendar, Clock, ShieldCheck, Coffee, Lock, Receipt, Loader2, FileText, UserCircle, CreditCard, CheckCircle2, Check, Send, Mail, Eye, EyeOff, Unlink, ExternalLink } from 'lucide-react';
 
 const getGreeting = () => `오늘도 활기찬 하루 보내세요.`;
 
@@ -110,10 +110,7 @@ export default function MyPage() {
         }
     };
 
-    const openHiworksAndProceed = () => {
-        window.open('https://mails.office.hiworks.com', '_blank');
-        setConnectStep(1);
-    };
+    const openHiworksAndProceed = () => setConnectStep(1);
 
     const connectHiworks = async () => {
         if (!hiworksEmail || !hiworksPassword) return toast.error('아이디와 비밀번호를 모두 입력하세요.');
@@ -367,8 +364,7 @@ export default function MyPage() {
                         ) : connectStep === 0 ? (
                             <div className="flex flex-col gap-3">
                                 <p className="text-xs font-bold text-slate-500 leading-relaxed">
-                                    하이웍스 메일을 연동하면 대시보드에서 받은 메일을 바로 확인할 수 있습니다.<br/>
-                                    연동 전 하이웍스 웹메일에서 비밀번호를 먼저 변경해야 합니다.
+                                    하이웍스 메일을 연동하면 대시보드에서 받은 메일을 바로 확인할 수 있습니다.
                                 </p>
                                 <button
                                     onClick={openHiworksAndProceed}
@@ -378,73 +374,148 @@ export default function MyPage() {
                                 </button>
                             </div>
                         ) : (
-                            <div className="space-y-5 max-w-md">
-                                {/* Step 1 완료 표시 */}
-                                <div className="flex items-start gap-3 p-4 bg-sky-50 border border-sky-200 rounded-xl">
-                                    <CheckCircle2 size={18} className="text-sky-500 mt-0.5 shrink-0" />
-                                    <div>
-                                        <p className="text-sm font-black text-sky-700">하이웍스 웹메일이 열렸습니다</p>
-                                        <p className="text-xs font-bold text-sky-500 mt-0.5">비밀번호를 변경하셨다면 아래에 새 비밀번호를 입력하세요.</p>
-                                        <button
-                                            onClick={() => window.open('https://mails.office.hiworks.com', '_blank')}
-                                            className="text-xs font-black text-sky-600 underline underline-offset-2 mt-1"
-                                        >
-                                            하이웍스 다시 열기
-                                        </button>
-                                    </div>
+                            <div className="space-y-5 max-w-sm">
+                                {/* 단계 표시기 */}
+                                <div className="flex items-center gap-1">
+                                    {[1, 2, 3].map((n) => (
+                                        <React.Fragment key={n}>
+                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 transition-colors ${
+                                                connectStep > n
+                                                    ? 'bg-sky-500 text-white'
+                                                    : connectStep === n
+                                                    ? 'bg-sky-500 text-white ring-4 ring-sky-100'
+                                                    : 'bg-slate-100 text-slate-400'
+                                            }`}>
+                                                {connectStep > n ? <Check size={12} /> : n}
+                                            </div>
+                                            {n < 3 && (
+                                                <div className={`flex-1 h-0.5 transition-colors ${connectStep > n ? 'bg-sky-400' : 'bg-slate-100'}`} />
+                                            )}
+                                        </React.Fragment>
+                                    ))}
                                 </div>
 
-                                {/* Step 2: 자격증명 입력 */}
-                                <div>
-                                    <label className="text-xs font-black text-slate-500 block mb-1.5">하이웍스 아이디</label>
-                                    <div className="flex items-center border border-slate-200 rounded-xl focus-within:border-sky-400 transition-colors overflow-hidden">
-                                        <input
-                                            type="text"
-                                            value={hiworksEmail}
-                                            onChange={e => setHiworksEmail(e.target.value.replace(/@.*/, ''))}
-                                            placeholder="아이디 입력"
-                                            className="flex-1 text-sm font-bold text-slate-700 px-4 py-3 placeholder:text-slate-300 focus:outline-none bg-transparent"
-                                        />
-                                        <span className="text-sm font-bold text-slate-400 pr-4 shrink-0">@han-sung.com</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs font-black text-slate-500 block mb-1.5">변경한 비밀번호</label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPassword ? 'text' : 'password'}
-                                            value={hiworksPassword}
-                                            onChange={e => setHiworksPassword(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && connectHiworks()}
-                                            placeholder="새 비밀번호"
-                                            className="w-full text-sm font-bold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 pr-10 placeholder:text-slate-300 focus:outline-none focus:border-sky-400 transition-colors"
-                                        />
+                                {/* 1단계: 비밀번호 변경 */}
+                                {connectStep === 1 && (
+                                    <div className="space-y-3">
+                                        <div>
+                                            <p className="text-sm font-black text-slate-700 mb-1">비밀번호 변경</p>
+                                            <p className="text-xs font-bold text-slate-500 leading-relaxed">하이웍스에 처음 로그인하면 자동으로 비밀번호 변경 화면이 열립니다. 변경 후 돌아오세요.</p>
+                                        </div>
                                         <button
-                                            type="button"
-                                            onClick={() => setShowPassword(v => !v)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                            onClick={() => window.open('https://mails.office.hiworks.com', '_blank')}
+                                            className="flex items-center gap-2 w-fit px-4 py-2.5 border border-sky-300 text-sky-600 hover:bg-sky-50 text-xs font-black rounded-xl transition-colors"
                                         >
-                                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            <ExternalLink size={13} /> 하이웍스 열기
+                                        </button>
+                                        <button
+                                            onClick={() => setConnectStep(2)}
+                                            className="flex items-center gap-2 w-fit px-5 py-3 bg-sky-500 hover:bg-sky-600 text-white text-sm font-black rounded-xl transition-colors"
+                                        >
+                                            변경 완료했어요 →
                                         </button>
                                     </div>
-                                    <p className="text-[11px] text-slate-400 font-bold mt-1.5">비밀번호는 암호화되어 저장되며, 이메일 수신 조회에만 사용됩니다.</p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={connectHiworks}
-                                        disabled={isConnecting}
-                                        className="flex items-center gap-2 px-5 py-3 bg-sky-500 hover:bg-sky-600 text-white text-sm font-black rounded-xl transition-colors disabled:opacity-50"
-                                    >
-                                        {isConnecting ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
-                                        {isConnecting ? '연동 확인 중...' : '연동 완료'}
-                                    </button>
-                                    <button
-                                        onClick={() => setConnectStep(0)}
-                                        className="text-xs font-black text-slate-400 hover:text-slate-600 px-3 py-3 transition-colors"
-                                    >
-                                        취소
-                                    </button>
-                                </div>
+                                )}
+
+                                {/* 2단계: POP3 활성화 */}
+                                {connectStep === 2 && (
+                                    <div className="space-y-3">
+                                        <div>
+                                            <p className="text-sm font-black text-slate-700 mb-1">POP3 활성화</p>
+                                            <p className="text-xs font-bold text-slate-500 leading-relaxed">
+                                                하이웍스 메일 설정에서 POP3를 <span className="text-slate-700 font-black">사용함</span>으로 변경하세요.<br/>
+                                                <span className="text-slate-400">환경설정 → POP3/SMTP 설정 → 사용함</span>
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => window.open('https://mails.office.hiworks.com/setting', '_blank')}
+                                            className="flex items-center gap-2 w-fit px-4 py-2.5 border border-sky-300 text-sky-600 hover:bg-sky-50 text-xs font-black rounded-xl transition-colors"
+                                        >
+                                            <ExternalLink size={13} /> POP3 설정 열기
+                                        </button>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => setConnectStep(3)}
+                                                className="flex items-center gap-2 px-5 py-3 bg-sky-500 hover:bg-sky-600 text-white text-sm font-black rounded-xl transition-colors"
+                                            >
+                                                활성화 완료했어요 →
+                                            </button>
+                                            <button
+                                                onClick={() => setConnectStep(1)}
+                                                className="text-xs font-black text-slate-400 hover:text-slate-600 transition-colors"
+                                            >
+                                                ← 이전
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 3단계: 비밀번호 입력 후 연동 완료 */}
+                                {connectStep === 3 && (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <p className="text-sm font-black text-slate-700 mb-1">연동 완료</p>
+                                            <p className="text-xs font-bold text-slate-500">아이디와 변경한 비밀번호를 입력하세요.</p>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-black text-slate-500 block mb-1.5">하이웍스 아이디</label>
+                                            <div className="flex items-center border border-slate-200 rounded-xl focus-within:border-sky-400 transition-colors overflow-hidden">
+                                                <input
+                                                    type="text"
+                                                    value={hiworksEmail}
+                                                    onChange={e => setHiworksEmail(e.target.value.replace(/@.*/, ''))}
+                                                    placeholder="아이디 입력"
+                                                    className="flex-1 text-sm font-bold text-slate-700 px-4 py-3 placeholder:text-slate-300 focus:outline-none bg-transparent"
+                                                />
+                                                <span className="text-sm font-bold text-slate-400 pr-4 shrink-0">@han-sung.com</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-black text-slate-500 block mb-1.5">변경한 비밀번호</label>
+                                            <div className="relative">
+                                                <input
+                                                    type={showPassword ? 'text' : 'password'}
+                                                    value={hiworksPassword}
+                                                    onChange={e => setHiworksPassword(e.target.value)}
+                                                    onKeyDown={e => e.key === 'Enter' && connectHiworks()}
+                                                    placeholder="새 비밀번호"
+                                                    className="w-full text-sm font-bold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 pr-10 placeholder:text-slate-300 focus:outline-none focus:border-sky-400 transition-colors"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowPassword(v => !v)}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                                >
+                                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                </button>
+                                            </div>
+                                            <p className="text-[11px] text-slate-400 font-bold mt-1.5">비밀번호는 암호화되어 저장됩니다.</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={connectHiworks}
+                                                disabled={isConnecting}
+                                                className="flex items-center gap-2 px-5 py-3 bg-sky-500 hover:bg-sky-600 text-white text-sm font-black rounded-xl transition-colors disabled:opacity-50"
+                                            >
+                                                {isConnecting ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                                                {isConnecting ? '연동 확인 중...' : '연동 완료'}
+                                            </button>
+                                            <button
+                                                onClick={() => setConnectStep(2)}
+                                                className="text-xs font-black text-slate-400 hover:text-slate-600 transition-colors"
+                                            >
+                                                ← 이전
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={() => setConnectStep(0)}
+                                    className="text-[11px] font-bold text-slate-300 hover:text-slate-500 transition-colors"
+                                >
+                                    처음으로
+                                </button>
                             </div>
                         )}
                     </div>
