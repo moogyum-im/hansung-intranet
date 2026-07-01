@@ -33,10 +33,12 @@ export async function POST(request) {
         } catch (err) {
             console.error('POP3 연결 테스트 실패:', err?.message);
             const msg = err?.message?.toLowerCase() || '';
-            if (msg.includes('auth') || msg.includes('login') || msg.includes('invalid') || msg.includes('err')) {
+            const isIpBlocked = msg.includes('ip') || msg.includes('not allowed') || msg.includes('not permit');
+            const isAuthError = !isIpBlocked && (msg.includes('[auth]') || msg.includes('login') || msg.includes('invalid password'));
+            if (isAuthError) {
                 return NextResponse.json({ error: '이메일 또는 비밀번호가 올바르지 않습니다. POP3/SMTP 설정이 활성화되어 있는지 확인하세요.' }, { status: 401 });
             }
-            // 연결 실패지만 저장은 허용
+            // IP 차단 또는 기타 연결 오류 → 저장 허용
         }
 
         const passwordEnc = encrypt(password);
