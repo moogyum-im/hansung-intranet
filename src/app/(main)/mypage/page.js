@@ -31,6 +31,14 @@ export default function MyPage() {
     const [connectStep, setConnectStep] = useState(0); // 0: 시작, 1: 비번변경 후 입력 단계
 
     useEffect(() => {
+        if (window.location.hash === '#hiworks') {
+            setTimeout(() => {
+                document.getElementById('hiworks')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 300);
+        }
+    }, []);
+
+    useEffect(() => {
         const fetchLatestData = async () => {
             if (!employee?.id) return;
             try {
