@@ -191,9 +191,14 @@ Deno.serve(async (req) => {
           if (!topResp.startsWith('+OK')) continue;
           const headerRaw = await pop3.readUntilDot();
           const headers = parseHeaders(headerRaw);
-          const dateStr = headers.date
-            ? new Date(headers.date).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })
-            : '';
+          const dateStr = headers.date ? (() => {
+            const d = new Date(headers.date);
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            return `${d.getFullYear()}.${mm}.${dd} ${hh}:${min}`;
+          })() : '';
           mails.push({
             id: msgNum,
             subject: decodeHeader(headers.subject) || '(제목 없음)',

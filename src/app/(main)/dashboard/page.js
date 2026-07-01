@@ -218,6 +218,18 @@ function AIWidget() {
 }
 
 // --- 4. 하이웍스 수신메일함 위젯 ---
+function getSeenMailIds() {
+    try { return new Set(JSON.parse(localStorage.getItem('hiworks_seen') || '[]')); }
+    catch { return new Set(); }
+}
+function markMailSeen(id) {
+    try {
+        const seen = getSeenMailIds();
+        seen.add(String(id));
+        localStorage.setItem('hiworks_seen', JSON.stringify([...seen]));
+    } catch {}
+}
+
 function showMailToast(subject, from) {
     toast.custom((t) => (
         <div
@@ -263,12 +275,13 @@ function HiworksMailWidget({ userId }) {
     const [unreadCount, setUnreadCount] = useState(0);
     const [connected, setConnected] = useState(null);
     const [fetchError, setFetchError] = useState(false);
-    const prevCountRef = useRef(0);
+    const prevCountRef = useRef(null);
 
     useEffect(() => {
         if (typeof window !== 'undefined' && Notification.permission === 'default') {
             Notification.requestPermission();
         }
+        prevCountRef.current = parseInt(localStorage.getItem('hiworks_prev_count') || '0');
     }, []);
 
     const fetchMails = useCallback(async ({ manual = false } = {}) => {
@@ -284,15 +297,18 @@ function HiworksMailWidget({ userId }) {
             }
             setConnected(true);
             setFetchError(!!data.fetchError);
-            const newMails = data.mails || [];
-            const newUnread = data.unreadCount ?? newMails.filter(m => !m.isRead).length;
+            const seen = getSeenMailIds();
+            const newMails = (data.mails || []).map(m => ({ ...m, isRead: seen.has(String(m.id)) }));
+            const newUnread = newMails.filter(m => !m.isRead).length;
             setMails(newMails);
             setUnreadCount(newUnread);
-            if (newUnread > prevCountRef.current) {
+            const prev = prevCountRef.current ?? newUnread;
+            if (newUnread > prev) {
                 const newest = newMails.find(m => !m.isRead);
-                showMailToast(newest?.subject, newest?.from);
+                if (newest) showMailToast(newest.subject, newest.from);
             }
             prevCountRef.current = newUnread;
+            localStorage.setItem('hiworks_prev_count', String(newUnread));
         } catch {
             setFetchError(true);
         } finally {
@@ -409,28 +425,27 @@ function HiworksMailWidget({ userId }) {
                                     href={mail.link || 'https://mails.office.hiworks.com/list/inbox?page=1'}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="group flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-sky-50 transition-all"
+                                    onClick={() => {
+                                        markMailSeen(mail.id);
+                                        setMails(prev => prev.map(m => m.id === mail.id ? { ...m, isRead: true } : m));
+                                        setUnreadCount(c => Math.max(0, c - 1));
+                                    }}
+                                    className={`group flex items-center gap-2 p-2.5 rounded-xl hover:bg-sky-50 transition-all ${mail.isRead ? 'opacity-40' : ''}`}
                                 >
-                                    {!mail.isRead && (
-                                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-[12px] font-bold text-slate-700 truncate group-hover:text-sky-600">
-                                            {mail.subject || '(제목 없음)'}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400 mt-0.5">
-                                            <span className="font-semibold text-slate-500">{mail.from}</span>
-                                            <span className="mx-1">·</span>
-                                            <span>{mail.date}</span>
-                                        </p>
-                                    </div>
-                                    <ArrowUpRight size={11} className="text-slate-300 group-hover:text-sky-400 shrink-0 mt-0.5" />
+                                    {!mail.isRead && <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />}
+                                    {mail.isRead && <span className="w-1.5 h-1.5 shrink-0" />}
+                                    <span className={`text-[11px] shrink-0 w-20 truncate ${mail.isRead ? 'font-normal text-slate-500' : 'font-bold text-slate-600'}`}>
+                                        {mail.from || '(알 수 없음)'}
+                                    </span>
+                                    <span className={`text-[12px] truncate flex-1 group-hover:text-sky-600 ${mail.isRead ? 'font-normal text-slate-500' : 'font-bold text-slate-700'}`}>
+                                        {mail.subject || '(제목 없음)'}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 shrink-0">{mail.date}</span>
                                 </a>
                             </li>
                         ))}
                     </ul>
                 ) : (
-                    // 연동됐지만 메일 없음
                     <div className="flex flex-col items-center justify-center h-full text-center gap-2 px-4 py-8">
                         <Mail size={28} className="text-slate-200" />
                         <p className="text-[12px] font-bold text-slate-400">받은 메일이 없습니다.</p>
