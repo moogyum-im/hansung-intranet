@@ -374,7 +374,7 @@ function HiworksMailWidget({ userId }) {
                             ))}
                         </div>
                         <a
-                            href="/mypage"
+                            href="/mypage#hiworks"
                             className="mt-auto flex items-center justify-center gap-1.5 py-2.5 bg-red-500 hover:bg-red-600 text-white text-[12px] font-black rounded-xl transition-colors"
                         >
                             <Mail size={13} /> 지금 연동하러 가기

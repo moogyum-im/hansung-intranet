@@ -423,9 +423,19 @@ export default function MyPage() {
                                         <div>
                                             <p className="text-sm font-black text-slate-700 mb-1">POP3 활성화</p>
                                             <p className="text-xs font-bold text-slate-500 leading-relaxed">
-                                                하이웍스 메일 설정에서 POP3를 <span className="text-slate-700 font-black">사용함</span>으로 변경하세요.<br/>
-                                                <span className="text-slate-400">환경설정 → POP3/SMTP 설정 → 사용함</span>
+                                                하이웍스 메일 설정에서 POP3를 <span className="text-slate-700 font-black">사용함</span>으로 변경하세요.
                                             </p>
+                                        </div>
+                                        {/* POP3 설정 위치 안내 이미지 */}
+                                        <div className="rounded-xl overflow-hidden border border-slate-200">
+                                            <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200">
+                                                <p className="text-[10px] font-black text-slate-400">메일 환경설정 → <span className="text-sky-600">POP3/SMTP</span> 탭 클릭 → 사용함 선택</p>
+                                            </div>
+                                            <img
+                                                src="/images/hiworks-pop3-guide.png"
+                                                alt="하이웍스 POP3 설정 위치"
+                                                className="w-full object-cover"
+                                            />
                                         </div>
                                         <button
                                             onClick={() => window.open('https://mails.office.hiworks.com/setting', '_blank')}
