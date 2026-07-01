@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { decrypt } from '@/lib/encrypt';
 import Pop3Command from 'node-pop3';
 
+export const preferredRegion = 'icn1';
+
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -122,6 +124,6 @@ export async function GET(request) {
         return NextResponse.json({ connected: true, mails, unreadCount: total });
     } catch (error) {
         console.error('POP3 메일 조회 오류:', error?.message);
-        return NextResponse.json({ connected: true, mails: [], unreadCount: 0, fetchError: true });
+        return NextResponse.json({ connected: true, mails: [], unreadCount: 0, fetchError: true, debugError: error?.message });
     }
 }

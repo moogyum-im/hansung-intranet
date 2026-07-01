@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { encrypt } from '@/lib/encrypt';
 import Pop3Command from 'node-pop3';
 
+export const preferredRegion = 'icn1';
+
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
