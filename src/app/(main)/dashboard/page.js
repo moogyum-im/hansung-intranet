@@ -350,22 +350,34 @@ function HiworksMailWidget({ userId }) {
                         ))}
                     </div>
                 ) : connected === false ? (
-                    // 미연동 상태
-                    <div className="flex flex-col items-center justify-center h-full text-center gap-4 px-4 py-8">
-                        <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center">
-                            <Mail size={26} className="text-sky-200" />
-                        </div>
-                        <div>
-                            <p className="text-[13px] font-black text-slate-500 mb-1.5">메일 미연동</p>
-                            <p className="text-[11px] text-slate-400 leading-relaxed">
-                                마이페이지에서 하이웍스 계정을<br />연동하면 메일이 여기에 표시됩니다.
+                    // 미연동 상태 - 필수 안내
+                    <div className="flex flex-col gap-3 p-3 h-full">
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-3.5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-[10px] font-black bg-red-500 text-white px-2 py-0.5 rounded-full">필수</span>
+                                <p className="text-[12px] font-black text-red-700">하이웍스 메일 연동 필요</p>
+                            </div>
+                            <p className="text-[11px] font-bold text-red-500 leading-relaxed">
+                                업무 메일 수신을 위해 반드시 연동을 완료해야 합니다. 아래 순서대로 진행해주세요.
                             </p>
                         </div>
+                        <div className="space-y-2">
+                            {[
+                                '하이웍스 첫 로그인 → 비밀번호 변경',
+                                '메일 환경설정 → POP3 사용함으로 변경',
+                                '마이페이지 → 하이웍스 연동 완료',
+                            ].map((text, i) => (
+                                <div key={i} className="flex items-center gap-2.5">
+                                    <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-[10px] font-black text-slate-500">{i + 1}</div>
+                                    <p className="text-[11px] font-bold text-slate-600">{text}</p>
+                                </div>
+                            ))}
+                        </div>
                         <a
-                            href="/mypage#hiworks"
-                            className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-[11px] font-black rounded-xl transition-colors"
+                            href="/mypage"
+                            className="mt-auto flex items-center justify-center gap-1.5 py-2.5 bg-red-500 hover:bg-red-600 text-white text-[12px] font-black rounded-xl transition-colors"
                         >
-                            <Mail size={12} /> 메일 연동하기
+                            <Mail size={13} /> 지금 연동하러 가기
                         </a>
                     </div>
                 ) : fetchError ? (
@@ -377,7 +389,7 @@ function HiworksMailWidget({ userId }) {
                         <div>
                             <p className="text-[13px] font-black text-slate-500 mb-1">메일 로딩 실패</p>
                             <p className="text-[11px] text-slate-400 leading-relaxed">
-                                IMAP 서버에 연결할 수 없습니다.<br />하이웍스 설정에서 IMAP을 활성화해 주세요.
+                                POP3 연결에 실패했습니다.<br />하이웍스 웹메일에 1회 로그인 후 다시 시도해 주세요.
                             </p>
                         </div>
                         <a
