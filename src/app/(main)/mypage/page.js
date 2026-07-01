@@ -382,7 +382,7 @@ export default function MyPage() {
                                 </button>
                             </div>
                         ) : (
-                            <div className="space-y-5 max-w-sm">
+                            <div className="space-y-5 max-w-lg">
                                 {/* 단계 표시기 */}
                                 <div className="flex items-center gap-1">
                                     {[1, 2, 3].map((n) => (
@@ -442,7 +442,7 @@ export default function MyPage() {
                                             <img
                                                 src="/images/hiworks-pop3-guide.png"
                                                 alt="하이웍스 POP3 설정 위치"
-                                                className="w-full object-cover"
+                                                className="w-full object-contain"
                                             />
                                         </div>
                                         <button
