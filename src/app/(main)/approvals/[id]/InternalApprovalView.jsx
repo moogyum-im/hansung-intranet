@@ -9,8 +9,10 @@ import {
     Paperclip, FileIcon, CheckCircle, XCircle,
     Settings, Users, ChevronRight, ImageIcon, FileText, MessageSquare, ShieldAlert
 } from 'lucide-react';
+import { usePrintImageFit } from '@/hooks/usePrintImageFit';
 
 export default function InternalApprovalView({ doc, employee, approvalHistory, referrerHistory }) {
+    usePrintImageFit();
     const router = useRouter();
     const [formData, setFormData] = useState({});
     const [loading, setLoading] = useState(true);
@@ -120,6 +122,8 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                     .approval-table { border-collapse: collapse !important; width: auto !important; margin-left: auto !important; }
                     .approval-table th, .approval-table td { border: 1px solid black !important; }
                     .print-section { page-break-inside: avoid !important; break-inside: avoid-page !important; }
+                    img { break-inside: avoid !important; page-break-inside: avoid !important; display: block !important; max-height: 180mm !important; max-width: 100% !important; width: auto !important; margin: 0 auto !important; }
+                    p:has(img), figure:has(img) { break-inside: avoid !important; page-break-inside: avoid !important; }
                 }
             `}} />
             
@@ -220,10 +224,10 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                             <div className="border border-black p-5 text-[14px] font-black bg-slate-50/20 font-black font-black font-black font-black font-black">{formData.title}</div>
                         </section>
 
-                        <section className="print-section font-black text-black font-black font-black font-black font-black font-black font-black font-black">
+                        <section className="approval-content-section font-black text-black font-black font-black font-black font-black font-black font-black font-black">
                             <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black font-black font-black font-black font-black font-black">02. 결재 상세 내용</h2>
-                            <div 
-                                className="border border-black p-5 min-h-[300px] text-[13px] leading-relaxed whitespace-pre-wrap font-black font-black break-words"
+                            <div
+                                className="border border-black p-5 min-h-[300px] text-[13px] leading-relaxed whitespace-pre-wrap font-black font-black break-words approval-html-content"
                                 dangerouslySetInnerHTML={{ __html: formData.content || '' }}
                             />
                         </section>

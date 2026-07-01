@@ -8,8 +8,10 @@ import {
     Printer, FileText, CheckCircle, XCircle, Hash, Trash2,
     UserCheck, Users, Loader2, Download, ChevronRight, Settings, Paperclip, ImageIcon
 } from 'lucide-react';
+import { usePrintImageFit } from '@/hooks/usePrintImageFit';
 
 export default function ResignationView({ doc, employee, approvalHistory, referrerHistory }) { 
+    usePrintImageFit();
     const router = useRouter();
     const [formData, setFormData] = useState({});
     const [currentStep, setCurrentStep] = useState(null);
@@ -103,6 +105,8 @@ export default function ResignationView({ doc, employee, approvalHistory, referr
                     table { border-collapse: collapse !important; border: 1px solid black !important; width: 100% !important; }
                     th, td { border: 1px solid black !important; padding: 10px !important; }
                     .print-section { page-break-inside: avoid !important; break-inside: avoid-page !important; }
+                    img { break-inside: avoid !important; page-break-inside: avoid !important; display: block !important; max-height: 180mm !important; max-width: 100% !important; width: auto !important; margin: 0 auto !important; }
+                    p:has(img), figure:has(img) { break-inside: avoid !important; page-break-inside: avoid !important; }
                     ::-webkit-scrollbar { display: none !important; }
                 }
                 ::-webkit-scrollbar { width: 0px; } 

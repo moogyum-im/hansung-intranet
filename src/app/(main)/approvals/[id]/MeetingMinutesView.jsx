@@ -8,8 +8,10 @@ import {
     Printer, Download, FileText, CheckCircle, XCircle,
     Users, Paperclip, MessageSquare, ShieldAlert
 } from 'lucide-react';
+import { usePrintImageFit } from '@/hooks/usePrintImageFit';
 
 export default function MeetingMinutesView({ doc, employee, approvalHistory, referrerHistory }) {
+    usePrintImageFit();
     const router = useRouter();
     const [formData, setFormData] = useState({});
     const [loading, setLoading] = useState(true);
@@ -88,6 +90,8 @@ export default function MeetingMinutesView({ doc, employee, approvalHistory, ref
                     .print-container { width: 210mm !important; margin: 0 auto !important; padding: 20mm 15mm !important; border: none !important; box-shadow: none !important; box-sizing: border-box !important; }
                     .approval-table th, .approval-table td { border: 1px solid black !important; }
                     .print-section { page-break-inside: avoid !important; break-inside: avoid-page !important; }
+                    img { break-inside: avoid !important; page-break-inside: avoid !important; display: block !important; max-height: 180mm !important; max-width: 100% !important; width: auto !important; margin: 0 auto !important; }
+                    p:has(img), figure:has(img) { break-inside: avoid !important; page-break-inside: avoid !important; }
                 }
             `}} />
 

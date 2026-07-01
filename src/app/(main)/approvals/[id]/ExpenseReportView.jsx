@@ -8,8 +8,10 @@ import {
     Printer, FileText, CheckCircle, XCircle, Hash, Trash2,
     Users, Loader2, Download, ChevronRight, Settings, Paperclip, ImageIcon, ExternalLink, CreditCard, MessageSquare, ShieldAlert
 } from 'lucide-react';
+import { usePrintImageFit } from '@/hooks/usePrintImageFit';
 
 export default function ExpenseReportView({ doc, employee, approvalHistory, referrerHistory }) {
+    usePrintImageFit();
     const router = useRouter();
     const [formData, setFormData] = useState({});
     const [loading, setLoading] = useState(true);
@@ -112,6 +114,8 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                     table { border-collapse: collapse !important; border: 1px solid black !important; width: 100% !important; }
                     th, td { border: 1px solid black !important; padding: 10px !important; }
                     .print-section { page-break-inside: avoid !important; break-inside: avoid-page !important; }
+                    img { break-inside: avoid !important; page-break-inside: avoid !important; display: block !important; max-height: 180mm !important; max-width: 100% !important; width: auto !important; margin: 0 auto !important; }
+                    p:has(img), figure:has(img) { break-inside: avoid !important; page-break-inside: avoid !important; }
                 }
             `}} />
             
@@ -242,11 +246,11 @@ export default function ExpenseReportView({ doc, employee, approvalHistory, refe
                             </table>
                         </section>
 
-                        <section className="print-section font-black text-black font-black w-full max-w-full">
+                        <section className="approval-content-section font-black text-black font-black w-full max-w-full">
                             <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">02. 상세 내역 (적요)</h2>
                             {/* 🚀 뷰(View) 컨테이너에도 에디터와 동일한 테이블 제어 CSS (overflow-x-auto 및 강제 비율) 주입 */}
-                            <div 
-                                className="border border-black p-5 text-[13px] leading-relaxed min-h-[250px] whitespace-pre-wrap font-black break-words overflow-x-auto w-full box-border [&_table]:!w-full [&_table]:!max-w-full [&_table]:!table-fixed [&_table]:!border-collapse [&_table]:my-2 [&_table]:text-[11px] [&_td]:!border [&_td]:!border-slate-400 [&_td]:!p-2 [&_td]:!break-all [&_td]:!whitespace-normal [&_th]:!border [&_th]:!border-slate-400 [&_th]:!p-2 [&_th]:!bg-slate-100 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md"
+                            <div
+                                className="border border-black p-5 text-[13px] leading-relaxed min-h-[250px] whitespace-pre-wrap font-black break-words overflow-x-auto w-full box-border [&_table]:!w-full [&_table]:!max-w-full [&_table]:!table-fixed [&_table]:!border-collapse [&_table]:my-2 [&_table]:text-[11px] [&_td]:!border [&_td]:!border-slate-400 [&_td]:!p-2 [&_td]:!break-all [&_td]:!whitespace-normal [&_th]:!border [&_th]:!border-slate-400 [&_th]:!p-2 [&_th]:!bg-slate-100 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md approval-html-content"
                                 dangerouslySetInnerHTML={{ __html: formData.description || '' }}
                             />
                         </section>
