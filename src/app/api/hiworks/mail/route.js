@@ -21,6 +21,7 @@ export async function GET(request) {
                 'apikey': serviceKey,
             },
             body: JSON.stringify({ userId }),
+            signal: AbortSignal.timeout(20000),
         });
 
         const data = await res.json();

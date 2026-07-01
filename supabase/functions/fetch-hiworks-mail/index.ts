@@ -151,7 +151,8 @@ Deno.serve(async (req) => {
     const mails = [];
 
     if (total > 0) {
-      const start = Math.max(1, total - 19);
+      // 최근 10개만
+      const start = Math.max(1, total - 9);
       const nums = Array.from({ length: total - start + 1 }, (_, i) => total - i);
 
       for (const msgNum of nums) {
