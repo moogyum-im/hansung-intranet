@@ -1,19 +1,28 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { createDecipheriv } from 'node:crypto';
 
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-function decrypt(encryptedText: string): string {
-  const key = Deno.env.get('ENCRYPTION_KEY')!;
-  const keyBuf = Buffer.from(key, 'hex');
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+  return bytes;
+}
+
+async function decrypt(encryptedText: string): Promise<string> {
+  const keyHex = Deno.env.get('ENCRYPTION_KEY')!;
   const [ivHex, encHex] = encryptedText.split(':');
-  const iv = Buffer.from(ivHex, 'hex');
-  const encrypted = Buffer.from(encHex, 'hex');
-  const decipher = createDecipheriv('aes-256-cbc', keyBuf, iv);
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', hexToBytes(keyHex), { name: 'AES-CBC' }, false, ['decrypt']
+  );
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-CBC', iv: hexToBytes(ivHex) },
+    cryptoKey,
+    hexToBytes(encHex)
+  );
+  return new TextDecoder().decode(decrypted);
 }
 
 // 버퍼드 POP3 리더
@@ -120,7 +129,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ notConnected: true }), { headers: corsHeaders });
     }
 
-    const password = decrypt(profile.hiworks_password_enc);
+    const password = await decrypt(profile.hiworks_password_enc);
 
     const conn = await Deno.connectTls({
       hostname: 'pop3s.hiworks.com',
