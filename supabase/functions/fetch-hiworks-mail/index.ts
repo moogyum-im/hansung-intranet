@@ -116,7 +116,28 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { userId } = await req.json();
+    const body = await req.json();
+
+    // 자격증명 검증 전용 모드
+    if (body.verifyOnly) {
+      const { email, password } = body;
+      const conn = await Deno.connectTls({ hostname: 'pop3s.hiworks.com', port: 995 });
+      const pop3 = new Pop3Reader(conn);
+      await pop3.readLine();
+      const userResp = await pop3.send(`USER ${email}`);
+      if (!userResp.startsWith('+OK')) {
+        pop3.close();
+        return new Response(JSON.stringify({ ok: false, error: '아이디 또는 비밀번호가 올바르지 않습니다.' }), { headers: corsHeaders });
+      }
+      const passResp = await pop3.send(`PASS ${password}`);
+      pop3.close();
+      if (!passResp.startsWith('+OK')) {
+        return new Response(JSON.stringify({ ok: false, error: '비밀번호가 올바르지 않습니다. POP3 활성화 여부도 확인해주세요.' }), { headers: corsHeaders });
+      }
+      return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+    }
+
+    const { userId } = body;
     if (!userId) return new Response(JSON.stringify({ notConnected: true }), { headers: corsHeaders });
 
     const { data: profile } = await supabaseAdmin
@@ -144,13 +165,13 @@ Deno.serve(async (req) => {
     const userResp = await pop3.send(`USER ${profile.hiworks_email}`);
     if (!userResp.startsWith('+OK')) {
       pop3.close();
-      return new Response(JSON.stringify({ error: 'AUTH_FAILED' }), { status: 401, headers: corsHeaders });
+      return new Response(JSON.stringify({ connected: true, fetchError: true, authFailed: true, mails: [], unreadCount: 0 }), { headers: corsHeaders });
     }
 
     const passResp = await pop3.send(`PASS ${password}`);
     if (!passResp.startsWith('+OK')) {
       pop3.close();
-      return new Response(JSON.stringify({ error: 'AUTH_FAILED' }), { status: 401, headers: corsHeaders });
+      return new Response(JSON.stringify({ connected: true, fetchError: true, authFailed: true, mails: [], unreadCount: 0 }), { headers: corsHeaders });
     }
 
     const statResp = await pop3.send('STAT');
