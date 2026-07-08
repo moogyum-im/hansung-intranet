@@ -29,6 +29,43 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
         onChange(editorRef.current.innerHTML);
     };
 
+    const insertImageFromFile = (file) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            editorRef.current.focus();
+            const imgNode = document.createElement('img');
+            imgNode.src = event.target.result;
+            imgNode.style.maxWidth = '100%';
+            imgNode.style.height = 'auto';
+            imgNode.style.borderRadius = '6px';
+            imgNode.style.marginTop = '8px';
+            imgNode.style.marginBottom = '8px';
+            imgNode.style.border = '1px solid #e2e8f0';
+            imgNode.style.display = 'block';
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(imgNode);
+                range.setStartAfter(imgNode);
+                range.setEndAfter(imgNode);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            } else {
+                editorRef.current.appendChild(imgNode);
+            }
+            setTimeout(() => onChange(editorRef.current.innerHTML), 50);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'));
+        if (file) insertImageFromFile(file);
+    };
+
     const handlePaste = (e) => {
         const clipboardData = e.clipboardData;
         if (!clipboardData) return;
@@ -39,42 +76,13 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf('image') !== -1) {
                 hasImage = true;
-                e.preventDefault(); 
-                
+                e.preventDefault();
+
                 const file = items[i].getAsFile();
                 if (!file) continue;
 
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const base64Image = event.target.result;
-                    editorRef.current.focus();
-                    
-                    const selection = window.getSelection();
-                    if (selection.rangeCount > 0) {
-                        const range = selection.getRangeAt(0);
-                        
-                        const imgNode = document.createElement('img');
-                        imgNode.src = base64Image;
-                        imgNode.style.maxWidth = '100%';
-                        imgNode.style.height = 'auto';
-                        imgNode.style.borderRadius = '6px';
-                        imgNode.style.marginTop = '8px';
-                        imgNode.style.marginBottom = '8px';
-                        imgNode.style.border = '1px solid #e2e8f0';
-                        imgNode.style.display = 'block';
-                        
-                        range.deleteContents();
-                        range.insertNode(imgNode);
-                        
-                        range.setStartAfter(imgNode);
-                        range.setEndAfter(imgNode);
-                        selection.removeAllRanges();
-                        selection.addRange(range);
-                    }
-                    setTimeout(() => onChange(editorRef.current.innerHTML), 50);
-                };
-                reader.readAsDataURL(file);
-                return; 
+                insertImageFromFile(file);
+                return;
             }
         }
 
@@ -164,7 +172,9 @@ const SimpleRichTextEditor = ({ value, onChange }) => {
                 contentEditable
                 onInput={() => onChange(editorRef.current.innerHTML)}
                 onPaste={handlePaste}
-                placeholder="상세 사유 기술 (스크린샷 캡처본 즉시 붙여넣기 지원 / 엑셀 표 삽입 시 100% 비율 자동 맞춤)"
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+                placeholder="상세 사유 기술 (스크린샷 캡처본 즉시 붙여넣기 지원 / 이미지 드래그앤드롭 지원 / 엑셀 표 삽입 시 100% 비율 자동 맞춤)"
             />
         </div>
     );
@@ -376,8 +386,8 @@ function ExpenseReportPage() {
         <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none font-black">
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black font-black">
                 <div className="flex items-center gap-2"></div>
-                <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 지출결의서 상신</>}
+                <button onClick={handleSubmit} disabled={loading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black text-[11px] shadow-lg transition-all active:scale-95 font-black disabled:opacity-60">
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? <><Loader2 size={14} className="animate-spin" /> 업로드 중...</> : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 지출결의서 상신</>}
                 </button>
             </div>
 
@@ -461,7 +471,10 @@ function ExpenseReportPage() {
                                             <div className="flex flex-col gap-2 font-black font-black">
                                                 <select name="paymentMethod" value={formData.paymentMethod} onChange={handleChange} className="w-full outline-none bg-transparent font-black font-black font-black"><option value="법인카드">법인카드</option><option value="개인카드">개인카드</option><option value="현금">현금</option></select>
                                                 {formData.paymentMethod === '법인카드' && (
-                                                    <div className="flex items-center gap-1 border-t border-black/5 pt-1 font-black font-black font-black font-black"><CreditCard size={10} className="text-blue-600 font-black font-black" /><input type="text" name="cardNumberLastFour" value={formData.cardNumberLastFour} onChange={handleChange} maxLength="4" placeholder="뒷 4자리" className="w-full outline-none bg-slate-50 text-[10px] p-1 font-mono font-black" /></div>
+                                                    <div className="flex flex-col gap-0.5 border-t border-black/5 pt-1">
+                                                        <div className="flex items-center gap-1 font-black"><CreditCard size={10} className="text-blue-600" /><input type="text" name="cardNumberLastFour" value={formData.cardNumberLastFour} onChange={handleChange} maxLength="4" placeholder="뒷 4자리" className="w-full outline-none bg-slate-50 text-[10px] p-1 font-mono font-black" /></div>
+                                                        {!formData.cardNumberLastFour && <p className="text-red-500 text-[9px] font-black">* 뒷 4자리 입력 필수 (미입력 시 상신 불가)</p>}
+                                                    </div>
                                                 )}
                                             </div>
                                         </td>

@@ -38,20 +38,14 @@ export default function FileUploadDnd({ onUploadComplete, onUploadingStateChange
             return supabase.storage.from('approval_attachments').upload(fileName, file)
                 .then(({ data, error }) => {
                     if (error) throw error;
-                    return { path: data.path, name: file.name };
+                    return { path: data.path, name: file.name, size: file.size };
                 });
         });
 
         try {
             const newFiles = await Promise.all(uploadPromises);
-            setUploadedFiles(prev => {
-                // 중복 방지: 이미 있는 path는 추가하지 않음
-                const existingPaths = new Set(prev.map(f => f.path));
-                const dedupedNew = newFiles.filter(f => !existingPaths.has(f.path));
-                const updated = [...prev, ...dedupedNew];
-                onUploadComplete(dedupedNew); // 새로 추가된 파일만 부모에 전달
-                return updated;
-            });
+            setUploadedFiles(prev => [...prev, ...newFiles]);
+            onUploadComplete(newFiles);
             toast.success('파일이 첨부되었습니다.', { id: 'uploading' });
         } catch (error) {
             console.error('파일 업로드 실패:', error);
