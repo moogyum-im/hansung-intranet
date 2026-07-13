@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
+import { updateUserPasswordAction } from '@/actions/authActions';
 import { toast } from 'react-hot-toast';
 import { KeyRound, Eye, EyeOff, ShieldCheck, X } from 'lucide-react';
 
@@ -14,18 +14,26 @@ export default function SecurityPopupPage() {
         e.preventDefault();
         if (passwords.new !== passwords.confirm) return toast.error("새 비밀번호가 일치하지 않습니다.");
         if (passwords.new.length < 6) return toast.error("비밀번호는 최소 6자 이상이어야 합니다.");
-        
+
         setIsChanging(true);
         try {
-            const { error } = await supabase.auth.updateUser({ password: passwords.new });
-            if (error) throw error;
-            
+            const formData = new FormData();
+            formData.append('newPassword', passwords.new);
+            formData.append('confirmPassword', passwords.confirm);
+
+            const result = await updateUserPasswordAction(formData);
+
+            if (!result.success) {
+                toast.error(result.error || "변경 중 오류가 발생했습니다.");
+                return;
+            }
+
             toast.success("비밀번호가 성공적으로 변경되었습니다.");
-            setTimeout(() => window.close(), 1500); // 1.5초 후 팝업 자동 닫기
-        } catch (error) { 
-            toast.error("변경 중 오류가 발생했습니다."); 
-        } finally { 
-            setIsChanging(false); 
+            setTimeout(() => window.close(), 1500);
+        } catch (error) {
+            toast.error(error.message || "변경 중 오류가 발생했습니다.");
+        } finally {
+            setIsChanging(false);
         }
     };
 
