@@ -155,7 +155,7 @@ function CompanySection() {
       {/* 환영 카드 */}
       <div className="bg-slate-800 rounded-xl px-6 py-6 text-white">
         <p className="text-xs font-medium text-slate-400 mb-3">WELCOME</p>
-        <p className="text-xl font-bold mb-1">{employee?.full_name} 님, 환영합니다.</p>
+        <p className="text-xl font-bold mb-1">{employee?.full_name} 님, 입사를 축하드립니다.</p>
         <p className="text-sm text-slate-300 leading-relaxed">
           한성종합조경의 새로운 시작을 진심으로 환영합니다.
         </p>
@@ -543,7 +543,7 @@ function LeaveSection() {
         </Link>
       </div>
 
-      <Note>미사용 연차는 금전으로 보상하지 않습니다 (제37조 ④). 연도 내 적극적으로 사용하세요.</Note>
+      <Note>미사용 연차는 연도 내 적극 사용을 권장합니다.</Note>
     </div>
   );
 }
