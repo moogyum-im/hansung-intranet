@@ -48,7 +48,7 @@ export default function LoginPage() {
                                 type="email"
                                 required
                                 className="mt-1 block w-full px-5 py-3 bg-white/10 border border-white/20 rounded-xl shadow-inner placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300 text-white transition-colors duration-200"
-                                placeholder="id@hansung.co.kr"
+                                placeholder="id@han-sung.com"
                                 disabled={isSubmitting}
                             />
                         </div>
