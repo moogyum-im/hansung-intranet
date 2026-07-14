@@ -31,6 +31,7 @@ import {
   BarChart3,
   Mail,
   BookOpen,
+  FolderOpen,
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose, openSidebar }) {
@@ -194,6 +195,8 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
     if (!employee || checkMenu('approvals', true)) {
         menuItems.push({ name: '전자 결재', href: '/approvals', icon: FileCheck, hasAlert: pendingApprovals > 0 });
     }
+
+    menuItems.push({ name: '서식함', href: '/forms', icon: FolderOpen });
 
     if (employee && checkMenu('admin', employee.department === '관리부' || employee.role === 'admin')) {
         menuItems.push({ name: '경영 지원', href: '/admin-portal', icon: Building2 });

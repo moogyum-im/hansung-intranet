@@ -6,11 +6,17 @@ const withPWA = nextPWA({
   dest: 'public',
   register: true,
   skipWaiting: true,
-  // --- [추가] 런타임 캐싱 기능을 비활성화하여 데이터 로딩 충돌을 방지합니다. ---
+  disable: true, // SW 캐싱 비활성화 - 구형 UI 캐시 문제 방지
+  cleanupOutdatedCaches: true,
   runtimeCaching: [],
 });
 
 const nextConfig = {
+  experimental: {
+    staleTimes: {
+      dynamic: 0,
+    },
+  },
   images: {
     remotePatterns: [
       {
