@@ -388,7 +388,7 @@ function FormDetailModal({ form, onClose, onFavorite }) {
                       color: ACCESS_LEVEL_COLORS[form.access_level].text,
                       borderColor: ACCESS_LEVEL_COLORS[form.access_level].text + '40',
                     }}>
-                    {ACCESS_LEVEL_LABELS[form.access_level]}
+                    {form.access_level}등급
                   </span>
                 )}
                 {isExpired && (
@@ -615,7 +615,7 @@ function FormRow({ form, isAdmin, onFavorite, onEdit, onVersion, onDelete, onDet
                 color: ACCESS_LEVEL_COLORS[form.access_level].text,
                 borderColor: ACCESS_LEVEL_COLORS[form.access_level].text + '40',
               }}>
-              {ACCESS_LEVEL_LABELS[form.access_level]}
+              {form.access_level}등급
             </span>
           )}
           {isExpired && (
