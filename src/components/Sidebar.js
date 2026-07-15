@@ -135,6 +135,9 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
     }, [employee, fetchTotalUnreadCount, fetchPendingApprovals]);
 
     const handleLogout = async () => {
+        if (employee?.id) {
+            await supabase.from('profiles').update({ status: '오프라인' }).eq('id', employee.id);
+        }
         await supabase.auth.signOut();
         router.push('/login');
     };

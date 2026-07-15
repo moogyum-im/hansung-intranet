@@ -34,22 +34,29 @@ export async function loginAction(formData) {
             return { success: false, error: '사용자 프로필을 불러올 수 없습니다.' };
         }
 
-        // 🚀 [수정] 3. 휴직 및 퇴사 상태 세분화하여 로그인 차단
+        // 3. 휴직 및 퇴사 상태 세분화하여 로그인 차단
         if (profile.employment_status === '휴직') {
-            await supabase.auth.signOut(); // 즉시 세션 파기
+            await supabase.auth.signOut();
             return { success: false, error: '휴직 중에는 인트라넷 접속이 제한됩니다.' };
         } else if (profile.employment_status !== '재직') {
-            await supabase.auth.signOut(); // 기타 비활성/퇴사 계정
+            await supabase.auth.signOut();
             return { success: false, error: '퇴사 처리되었거나 비활성화된 계정입니다.' };
         }
+
+        // 4. 로그인 성공 시 상태를 '업무중'으로 변경
+        await supabase.from('profiles').update({ status: '업무중' }).eq('id', authData.user.id);
     }
-    
+
     redirect('/dashboard');
 }
 
 export async function signOutAction() {
     const cookieStore = cookies();
     const supabase = createServerActionClient({ cookies: () => cookieStore });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+        await supabase.from('profiles').update({ status: '오프라인' }).eq('id', user.id);
+    }
     await supabase.auth.signOut();
     redirect('/login');
 }

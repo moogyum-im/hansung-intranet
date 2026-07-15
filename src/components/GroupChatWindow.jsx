@@ -270,18 +270,18 @@ const GalleryPanel = ({ messages, onClose }) => {
 
     return (
         <div className="absolute inset-0 bg-white z-20 flex flex-col">
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-[#E8E8E8] shrink-0">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-[#E5E5EA] shrink-0">
                 <button onClick={onClose}
-                    className="w-8 h-8 rounded-full hover:bg-[#F2F3F5] flex items-center justify-center text-[#555]">
+                    className="w-8 h-8 rounded-full hover:bg-[#F2F2F7] flex items-center justify-center text-[#8E8E93]">
                     <ChevronLeft size={18} />
                 </button>
-                <h3 className="text-[14px] font-black text-[#1A1A1A]">공유 미디어</h3>
+                <h3 className="text-[14px] font-bold text-[#1C1C1E]">공유 미디어</h3>
             </div>
-            <div className="flex border-b border-[#E8E8E8] shrink-0">
+            <div className="flex border-b border-[#E5E5EA] shrink-0">
                 {[['photo', `사진 ${photos.length}`], ['file', `파일 ${files.length}`]].map(([key, label]) => (
                     <button key={key} onClick={() => setTab(key)}
-                        className={`flex-1 py-3 text-[12px] font-black transition-colors
-                            ${tab === key ? 'text-[#1e293b] border-b-2 border-[#1e293b]' : 'text-[#AAA]'}`}>
+                        className={`flex-1 py-3 text-[12px] font-bold transition-colors
+                            ${tab === key ? 'text-[#0A84FF] border-b-2 border-[#0A84FF]' : 'text-[#8E8E93]'}`}>
                         {label}
                     </button>
                 ))}
@@ -342,13 +342,13 @@ const TypingIndicator = ({ users }) => {
     if (!users.length) return null;
     return (
         <div className="flex items-end gap-2 mb-3 px-4">
-            <div className="w-8 h-8 rounded-full bg-[#E8E8E8] flex items-center justify-center text-[#999] text-xs font-black shrink-0">
+            <div className="w-8 h-8 rounded-full bg-[#F2F2F7] flex items-center justify-center text-[#8E8E93] text-xs font-black shrink-0">
                 {users[0]?.charAt(0)}
             </div>
-            <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+            <div className="bg-[#F2F2F7] rounded-2xl rounded-tl-sm px-4 py-3">
                 <div className="flex gap-1 items-center h-4">
                     {[0, 150, 300].map(d => (
-                        <span key={d} className="w-1.5 h-1.5 bg-[#AAA] rounded-full animate-bounce"
+                        <span key={d} className="w-1.5 h-1.5 bg-[#8E8E93] rounded-full animate-bounce"
                             style={{ animationDelay: `${d}ms` }} />
                     ))}
                 </div>
@@ -372,6 +372,7 @@ export default function GroupChatWindow({
     const [messages, setMessages]         = useState(initialMessages || []);
     const [newMessage, setNewMessage]     = useState('');
     const [participants, setParticipants] = useState(initialParticipants || []);
+    const [bubbleColor, setBubbleColor]   = useState('#0A84FF');
     const [isManageModalOpen, setManageModalOpen]   = useState(false);
     const [msgMenu, setMsgMenu]                     = useState(null); // { msg, isMine, rect }
     const [forwardMsg, setForwardMsg]               = useState(null);
@@ -420,6 +421,15 @@ export default function GroupChatWindow({
         const { data } = await supabase.rpc('get_unread_counts_for_my_messages', { p_room_id: currentRoomId });
         if (data) setUnreadCounts(data.reduce((acc, i) => { acc[i.message_id] = i.unread_count; return acc; }, {}));
     }, [currentRoomId, currentUserId]);
+
+    // 말풍선 색상 초기화 + 실시간 반영
+    useEffect(() => {
+        const saved = localStorage.getItem('chatBubbleColor');
+        if (saved) setBubbleColor(saved);
+        const handleColorChange = (e) => setBubbleColor(e.detail);
+        window.addEventListener('chatBubbleColorChanged', handleColorChange);
+        return () => window.removeEventListener('chatBubbleColorChanged', handleColorChange);
+    }, []);
 
     // 팝업 탭 제목
     useEffect(() => {
@@ -646,14 +656,14 @@ export default function GroupChatWindow({
         if (window.confirm('채팅방을 나가시겠습니까?')) {
             const { error } = await supabase.from('chat_room_participants')
                 .delete().eq('user_id', currentUserId).eq('room_id', currentRoomId);
-            if (!error) { if (isPopup) window.close(); else { router.push('/chatrooms'); router.refresh(); } }
+            if (!error) { if (isPopup) router.push('/chat-popup'); else { router.push('/chatrooms'); router.refresh(); } }
         }
     };
 
     if (!currentUser || !chatRoom || employeeLoading) return (
-        <div className="h-full flex flex-col items-center justify-center bg-[#1e293b]">
-            <Lock size={40} className="text-blue-400 animate-bounce" />
-            <p className="text-white font-black text-sm mt-4">Loading...</p>
+        <div className="h-full flex flex-col items-center justify-center bg-white">
+            <Lock size={36} className="text-[#C7C7CC] animate-pulse" />
+            <p className="text-[#8E8E93] font-medium text-sm mt-3">불러오는 중...</p>
         </div>
     );
 
@@ -685,7 +695,7 @@ export default function GroupChatWindow({
 
             const dateSep = dateStr !== lastDate ? (
                 <div key={`sep-${dateStr}`} className="flex items-center justify-center my-5">
-                    <span className="text-[11px] text-[#555] bg-black/10 px-4 py-1 rounded-full font-medium">
+                    <span className="text-[11px] text-[#8E8E93] bg-[#F2F2F7] px-4 py-1.5 rounded-full font-medium">
                         {new Date(msg.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
                     </span>
                 </div>
@@ -721,7 +731,7 @@ export default function GroupChatWindow({
                         <div className={`flex flex-col max-w-[65%] ${isMine ? 'items-end' : 'items-start'}`}>
                             {/* ✅ 이름 (상대방 첫 메시지에만) */}
                             {!isMine && isFirstInGroup && (
-                                <p className="text-[11px] font-black text-[#555] mb-1 ml-1">
+                                <p className="text-[11px] font-semibold text-[#8E8E93] mb-1 ml-1">
                                     {msg.sender?.full_name}
                                 </p>
                             )}
@@ -733,10 +743,11 @@ export default function GroupChatWindow({
                                         e.stopPropagation();
                                         setMsgMenu({ msg, isMine, rect: e.currentTarget.getBoundingClientRect() });
                                     }}
-                                    className={`px-3.5 py-2.5 cursor-pointer transition-opacity hover:opacity-80 select-none
+                                    style={isMine ? { backgroundColor: bubbleColor } : undefined}
+                                    className={`px-3.5 py-2.5 cursor-pointer transition-opacity hover:opacity-85 select-none
                                         ${isMine
-                                            ? 'bg-[#E2E8F0] text-[#1A1A1A] rounded-2xl rounded-br-sm'
-                                            : 'bg-white text-[#1A1A1A] rounded-2xl rounded-tl-sm shadow-sm'
+                                            ? 'text-white rounded-2xl rounded-br-sm'
+                                            : 'bg-[#F2F2F7] text-[#1C1C1E] rounded-2xl rounded-tl-sm'
                                         }`}>
                                     <MessageContent msg={msg} allMessages={messages} searchQuery={searchQuery} />
                                 </div>
@@ -745,9 +756,9 @@ export default function GroupChatWindow({
                                 {showTime && (
                                     <div className={`flex flex-col gap-0.5 pb-0.5 shrink-0 ${isMine ? 'items-end' : 'items-start'}`}>
                                         {isMine && unread > 0 && (
-                                            <span className="text-[10px] font-black text-[#64748B]">{unread}</span>
+                                            <span className="text-[10px] font-semibold text-[#0A84FF]">{unread}</span>
                                         )}
-                                        <span className="text-[10px] text-[#888] whitespace-nowrap">
+                                        <span className="text-[10px] text-[#8E8E93] whitespace-nowrap">
                                             {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true })}
                                         </span>
                                     </div>
@@ -791,21 +802,21 @@ export default function GroupChatWindow({
                         <div className="flex items-center gap-1 shrink-0">
                             <button onClick={() => { setIsSearchOpen(s => !s); setSearchQuery(''); setSearchResults([]); }}
                                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors
-                                    ${isSearchOpen ? 'bg-[#1e293b] text-white' : 'hover:bg-[#F2F3F5] text-[#555]'}`}>
+                                    ${isSearchOpen ? 'bg-[#0A84FF] text-white' : 'hover:bg-[#F2F2F7] text-[#8E8E93]'}`}>
                                 <Search size={16} />
                             </button>
                             <button onClick={() => setShowGallery(true)}
-                                className="w-8 h-8 rounded-full hover:bg-[#F2F3F5] flex items-center justify-center text-[#555] transition-colors">
+                                className="w-8 h-8 rounded-full hover:bg-[#F2F2F7] flex items-center justify-center text-[#8E8E93] transition-colors">
                                 <ImageIcon size={16} />
                             </button>
                             {!chatRoom.is_direct_message && (
                                 <button onClick={() => setManageModalOpen(true)}
-                                    className="w-8 h-8 rounded-full hover:bg-[#F2F3F5] flex items-center justify-center text-[#555] transition-colors">
+                                    className="w-8 h-8 rounded-full hover:bg-[#F2F2F7] flex items-center justify-center text-[#8E8E93] transition-colors">
                                     <Users size={16} />
                                 </button>
                             )}
                             <button onClick={handleLeaveRoom}
-                                className="w-8 h-8 rounded-full hover:bg-[#FFF0F0] flex items-center justify-center text-[#AAA] hover:text-[#EF4444] transition-colors">
+                                className="w-8 h-8 rounded-full hover:bg-[#FFF0F0] flex items-center justify-center text-[#C7C7CC] hover:text-[#EF4444] transition-colors">
                                 <LogOut size={16} />
                             </button>
                         </div>
@@ -850,19 +861,19 @@ export default function GroupChatWindow({
 
                 {/* 고정 메시지 배너 */}
                 {pinnedMessage && (
-                    <div className="shrink-0 flex items-center gap-2.5 px-4 py-2 bg-slate-50 border-b border-slate-100">
-                        <Pin size={12} className="text-slate-400 shrink-0" />
+                    <div className="shrink-0 flex items-center gap-2.5 px-4 py-2.5 bg-[#F0F8FF] border-b border-[#DBEAFE] shadow-[inset_3px_0_0_#0A84FF]">
+                        <Pin size={11} className="text-[#0A84FF] shrink-0" />
                         <div className="flex-1 min-w-0">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">고정된 메시지</p>
-                            <p className="text-[12px] font-semibold text-slate-700 truncate">{pinnedMessage.content}</p>
+                            <p className="text-[9px] font-bold text-[#0A84FF] uppercase tracking-wider mb-0.5">고정 메시지</p>
+                            <p className="text-[12px] font-medium text-[#1C1C1E] truncate">{pinnedMessage.content}</p>
                         </div>
                         {isRoomCreator && (
                             <button
                                 onClick={() => handlePinMessage({ id: pinnedMessage.id, sender: { full_name: pinnedMessage.sender_name }, content: pinnedMessage.content, message_type: pinnedMessage.message_type })}
-                                className="text-slate-300 hover:text-slate-500 shrink-0"
+                                className="text-[#C7C7CC] hover:text-[#8E8E93] shrink-0"
                                 title="고정 해제"
                             >
-                                <X size={14} />
+                                <X size={13} />
                             </button>
                         )}
                     </div>
@@ -872,8 +883,7 @@ export default function GroupChatWindow({
                 <div className="flex-1 relative overflow-hidden">
                     {showGallery && <GalleryPanel messages={messages} onClose={() => setShowGallery(false)} />}
 
-                    {/* ✅ 카카오톡 배경 #F2F3F5 */}
-                    <div className="h-full overflow-y-auto py-3 bg-[#ECEEF1] relative"
+                    <div className="h-full overflow-y-auto py-3 bg-white relative"
                         onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
                         {isDragging && (
                             <div className="absolute inset-2 bg-blue-50/95 border-2 border-dashed border-blue-400 z-10 flex flex-col items-center justify-center rounded-2xl pointer-events-none">
@@ -887,15 +897,14 @@ export default function GroupChatWindow({
                     </div>
                 </div>
 
-                {/* ✅ 카카오톡 스타일 입력창 */}
-                <footer className="bg-white border-t border-[#E8E8E8] shrink-0 px-3 py-2">
+                <footer className="bg-white border-t border-[#E5E5EA] shrink-0 px-3 py-2">
                     {replyingTo && (
-                        <div className="flex items-center justify-between px-3 py-2 mb-2 bg-[#F9F9F9] rounded-xl border border-[#E8E8E8]">
+                        <div className="flex items-center justify-between px-3 py-2 mb-2 bg-[#F2F2F7] rounded-xl border border-[#E5E5EA]">
                             <div className="min-w-0">
-                                <p className="text-[10px] font-black text-[#1e293b] mb-0.5">↩ {replyingTo.sender?.full_name}</p>
-                                <p className="text-[11px] text-[#888] truncate">{replyingTo.content}</p>
+                                <p className="text-[10px] font-bold text-[#0A84FF] mb-0.5">↩ {replyingTo.sender?.full_name}</p>
+                                <p className="text-[11px] text-[#8E8E93] truncate">{replyingTo.content}</p>
                             </div>
-                            <button onClick={() => setReplyingTo(null)} className="text-[#CCC] hover:text-[#EF4444] ml-2 shrink-0">
+                            <button onClick={() => setReplyingTo(null)} className="text-[#C7C7CC] hover:text-[#EF4444] ml-2 shrink-0">
                                 <X size={13} />
                             </button>
                         </div>
@@ -903,21 +912,21 @@ export default function GroupChatWindow({
                     <div className="flex items-end gap-2">
                         <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple />
                         <button type="button" onClick={() => fileInputRef.current?.click()}
-                            className="w-9 h-9 rounded-full hover:bg-[#F2F3F5] flex items-center justify-center text-[#888] transition-colors shrink-0">
+                            className="w-9 h-9 rounded-full hover:bg-[#F2F2F7] flex items-center justify-center text-[#8E8E93] transition-colors shrink-0">
                             <Paperclip size={20} />
                         </button>
-                        <div className="flex-1 bg-[#F2F3F5] rounded-2xl px-3.5 py-2.5 min-h-[40px] flex items-center">
+                        <div className="flex-1 bg-[#F2F2F7] rounded-2xl px-3.5 py-2.5 min-h-[40px] flex items-center">
                             <input ref={messageInputRef} type="text" value={newMessage}
                                 onChange={handleInputChange}
                                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSendMessage(e); } }}
                                 placeholder="메시지를 입력하세요"
-                                className="flex-1 bg-transparent text-[13.5px] text-[#1A1A1A] placeholder:text-[#AAA] outline-none" />
+                                className="flex-1 bg-transparent text-[13.5px] text-[#1C1C1E] placeholder:text-[#C7C7CC] outline-none" />
                         </div>
                         <button
                             onClick={handleSendMessage}
                             disabled={!newMessage.trim() || isUploading}
                             className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0
-                                ${newMessage.trim() ? 'bg-[#475569] text-white' : 'bg-[#F2F3F5] text-[#CCC]'}`}>
+                                ${newMessage.trim() ? 'bg-[#0A84FF] text-white' : 'bg-[#F2F2F7] text-[#C7C7CC]'}`}>
                             <Send size={16} className={newMessage.trim() ? "translate-x-px -translate-y-px" : ""} />
                         </button>
                     </div>
