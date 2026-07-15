@@ -21,6 +21,7 @@ function PdfUploadPage() {
     const [attachments, setAttachments] = useState([]);
     const [isUploading, setIsUploading] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
 
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
@@ -42,7 +43,7 @@ function PdfUploadPage() {
         }
     }, [employee, employeeLoading]);
 
-    const handleUploadComplete = useCallback((uploadedFiles) => {
+    const handleUploadComplete = useCallback(async (uploadedFiles) => {
         if (Array.isArray(uploadedFiles)) {
             const formatted = uploadedFiles.map(f => ({ name: f.name.normalize('NFC'), path: f.path, size: f.size }));
             setAttachments(prev => {
@@ -50,10 +51,23 @@ function PdfUploadPage() {
                 return [...prev, ...formatted.filter(f => !existing.has(f.path))];
             });
             setIsUploading(false);
-        }
-    }, []);
 
-    const removeAttachment = (idx) => setAttachments(prev => prev.filter((_, i) => i !== idx));
+            const firstPdf = formatted.find(f => f.name?.toLowerCase().endsWith('.pdf')) || formatted[0];
+            if (firstPdf && !pdfPreviewUrl) {
+                const cleanPath = firstPdf.path.replace('approval_attachments/', '').trim();
+                const { data } = await supabase.storage.from('approval_attachments').createSignedUrl(cleanPath, 3600);
+                if (data?.signedUrl) setPdfPreviewUrl(data.signedUrl);
+            }
+        }
+    }, [pdfPreviewUrl]);
+
+    const removeAttachment = (idx) => {
+        setAttachments(prev => {
+            const next = prev.filter((_, i) => i !== idx);
+            if (next.length === 0) setPdfPreviewUrl(null);
+            return next;
+        });
+    };
 
     const addApprover = () => {
         if (approvers.length >= 4) return toast.error('결재선은 최대 4명까지 가능합니다.');
@@ -179,7 +193,7 @@ function PdfUploadPage() {
 
                         {/* 제목 */}
                         <section>
-                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">01. 문서 제목</h2>
+                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">01. 문서 제목 <span className="text-red-500">*</span></h2>
                             <input
                                 type="text"
                                 value={title}
@@ -189,9 +203,42 @@ function PdfUploadPage() {
                             />
                         </section>
 
+                        {/* PDF 첨부 + 즉시 뷰어 */}
+                        <section>
+                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">02. PDF 서류 첨부 <span className="text-red-500">*</span></h2>
+                            {!pdfPreviewUrl ? (
+                                <>
+                                    <div className="mb-3 flex items-center gap-2 text-[11px] text-slate-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                                        <FileText size={13} className="text-blue-500 shrink-0" />
+                                        서식함에서 내려받은 서식을 작성 후 PDF로 저장하여 첨부해주세요.
+                                    </div>
+                                    <FileUploadDnd
+                                        onUploadComplete={handleUploadComplete}
+                                        onUploadingStateChange={setIsUploading}
+                                    />
+                                </>
+                            ) : (
+                                <div className="border border-black">
+                                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-black/10">
+                                        <span className="text-[11px] font-black truncate">{attachments[0] ? (typeof attachments[0] === 'object' ? attachments[0].name : attachments[0]) : 'PDF'}</span>
+                                        <button onClick={() => { setAttachments([]); setPdfPreviewUrl(null); }}
+                                            className="text-[10px] text-slate-400 hover:text-red-500 flex items-center gap-1 font-black shrink-0 ml-3">
+                                            <X size={12} /> 파일 변경
+                                        </button>
+                                    </div>
+                                    <iframe
+                                        src={pdfPreviewUrl}
+                                        className="w-full"
+                                        style={{ height: '72vh' }}
+                                        title="PDF 미리보기"
+                                    />
+                                </div>
+                            )}
+                        </section>
+
                         {/* 비고 */}
                         <section>
-                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">02. 비고 / 전달 사항 <span className="text-slate-400 normal-case font-medium">(선택)</span></h2>
+                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">03. 비고 / 전달 사항 <span className="text-slate-400 normal-case font-medium">(선택)</span></h2>
                             <textarea
                                 value={note}
                                 onChange={e => setNote(e.target.value)}
@@ -199,29 +246,6 @@ function PdfUploadPage() {
                                 rows={4}
                                 className="w-full border border-black p-4 text-[12px] outline-none focus:bg-slate-50 resize-none font-medium"
                             />
-                        </section>
-
-                        {/* PDF 첨부 */}
-                        <section>
-                            <h2 className="text-[10px] mb-2 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">03. PDF 서류 첨부 <span className="text-red-500">*</span></h2>
-                            <div className="mb-3 flex items-center gap-2 text-[11px] text-slate-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                                <FileText size={13} className="text-blue-500 shrink-0" />
-                                서식함에서 내려받은 서식을 작성 후 PDF로 저장하여 첨부해주세요.
-                            </div>
-                            <FileUploadDnd
-                                onUploadComplete={handleUploadComplete}
-                                onUploadingStateChange={setIsUploading}
-                            />
-                            {attachments.length > 0 && (
-                                <div className="mt-3 space-y-2">
-                                    {attachments.map((f, i) => (
-                                        <div key={i} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[11px]">
-                                            <span className="font-black truncate">{typeof f === 'object' ? f.name : f}</span>
-                                            <button onClick={() => removeAttachment(i)} className="ml-2 text-slate-300 hover:text-red-500 shrink-0"><X size={13} /></button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
                         </section>
 
                         <div className="pt-10 text-center">

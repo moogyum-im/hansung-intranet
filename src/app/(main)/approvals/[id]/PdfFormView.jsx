@@ -188,36 +188,53 @@ export default function PdfFormView({ doc, employee, approvalHistory, referrerHi
                             <div className="border border-black p-5 text-[14px] font-black bg-slate-50/20">{doc.title}</div>
                         </section>
 
-                        {/* 비고 */}
-                        {formData.note && (
-                            <section>
-                                <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">02. 비고 / 전달 사항</h2>
-                                <div className="border border-black p-5 text-[13px] leading-relaxed whitespace-pre-wrap font-medium">{formData.note}</div>
-                            </section>
-                        )}
-
-                        {/* 첨부 파일 안내 */}
+                        {/* 첨부 서류 인라인 뷰어 */}
                         <section>
-                            <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">03. 첨부 서류</h2>
+                            <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">02. 첨부 서류</h2>
                             {attachmentSignedUrls.length > 0 ? (
-                                <div className="space-y-2">
-                                    {attachmentSignedUrls.map((file, i) => (
-                                        <div key={i} className="flex items-center justify-between border border-black p-3 bg-slate-50/50">
-                                            <div className="flex items-center gap-2">
-                                                <FileText size={14} className="text-slate-500 shrink-0" />
-                                                <span className="text-[12px] font-black">{file.name}</span>
-                                            </div>
-                                            <a href={file.url} download={file.name} target="_blank" rel="noreferrer"
-                                                className="flex items-center gap-1 px-3 py-1 border border-black text-[10px] font-black hover:bg-black hover:text-white transition-all no-print">
-                                                <Download size={12} /> 다운로드
-                                            </a>
+                                <div className="border border-black">
+                                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-black/10 no-print">
+                                        <div className="flex items-center gap-2">
+                                            <FileText size={13} className="text-slate-500 shrink-0" />
+                                            <span className="text-[11px] font-black truncate">{attachmentSignedUrls[0].name}</span>
                                         </div>
-                                    ))}
+                                        <a href={attachmentSignedUrls[0].url} download={attachmentSignedUrls[0].name} target="_blank" rel="noreferrer"
+                                            className="flex items-center gap-1 px-3 py-1 border border-black text-[10px] font-black hover:bg-black hover:text-white transition-all shrink-0 ml-3">
+                                            <Download size={11} /> 다운로드
+                                        </a>
+                                    </div>
+                                    <iframe
+                                        src={attachmentSignedUrls[0].url}
+                                        className="w-full"
+                                        style={{ height: '80vh' }}
+                                        title="첨부 서류 PDF"
+                                    />
+                                    {attachmentSignedUrls.length > 1 && (
+                                        <div className="border-t border-black/10 p-3 space-y-1 bg-slate-50 no-print">
+                                            {attachmentSignedUrls.slice(1).map((file, i) => (
+                                                <div key={i} className="flex items-center justify-between px-2 py-1.5 bg-white border border-slate-200 rounded text-[11px]">
+                                                    <span className="font-black truncate">{file.name}</span>
+                                                    <a href={file.url} download={file.name} target="_blank" rel="noreferrer"
+                                                        className="flex items-center gap-1 px-2 py-0.5 border border-black text-[10px] font-black hover:bg-black hover:text-white transition-all shrink-0 ml-2">
+                                                        <Download size={11} /> 다운로드
+                                                    </a>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="border border-dashed border-slate-200 p-8 text-center text-[11px] text-slate-300">첨부 파일 없음</div>
                             )}
                         </section>
+
+                        {/* 비고 */}
+                        {formData.note && (
+                            <section>
+                                <h2 className="text-[10px] mb-3 uppercase tracking-tighter border-l-4 border-black pl-2 font-black">03. 비고 / 전달 사항</h2>
+                                <div className="border border-black p-5 text-[13px] leading-relaxed whitespace-pre-wrap font-medium">{formData.note}</div>
+                            </section>
+                        )}
 
                         <div className="pt-10 text-center">
                             <p className="text-xl font-black uppercase tracking-widest">
