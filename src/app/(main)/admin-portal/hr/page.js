@@ -6,10 +6,22 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  Users, Search, Bell, ChevronDown, Wallet, ShieldAlert, 
-  CalendarDays, RefreshCw, Loader2, Save, Building2, CalendarRange, LayoutDashboard
+import {
+  Users, Search, Bell, ChevronDown, Wallet, ShieldAlert,
+  CalendarDays, RefreshCw, Loader2, Save, Building2, CalendarRange, LayoutDashboard,
+  ShieldCheck, X, Check
 } from 'lucide-react';
+
+const MENU_DEFS = [
+  { key: 'sites',       label: '현장 관리',      desc: '현장 목록 및 현장별 공사 관리' },
+  { key: 'approvals',   label: '전자 결재',      desc: '기안 작성, 수신 결재, 휴가 신청' },
+  { key: 'admin',       label: '경영 지원',      desc: '인사·급여·지출 관리 포털' },
+  { key: 'chat',        label: '사내 채팅',      desc: '팀 및 개인 채팅방' },
+  { key: 'mail',        label: '메일함',         desc: '하이웍스 수신 메일함' },
+  { key: 'db',          label: '데이터베이스',   desc: '조경수 DB, 공정표, 내역, 수익, 작업일보 분석' },
+  { key: 'bid_records', label: '입찰 기록 관리', desc: '프로젝트 입찰 기록 및 현황' },
+  { key: 'onboarding', label: '입사 안내',      desc: '회사 소개·사내 규정·시스템 사용법·복지·연차 (신규 입사자)' },
+];
 
 export default function HRManagementPage() {
   const { employee, loading: authLoading } = useEmployee();
@@ -22,6 +34,10 @@ export default function HRManagementPage() {
   
   const [isSaving, setIsSaving] = useState({});
   const [localLeaveData, setLocalLeaveData] = useState({});
+
+  const [menuPermModal, setMenuPermModal] = useState(null); // { empId, empName }
+  const [empMenuPerms, setEmpMenuPerms] = useState(new Set());
+  const [isSavingPerms, setIsSavingPerms] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -161,6 +177,47 @@ export default function HRManagementPage() {
       .sort((a, b) => (priority[a] || 99) - (priority[b] || 99) || a.localeCompare(b))
       .reduce((acc, key) => { acc[key] = groups[key]; return acc; }, {});
   }, [employees, searchTerm]);
+
+  const openMenuPermModal = async (emp) => {
+    setMenuPermModal({ empId: emp.id, empName: emp.full_name });
+    const { data } = await supabase
+      .from('menu_permissions')
+      .select('menu_key')
+      .eq('user_id', emp.id);
+    setEmpMenuPerms(new Set((data || []).map(d => d.menu_key)));
+  };
+
+  const closeMenuPermModal = () => {
+    setMenuPermModal(null);
+    setEmpMenuPerms(new Set());
+  };
+
+  const toggleMenuPerm = (key) => {
+    setEmpMenuPerms(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const saveMenuPerms = async () => {
+    if (!menuPermModal) return;
+    setIsSavingPerms(true);
+    try {
+      await supabase.from('menu_permissions').delete().eq('user_id', menuPermModal.empId);
+      if (empMenuPerms.size > 0) {
+        const rows = [...empMenuPerms].map(key => ({ user_id: menuPermModal.empId, menu_key: key }));
+        const { error } = await supabase.from('menu_permissions').insert(rows);
+        if (error) throw error;
+      }
+      toast.success(`${menuPermModal.empName}님의 메뉴 권한이 저장되었습니다.`);
+      closeMenuPermModal();
+    } catch (error) {
+      toast.error('저장에 실패했습니다.');
+    } finally {
+      setIsSavingPerms(false);
+    }
+  };
 
   const formatShortDate = (dateStr) => {
     const d = new Date(dateStr);
@@ -378,9 +435,14 @@ export default function HRManagementPage() {
                               )}
                             </td>
                             <td className="p-3 text-center">
-                              <button onClick={() => handleIndividualSave(emp.id)} disabled={isSaving[emp.id]} className="px-3 py-1.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-600 text-xs font-black rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-50 w-full justify-center">
-                                {isSaving[emp.id] ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} 저장
-                              </button>
+                              <div className="flex flex-col gap-1.5">
+                                <button onClick={() => handleIndividualSave(emp.id)} disabled={isSaving[emp.id]} className="px-3 py-1.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-600 text-xs font-black rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-50 w-full justify-center">
+                                  {isSaving[emp.id] ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} 저장
+                                </button>
+                                <button onClick={() => openMenuPermModal(emp)} className="px-3 py-1.5 bg-slate-100 hover:bg-violet-600 hover:text-white text-slate-600 text-xs font-black rounded-lg transition-colors inline-flex items-center gap-1.5 w-full justify-center">
+                                  <ShieldCheck size={14}/> 메뉴 권한
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -393,6 +455,67 @@ export default function HRManagementPage() {
           </div>
         </div>
       </main>
+
+      {/* 메뉴 권한 설정 모달 */}
+      {menuPermModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm" onClick={closeMenuPermModal}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-violet-50">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-violet-600 rounded-xl flex items-center justify-center">
+                  <ShieldCheck size={18} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-violet-500">메뉴 권한 설정</p>
+                  <p className="text-base font-black text-slate-800">{menuPermModal.empName}</p>
+                </div>
+              </div>
+              <button onClick={closeMenuPermModal} className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-6 py-4">
+              <p className="text-[11px] font-bold text-slate-500 bg-slate-50 px-3 py-2 rounded-xl mb-4">
+                체크된 메뉴만 이 직원에게 표시됩니다. 모두 해제 후 저장하면 부서 기반 기본 규칙으로 돌아갑니다.
+              </p>
+
+              <div className="space-y-2">
+                {MENU_DEFS.map(({ key, label, desc }) => (
+                  <button
+                    key={key}
+                    onClick={() => toggleMenuPerm(key)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left
+                      ${empMenuPerms.has(key)
+                        ? 'border-violet-300 bg-violet-50'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                  >
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors
+                      ${empMenuPerms.has(key) ? 'bg-violet-600 border-violet-600' : 'border-slate-300'}`}>
+                      {empMenuPerms.has(key) && <Check size={12} className="text-white" strokeWidth={3} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-black ${empMenuPerms.has(key) ? 'text-violet-700' : 'text-slate-700'}`}>{label}</p>
+                      <p className="text-[10px] font-bold text-slate-400 truncate">{desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2 px-6 pb-6">
+              <button onClick={closeMenuPermModal} className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-black rounded-xl transition-colors">
+                취소
+              </button>
+              <button onClick={saveMenuPerms} disabled={isSavingPerms} className="flex-1 px-4 py-3 bg-violet-600 hover:bg-violet-700 text-white text-sm font-black rounded-xl transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-60">
+                {isSavingPerms ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

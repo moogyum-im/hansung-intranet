@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useSearchParams } from 'next/navigation';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import { 
   Loader2, User, FileText, History, Mail, Phone, MapPin, 
   Briefcase, Award, X, Download, Plus, Upload, Save, Edit2, Trash2
@@ -246,7 +246,7 @@ function HRProfileContent() {
 
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-50 overflow-y-auto font-sans text-slate-900 antialiased flex flex-col">
-      <Toaster position="top-right" />
+      
       
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm shrink-0">
         <div className="h-16 px-8 flex items-center justify-between">

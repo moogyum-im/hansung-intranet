@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { Plus, Gavel, Trash2, ChevronRight, CalendarDays, X } from 'lucide-react';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 
 const ALLOWED = ['임아름', '임무겸'];
 
@@ -87,7 +87,6 @@ export default function BidRecordsPage() {
 
     return (
         <div className="p-6 max-w-4xl mx-auto">
-            <Toaster />
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <div className="flex items-center gap-3 mb-1">

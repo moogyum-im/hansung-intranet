@@ -7,3 +7,5 @@ ALTER TABLE profiles
 
 COMMENT ON COLUMN profiles.hiworks_email IS '하이웍스 로그인 이메일 (예: user@han-sung.com)';
 COMMENT ON COLUMN profiles.hiworks_password_enc IS '하이웍스 비밀번호 AES-256 암호화 저장값';
+
+

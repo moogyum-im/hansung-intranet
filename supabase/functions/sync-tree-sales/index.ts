@@ -27,11 +27,17 @@ Deno.serve(async (_req) => {
     
     const csvContent = await response.text();
     log("CSV content fetched successfully.");
-    
-    // Deno 표준 CSV 파서 사용
-    const records = parse(csvContent, {
+
+    // 천 단위 쉼표 제거: "35,000" → "35000"
+    // 구글 시트가 숫자를 텍스트로 저장 시 CSV에 쉼표가 그대로 포함되어
+    // 파서가 컬럼을 잘못 분리하는 문제 방지. 두 번 실행해 100만 이상 처리.
+    let cleanedCsv = csvContent.replace(/(\d),(\d{3})(?=[,\r\n]|$)/gm, '$1$2');
+    cleanedCsv = cleanedCsv.replace(/(\d),(\d{3})(?=[,\r\n]|$)/gm, '$1$2');
+    log("CSV cleaned (thousands separators removed).");
+
+    // Deno 표준 CSV 파서 사용 (헤더를 컬럼명으로 자동 사용 — 구글 폼 응답 시트 대응)
+    const records = parse(cleanedCsv, {
       skipFirstRow: true,
-      columns: ['지역', '수목명', '규격', '가격', '수량', '업체명', '연락처', '비고'],
     });
     log(`Parsed ${records.length} records from CSV.`);
     
@@ -47,8 +53,8 @@ Deno.serve(async (_req) => {
       region: record['지역'],
       tree_name: record['수목명'],
       size: record['규격'],
-      price: parseInt(record['가격'], 10) || null,
-      quantity: parseInt(record['수량'], 10) || null,
+      price: parseInt(String(record['가격']).replace(/,/g, ''), 10) || null,
+      quantity: parseInt(String(record['수량']).replace(/,/g, ''), 10) || null,
       company_name: record['업체명'],
       contact_info: record['연락처'],
       remarks: record['비고'],
@@ -58,10 +64,13 @@ Deno.serve(async (_req) => {
 
     log("Data successfully mapped. Preparing to upsert.");
 
-    // 기존 데이터를 모두 지우고 새로 삽입
-    const { error: deleteError } = await supabaseAdmin.from('tree_sales_info').delete().neq('id', 0);
+    // 구글 시트에서 온 데이터만 삭제 (공급업체 직접 입력 데이터는 보존)
+    const { error: deleteError } = await supabaseAdmin
+      .from('tree_sales_info')
+      .delete()
+      .is('supplier_token_code', null);
     if (deleteError) throw deleteError;
-    log("Old data deleted.");
+    log("Old sheet data deleted (supplier entries preserved).");
 
     const { error: insertError } = await supabaseAdmin.from('tree_sales_info').insert(treeData);
     if (insertError) throw insertError;

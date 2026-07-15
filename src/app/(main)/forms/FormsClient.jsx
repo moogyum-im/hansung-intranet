@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { ACCESS_LEVEL_LABELS } from '@/lib/formAccessLevel';
 import { supabase } from '@/lib/supabase/client';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 const DEPT_LIST = ['전략기획부', '공무부', '공사부', '관리부', '굴취팀'];
 
@@ -965,7 +965,6 @@ export default function FormsClient() {
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
-      <Toaster position="bottom-right" />
 
       {/* ── 좌측 사이드바 ── */}
       <aside className="w-56 shrink-0 flex flex-col py-4 border-r border-slate-100 bg-white">
@@ -1104,12 +1103,12 @@ export default function FormsClient() {
             <div className="flex items-center gap-2.5 text-[11px] text-slate-500 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">1</span>
-                <span className="font-medium text-slate-600">서식 내려받기</span>
+                <span className="font-medium text-slate-600">서식 다운로드</span>
               </div>
               <span className="text-slate-300">→</span>
               <div className="flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">2</span>
-                <span className="font-medium text-slate-600">작성 후 PDF 출력</span>
+                <span className="font-medium text-slate-600">서식 작성 후 PDF 저장</span>
               </div>
               <span className="text-slate-300">→</span>
               <a href="/approvals/pdf-upload"

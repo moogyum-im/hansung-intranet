@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Save, FileEdit } from 'lucide-react';
 
@@ -137,7 +137,6 @@ function EditPayrollContent() {
 
     return (
         <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-100 font-sans text-black antialiased">
-            <Toaster position="top-center" />
             
             <div className="p-4 border-b flex justify-between items-center bg-white shrink-0 shadow-sm">
                 <div>

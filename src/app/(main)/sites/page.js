@@ -254,7 +254,7 @@ export default function SitesPage() {
             {searchTerm && filtered.ongoing.length === 0 && filtered.pending.length === 0 && filtered.completed.length === 0 && (
               <div className="flex flex-col items-center justify-center py-24 text-slate-400">
                 <Search size={32} className="mb-3 opacity-30" />
-                <p className="text-sm font-semibold">"{searchTerm}"에 해당하는 현장이 없습니다</p>
+                <p className="text-sm font-semibold">&quot;{searchTerm}&quot;에 해당하는 현장이 없습니다</p>
               </div>
             )}
             <StatusSection title="진행 중 프로젝트" sites={filtered.ongoing}   statusType="ongoing" />

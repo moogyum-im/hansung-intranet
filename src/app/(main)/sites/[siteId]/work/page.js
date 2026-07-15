@@ -354,6 +354,145 @@ const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
     );
 };
 
+// 금일 반입량 기반 권장 인원 배너 + 과투입 경고 (표준 품셈 기준)
+const LaborRecommendationBanner = ({ manualLedger, laborCosts }) => {
+    const [recs, setRecs] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [collapsed, setCollapsed] = useState(false);
+
+    const incomingItems = (manualLedger || []).filter(r => {
+        if (r.isPastRecord) return false;
+        const inc = Number(String(r.incoming || '0').replace(/,/g, ''));
+        return inc > 0 && r.item;
+    }).map(r => ({ item: r.item, spec: r.spec || '', incoming: r.incoming }));
+
+    const key = JSON.stringify(incomingItems);
+
+    useEffect(() => {
+        if (!incomingItems.length) { setRecs(null); return; }
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            setLoading(true);
+            try {
+                const res = await fetch('/api/sites/labor-benchmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: incomingItems }),
+                });
+                const data = await res.json();
+                if (!cancelled) setRecs(data);
+            } catch { /* silent */ } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }, 600);
+        return () => { cancelled = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [key]);
+
+    if (!incomingItems.length && !recs) return null;
+
+    const totalIncoming = incomingItems.reduce((s, i) => s + (Number(String(i.incoming || '0').replace(/,/g, '')) || 0), 0);
+
+    // 실제 투입 인원 합계 (labor_costs)
+    const actualWorkers = (laborCosts || []).reduce((s, r) => s + (Number(r.count) || 0), 0);
+    // 권장 인원 합계 (기능공 + 보통인부)
+    const recommendedWorkers = recs ? (recs.totalSkilled + recs.totalUnskilled) : 0;
+    const isOverstaffed = recs && recommendedWorkers > 0 && actualWorkers > recommendedWorkers;
+    const overCount = isOverstaffed ? actualWorkers - recommendedWorkers : 0;
+
+    return (
+        <div className="w-full font-sans text-slate-800 print:hidden mb-4">
+            {/* 과투입 경고 배너 */}
+            {isOverstaffed && (
+                <div className="w-full bg-red-50 border-2 border-red-500 px-4 py-2.5 mb-1 flex items-center gap-3">
+                    <span className="text-red-600 text-base font-black">⚠️</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-black text-red-700 uppercase tracking-wider">과투입 경고</span>
+                        <span className="text-[11px] text-red-600">
+                            실제 투입 <strong>{actualWorkers}명</strong> · 권장 <strong>{recommendedWorkers}명</strong>
+                            {' '}&mdash; <strong className="text-red-800">{overCount}명 초과</strong>
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            {/* 권장 인원 배너 */}
+            <div className="w-full bg-blue-50 border border-blue-200">
+                <button
+                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-blue-100 transition-colors text-left"
+                    onClick={() => setCollapsed(v => !v)}
+                >
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black text-blue-700 uppercase tracking-wider">📊 권장 인원 (표준 품셈 기준)</span>
+                        <span className="text-[10px] text-blue-500">금일 반입 {totalIncoming.toLocaleString()}주</span>
+                        {loading && <span className="text-[10px] text-blue-400 animate-pulse">계산 중...</span>}
+                        {recs && !loading && (
+                            <span className="text-[10px] bg-blue-200 text-blue-800 px-2 py-0.5 rounded-sm font-black">
+                                기능공 {recs.totalSkilled}명 · 보통인부 {recs.totalUnskilled}명
+                                {recs.totalExcavator > 0 && ` · 굴삭기 ${recs.totalExcavator}대`}
+                                {recs.totalCrane > 0 && ` · 크레인 ${recs.totalCrane}대`}
+                            </span>
+                        )}
+                        {recs && !loading && actualWorkers > 0 && (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-sm font-black ${isOverstaffed ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                현재 투입 {actualWorkers}명
+                            </span>
+                        )}
+                    </div>
+                    <span className="text-blue-400 text-xs">{collapsed ? '▼' : '▲'}</span>
+                </button>
+
+                {!collapsed && recs && (
+                    <div className="border-t border-blue-200 px-4 py-3">
+                        <table className="w-full text-[10px]">
+                            <thead>
+                                <tr className="text-blue-500 border-b border-blue-100">
+                                    <th className="text-left py-1 font-semibold">품명</th>
+                                    <th className="text-left py-1 font-semibold">규격</th>
+                                    <th className="text-right py-1 font-semibold">반입</th>
+                                    <th className="text-right py-1 font-semibold">기준일생산</th>
+                                    <th className="text-right py-1 font-semibold">기능공</th>
+                                    <th className="text-right py-1 font-semibold">보통인부</th>
+                                    <th className="text-right py-1 font-semibold">굴삭기</th>
+                                    <th className="text-right py-1 font-semibold">크레인</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-blue-50">
+                                {recs.recommendations.map((r, i) => (
+                                    <tr key={i} className={r.matched ? '' : 'text-slate-400'}>
+                                        <td className="py-1 font-semibold">{r.item}</td>
+                                        <td className="py-1 text-slate-500">{r.spec || '-'}</td>
+                                        <td className="py-1 text-right">{(Number(String(r.incoming||'0').replace(/,/g,''))||0).toLocaleString()}주</td>
+                                        <td className="py-1 text-right">{r.matched ? `${r.treesPerDay}주/일` : '미매핑'}</td>
+                                        <td className="py-1 text-right font-black text-blue-800">{r.matched ? r.skilled : '-'}</td>
+                                        <td className="py-1 text-right font-black text-slate-700">{r.matched ? r.unskilled : '-'}</td>
+                                        <td className="py-1 text-right text-slate-500">{r.matched && r.excavator ? r.excavator : '-'}</td>
+                                        <td className="py-1 text-right text-slate-500">{r.matched && r.crane ? r.crane : '-'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            {recs.recommendations.some(r => r.matched) && (
+                                <tfoot>
+                                    <tr className="border-t border-blue-200 font-black text-blue-800">
+                                        <td colSpan={4} className="pt-1.5 text-[10px]">합계</td>
+                                        <td className="pt-1.5 text-right">{recs.totalSkilled}</td>
+                                        <td className="pt-1.5 text-right">{recs.totalUnskilled}</td>
+                                        <td className="pt-1.5 text-right">{recs.totalExcavator || '-'}</td>
+                                        <td className="pt-1.5 text-right">{recs.totalCrane || '-'}</td>
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
+                        {recs.recommendations.some(r => !r.matched) && (
+                            <p className="text-[10px] text-slate-400 mt-2">* 미매핑 품목은 표준 품셈에 해당 규격이 없습니다 (잔디·지피류 등)</p>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 export default function DailyWorkPage() {
     const { siteId } = useParams();
     const router = useRouter();
@@ -1185,6 +1324,8 @@ await supabase.from('construction_sites').update({
             <div className="flex-1 overflow-auto bg-[#F8FAFC] p-4">
                 <div style={{ zoom: zoomLevel }} className="pb-40 flex flex-col items-center mx-auto w-full max-w-[1600px]">
                     
+                    <LaborRecommendationBanner manualLedger={formData?.manual_ledger} laborCosts={formData?.labor_costs} />
+
                     {!isReadOnly && (
                         <div className="w-full bg-red-50/50 border-2 border-red-500 p-4 mb-4 shadow-md font-sans flex flex-col justify-center text-slate-900">
                             <div className="flex items-center gap-2 mb-3">

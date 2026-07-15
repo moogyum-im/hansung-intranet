@@ -16,6 +16,9 @@ CREATE INDEX IF NOT EXISTS idx_form_activity_form_id
 CREATE INDEX IF NOT EXISTS idx_form_activity_user_id
   ON form_activity_log(user_id, created_at DESC);
 
+
+
+
 ALTER TABLE form_activity_log ENABLE ROW LEVEL SECURITY;
 
 -- 인증된 사용자는 읽기 가능

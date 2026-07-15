@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import Image from 'next/image';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import { openMainChatPopup } from '@/lib/chatPopup'; // ✅ 추가
 import {
   LayoutDashboard,
@@ -216,7 +216,6 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
 
     return (
         <>
-            <Toaster />
             {/* 모바일 오버레이 */}
             <div
                 className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden ${isOpen ? 'block' : 'hidden'}`}

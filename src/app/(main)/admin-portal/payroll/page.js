@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -157,7 +157,6 @@ export default function PayrollManagementPage() {
 
     return (
         <div className="flex flex-col h-screen bg-white font-sans text-slate-800 antialiased relative">
-            <Toaster position="top-right" />
 
             {isImportModalOpen && (
                 <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 font-sans">

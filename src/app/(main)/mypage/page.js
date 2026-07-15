@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import MyAttendanceWidget from '@/components/MyAttendanceWidget';
 import LeaveCalendar from './LeaveCalendar.jsx';
 import ClientSideOnlyWrapper from '@/components/ClientSideOnlyWrapper';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import { Calendar, Clock, ShieldCheck, Coffee, Lock, Receipt, Loader2, FileText, UserCircle, CreditCard, CheckCircle2, Check, Send, Mail, Eye, EyeOff, Unlink, ExternalLink } from 'lucide-react';
 
 const getGreeting = () => `오늘도 활기찬 하루 보내세요.`;
@@ -174,7 +174,6 @@ export default function MyPage() {
 
     return (
         <div className="bg-[#f8fafc] min-h-screen pb-12 font-sans antialiased overflow-y-auto custom-scrollbar">
-            <Toaster position="top-right" />
             
             {/* 🚀 콤팩트한 화이트/그레이톤 헤더 */}
             <header className="bg-white border-b border-slate-200 px-6 sm:px-12 py-8 shrink-0">

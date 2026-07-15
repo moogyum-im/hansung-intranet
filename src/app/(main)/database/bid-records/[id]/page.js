@@ -9,7 +9,7 @@ import {
     Edit3, Check, X, Settings, ChevronDown, ChevronUp, AlertCircle,
     Sparkles, RefreshCw, Search
 } from 'lucide-react';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 
 const ALLOWED = ['임아름', '임무겸'];
 
@@ -265,7 +265,6 @@ export default function BidRecordDetailPage() {
 
     return (
         <div className="p-4 md:p-6 max-w-7xl mx-auto">
-            <Toaster />
 
             {/* 헤더 */}
             <div className="flex items-start gap-4 mb-6">
