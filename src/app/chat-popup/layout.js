@@ -74,6 +74,9 @@ function ChatLayoutInner({ children }) {
     const filtered = rooms.filter(r => r.name?.toLowerCase().includes(search.toLowerCase()));
     const totalUnread = rooms.reduce((s, r) => s + (r.unread_count || 0), 0);
 
+    const avatarColors = ['#64748B','#475569','#6366F1','#0EA5E9','#10B981','#F59E0B','#EF4444','#8B5CF6'];
+    const getAvatarColor = (name = '') => avatarColors[name.charCodeAt(0) % avatarColors.length];
+
     return (
         <div className="flex h-screen overflow-hidden bg-white">
             <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
@@ -137,7 +140,8 @@ function ChatLayoutInner({ children }) {
                                     ${isSelected ? 'bg-[#F2F3F5]' : 'hover:bg-[#F9F9F9]'}`}>
                                 {/* 프로필 원 */}
                                 <div className="relative shrink-0">
-                                    <div className="w-12 h-12 rounded-full bg-[#1e293b] flex items-center justify-center text-white text-[13px] font-black">
+                                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-[13px] font-black"
+                                        style={{ backgroundColor: getAvatarColor(room.name) }}>
                                         {initials}
                                     </div>
                                     {room.unread_count > 0 && (

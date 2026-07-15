@@ -28,6 +28,55 @@ export async function createGroupChat(roomName, participantIds) {
         return { error: '채팅방 생성에 실패했습니다.' };
     }
 }
+export async function pinMessage(roomId, messageData) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: '로그인이 필요합니다.' };
+    const { error } = await supabase.from('chat_rooms').update({ pinned_message: messageData }).eq('id', roomId);
+    if (error) { console.error('pinMessage error:', error); return { error: `고정에 실패했습니다. (${error.message})` }; }
+    revalidatePath(`/chatrooms/${roomId}`);
+    return { success: true };
+}
+
+export async function unpinMessage(roomId) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: '로그인이 필요합니다.' };
+    const { error } = await supabase.from('chat_rooms').update({ pinned_message: null }).eq('id', roomId);
+    if (error) { console.error('unpinMessage error:', error); return { error: `고정 해제에 실패했습니다. (${error.message})` }; }
+    revalidatePath(`/chatrooms/${roomId}`);
+    return { success: true };
+}
+
+export async function addParticipants(roomId, newParticipantIds) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: '로그인이 필요합니다.' };
+    try {
+        const { data: room, error: roomError } = await supabase.from('chat_rooms').select('created_by').eq('id', roomId).single();
+        if (roomError || !room) throw new Error('채팅방 정보를 찾을 수 없습니다.');
+        if (room.created_by !== user.id) return { error: '방장만 참여자를 추가할 수 있습니다.' };
+
+        const { data: existing } = await supabase
+            .from('chat_room_participants')
+            .select('user_id')
+            .eq('room_id', roomId);
+        const existingIds = new Set((existing || []).map(p => p.user_id));
+        const toAdd = newParticipantIds.filter(id => !existingIds.has(id));
+        if (toAdd.length === 0) return { error: '이미 모두 참여 중입니다.' };
+
+        const { error: insertError } = await supabase.from('chat_room_participants')
+            .insert(toAdd.map(id => ({ room_id: roomId, user_id: id })));
+        if (insertError) throw insertError;
+
+        revalidatePath(`/chatrooms/${roomId}`);
+        return { success: true, added: toAdd.length };
+    } catch (error) {
+        console.error("참여자 추가 실패:", error);
+        return { error: '참여자 추가에 실패했습니다.' };
+    }
+}
+
 export async function removeParticipant(roomId, participantIdToRemove) {
     const supabase = createServerActionClient({ cookies });
     const { data: { user } } = await supabase.auth.getUser();

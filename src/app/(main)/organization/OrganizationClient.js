@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { toast } from 'react-hot-toast';
 import { findOrCreateDirectChat } from '@/actions/chatActions';
+import { openChatPopup } from '@/lib/chatPopup';
 import { 
   MessageSquare, 
   Users, 
@@ -116,7 +116,6 @@ function DepartmentAccordion({ department, employees, onEmployeeClick }) {
 
 export default function OrganizationClient({ initialEmployees }) {
     const { employee: currentUser } = useEmployee();
-    const router = useRouter();
 
     // ★★★ 직급 정렬 우선순위 정의 ★★★
     const positionOrder = {
@@ -190,8 +189,8 @@ export default function OrganizationClient({ initialEmployees }) {
         if (result.error) {
             toast.error(result.error, { id: toastId });
         } else if (result.roomId) {
-            toast.success('채팅방으로 이동합니다.', { id: toastId });
-            router.push(`/chatrooms/${result.roomId}`);
+            toast.dismiss(toastId);
+            openChatPopup(result.roomId);
         }
     };
 

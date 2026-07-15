@@ -35,6 +35,8 @@ import {
     Mail,
     Send,
     RefreshCw,
+    FolderOpen,
+    BookOpen,
 } from 'lucide-react';
 
 // --- 스켈레톤 ---
@@ -471,19 +473,15 @@ function HiworksMailWidget({ userId }) {
 
 // --- 4. 나만의 바로가기 위젯 ---
 const BASE_SHORTCUTS = [
-    { id: 'notices',        name: '공지사항',  href: '/notices',      icon: Megaphone },
-    { id: 'approvals',      name: '전자 결재', href: '/approvals',    icon: FileCheck },
-    { id: 'organization',   name: '조직도',    href: '/organization', icon: Users2 },
-    { id: 'mypage',         name: '내 정보',   href: '/mypage',       icon: UserCircle },
+    { id: 'notices',      name: '공지사항',  href: '/notices',      icon: Megaphone },
+    { id: 'approvals',    name: '전자 결재', href: '/approvals',    icon: FileCheck },
+    { id: 'organization', name: '조직도',    href: '/organization', icon: Users2 },
+    { id: 'forms',        name: '서식함',    href: '/forms',        icon: FolderOpen },
+    { id: 'mypage',       name: '내 정보',   href: '/mypage',       icon: UserCircle },
 ];
 
-const SITE_SHORTCUTS = [
-    { id: 'sites', name: '현장 관리', href: '/sites', icon: Construction },
-];
-
-const ADMIN_SHORTCUTS = [
-    { id: 'admin', name: '경영 지원', href: '/admin-portal', icon: Building2 },
-];
+const SITE_SHORTCUT   = { id: 'sites',          name: '현장 관리',     href: '/sites',                          icon: Construction };
+const ADMIN_SHORTCUT  = { id: 'admin',           name: '경영 지원',     href: '/admin-portal',                   icon: Building2 };
 
 const DB_SHORTCUTS = [
     { id: 'tree-sales',     name: '조경수 DB',     href: '/database/tree-sales',           icon: TreePine },
@@ -493,40 +491,81 @@ const DB_SHORTCUTS = [
     { id: 'work-analysis',  name: '작업일보 분석', href: '/database/work-analysis',        icon: BarChart3 },
 ];
 
-const BID_SHORTCUTS = [
-    { id: 'bid-records', name: '입찰 기록', href: '/database/bid-records', icon: Gavel },
-];
-
-function getAvailableShortcuts(employee) {
-    if (!employee) return BASE_SHORTCUTS;
-    const allowedSiteDepts = ['공무부', '최고 경영진', '최고경영진', '공사부', '시스템관리부', '전략기획부'];
-    const canSite  = allowedSiteDepts.includes(employee.department);
-    const canAdmin = employee.department === '관리부' || employee.role === 'admin';
-    const canDb    = employee.department === '전략기획부' && employee.full_name === '임아름';
-    const canBid   = employee.full_name === '임아름' || employee.full_name === '임무겸';
-    return [
-        ...BASE_SHORTCUTS,
-        ...(canSite  ? SITE_SHORTCUTS  : []),
-        ...(canAdmin ? ADMIN_SHORTCUTS : []),
-        ...(canDb    ? DB_SHORTCUTS    : []),
-        ...(canBid   ? BID_SHORTCUTS   : []),
-    ];
-}
+const BID_SHORTCUT = { id: 'bid-records', name: '입찰 기록', href: '/database/bid-records', icon: Gavel };
 
 function QuickAccessWidget({ currentUser }) {
     const LS_KEY = `quick_shortcuts_${currentUser?.id}`;
-    const availableShortcuts = getAvailableShortcuts(currentUser);
+
+    const [menuPermissions, setMenuPermissions] = useState(undefined); // undefined=로딩중 null=설정없음 Set=허용목록
+    const [boardShortcuts, setBoardShortcuts] = useState([]);
+    const [availableShortcuts, setAvailableShortcuts] = useState(BASE_SHORTCUTS);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        // menu_permissions 가져오기
+        supabase
+            .from('menu_permissions')
+            .select('menu_key')
+            .eq('user_id', currentUser.id)
+            .then(({ data }) => {
+                setMenuPermissions(data && data.length > 0 ? new Set(data.map(d => d.menu_key)) : null);
+            });
+        // board_permissions 가져오기
+        supabase
+            .from('board_permissions')
+            .select('board:resource_boards!inner(name, url_slug)')
+            .eq('user_id', currentUser.id)
+            .then(({ data, error }) => {
+                if (!error && data) {
+                    setBoardShortcuts(data.map(item => ({
+                        id: `board-${item.board.url_slug}`,
+                        name: item.board.name,
+                        href: `/database/${item.board.url_slug}`,
+                        icon: BookOpen,
+                    })));
+                }
+            });
+    }, [currentUser]);
+
+    useEffect(() => {
+        if (!currentUser || menuPermissions === undefined) return;
+
+        const checkMenu = (key, legacyCheck) => {
+            if (menuPermissions === null) return legacyCheck;
+            return menuPermissions.has(key);
+        };
+
+        const allowedSiteDepts = ['공무부', '최고 경영진', '최고경영진', '공사부', '시스템관리부', '전략기획부'];
+        const canSite  = checkMenu('sites', allowedSiteDepts.includes(currentUser.department));
+        const canAdmin = checkMenu('admin', currentUser.department === '관리부' || currentUser.role === 'admin');
+        const canDb    = checkMenu('db', currentUser.department === '전략기획부' && currentUser.full_name === '임아름');
+        const canBid   = checkMenu('bid_records', currentUser.full_name === '임아름' || currentUser.full_name === '임무겸');
+
+        setAvailableShortcuts([
+            ...BASE_SHORTCUTS,
+            ...(canSite  ? [SITE_SHORTCUT]  : []),
+            ...(canAdmin ? [ADMIN_SHORTCUT] : []),
+            ...(canDb    ? DB_SHORTCUTS     : []),
+            ...(canBid   ? [BID_SHORTCUT]   : []),
+            ...boardShortcuts,
+        ]);
+    }, [currentUser, menuPermissions, boardShortcuts]);
+
     const [selectedIds, setSelectedIds] = useState(() => {
-        if (typeof window === 'undefined') return ['notices', 'approvals', 'leave', 'mypage'];
+        if (typeof window === 'undefined') return ['notices', 'approvals', 'organization', 'mypage'];
         try {
             const saved = localStorage.getItem(`quick_shortcuts_${currentUser?.id}`);
-            return saved ? JSON.parse(saved) : ['notices', 'approvals', 'leave', 'mypage'];
-        } catch { return ['notices', 'approvals', 'leave', 'mypage']; }
+            return saved ? JSON.parse(saved) : ['notices', 'approvals', 'organization', 'mypage'];
+        } catch { return ['notices', 'approvals', 'organization', 'mypage']; }
     });
     const [settingOpen, setSettingOpen] = useState(false);
     const [draft, setDraft] = useState([]);
 
-    const openSetting = () => { setDraft([...selectedIds]); setSettingOpen(true); };
+    const openSetting = () => {
+        // 유효하지 않은 id는 제거하고 모달 열기
+        setDraft(selectedIds.filter(id => availableShortcuts.some(s => s.id === id)));
+        setSettingOpen(true);
+    };
     const toggleDraft = (id) => {
         setDraft(prev =>
             prev.includes(id) ? prev.filter(x => x !== id) : prev.length < 4 ? [...prev, id] : prev

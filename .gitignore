@@ -34,3 +34,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# PWA 서비스 워커 빌드 산출물 (자동 생성, 캐시 깨짐 원인)
+/public/workbox-*.js
+/public/worker-*.js
+/public/sw.js

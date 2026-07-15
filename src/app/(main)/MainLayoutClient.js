@@ -2,7 +2,9 @@
 'use client'; 
 
 import { useState, useEffect } from 'react';
-import Sidebar from '@/components/Sidebar';
+import dynamic from 'next/dynamic';
+
+const Sidebar = dynamic(() => import('@/components/Sidebar'), { ssr: false });
 import { EmployeeProvider } from '@/contexts/EmployeeContext';
 import GlobalChatListener from '@/components/GlobalChatListener';
 import { usePathname, useRouter } from 'next/navigation';
@@ -32,11 +34,17 @@ export default function MainLayoutClient({ children }) {
     }, [router]);
 
     useEffect(() => {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                window.location.reload();
+        if (!('serviceWorker' in navigator)) return;
+        if (process.env.NODE_ENV === 'development') {
+            // 개발 환경에서는 등록된 SW를 모두 해제해서 CSS 캐시 깨짐 방지
+            navigator.serviceWorker.getRegistrations().then(regs => {
+                regs.forEach(r => r.unregister());
             });
+            return;
         }
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
+        });
     }, []);
 
     return (

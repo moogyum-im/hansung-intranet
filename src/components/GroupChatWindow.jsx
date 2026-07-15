@@ -9,15 +9,126 @@ import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import ManageParticipantsModal from './ManageParticipantsModal';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { pinMessage, unpinMessage } from '@/actions/chatActions';
 import {
     Send, Paperclip, LogOut, Download, X, Edit3,
     Users, ShieldCheck, Lock, MessageCircle,
     Image as ImageIcon, FileText, ChevronLeft,
     Search, ChevronUp, ChevronDown, Link as LinkIcon,
-    MoreVertical
+    MoreVertical, Reply, Copy, CornerUpRight, Trash2, Pin, PinOff
 } from 'lucide-react';
 
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+// ── 메시지 액션 메뉴 (카카오톡 스타일) ─────────────────────────
+function MessageActionMenu({ msg, isMine, isCreator, isPinned, anchorRect, onClose, onReply, onCopy, onForward, onDelete, onPin }) {
+    const menuRef = useRef(null);
+
+    useEffect(() => {
+        const handle = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) onClose(); };
+        document.addEventListener('mousedown', handle);
+        return () => document.removeEventListener('mousedown', handle);
+    }, [onClose]);
+
+    // 버블 위 or 아래 배치
+    const spaceAbove = anchorRect ? anchorRect.top : 200;
+    const menuTop = spaceAbove > 120
+        ? anchorRect.top - 68
+        : anchorRect.bottom + 8;
+    const menuLeft = Math.max(8, Math.min(anchorRect ? anchorRect.left : 0, window.innerWidth - 260));
+
+    const actions = [
+        { icon: Reply,              label: '답장',        onClick: onReply,   danger: false },
+        { icon: Copy,               label: '복사',        onClick: onCopy,    danger: false, hide: msg.message_type !== 'text' },
+        { icon: CornerUpRight,      label: '전달',        onClick: onForward, danger: false },
+        { icon: isPinned ? PinOff : Pin, label: isPinned ? '고정해제' : '고정', onClick: onPin, danger: false, hide: !isCreator },
+        { icon: Trash2,             label: '삭제',        onClick: onDelete,  danger: true,  hide: !isMine },
+    ].filter(a => !a.hide);
+
+    return (
+        <div className="fixed inset-0 z-[200]" onClick={onClose}>
+            <div
+                ref={menuRef}
+                style={{ position: 'fixed', top: menuTop, left: menuLeft }}
+                className="bg-white rounded-2xl shadow-2xl border border-slate-100 flex overflow-hidden"
+                onClick={e => e.stopPropagation()}
+            >
+                {actions.map(a => (
+                    <button
+                        key={a.label}
+                        onClick={() => { a.onClick(); onClose(); }}
+                        className={`flex flex-col items-center gap-1.5 px-5 py-3 transition-colors hover:bg-slate-50
+                            ${a.danger ? 'text-rose-500 hover:bg-rose-50' : 'text-slate-600'}`}
+                    >
+                        <a.icon size={17} strokeWidth={2} />
+                        <span className="text-[10px] font-bold whitespace-nowrap">{a.label}</span>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// ── 전달하기 모달 ────────────────────────────────────────────────
+function ForwardModal({ msg, currentUserId, onClose }) {
+    const [rooms, setRooms] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [sending, setSending] = useState(null);
+
+    useEffect(() => {
+        supabase.rpc('get_chat_rooms_with_last_message').then(({ data }) => {
+            setRooms(data || []);
+            setLoading(false);
+        });
+    }, []);
+
+    const forward = async (roomId) => {
+        setSending(roomId);
+        const content = msg.message_type === 'text'
+            ? msg.content
+            : msg.message_type === 'image' ? msg.content : msg.content;
+        await supabase.from('chat_messages').insert({
+            room_id: roomId,
+            sender_id: currentUserId,
+            content,
+            message_type: msg.message_type,
+        });
+        toast.success('메시지를 전달했습니다.');
+        setSending(null);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-72 overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="text-[14px] font-black text-slate-800">전달할 채팅방 선택</h3>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                    {loading ? (
+                        <p className="text-center text-[12px] text-slate-400 py-6">불러오는 중...</p>
+                    ) : rooms.map(room => {
+                        const initials = room.name?.split(/[,\s]+/).map(n => n.charAt(0)).slice(0, 2).join('') || '?';
+                        return (
+                            <button
+                                key={room.id}
+                                onClick={() => forward(room.id)}
+                                disabled={!!sending}
+                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                            >
+                                <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-[11px] font-black text-slate-600 shrink-0">
+                                    {sending === room.id ? '...' : initials}
+                                </div>
+                                <p className="text-[13px] font-bold text-slate-700 truncate">{room.name}</p>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}
 const previewCache = new Map();
 
 // ── 링크 미리보기 ────────────────────────────────────────────
@@ -247,6 +358,9 @@ const TypingIndicator = ({ users }) => {
 };
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
+const AVATAR_COLORS = ['#64748B','#475569','#6366F1','#0EA5E9','#10B981','#F59E0B','#EF4444','#8B5CF6'];
+const getAvatarColor = (name = '') => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
+
 export default function GroupChatWindow({
     currentUser, chatRoom, initialMessages, initialParticipants,
     isPanel = false, isPopup = false
@@ -259,6 +373,10 @@ export default function GroupChatWindow({
     const [newMessage, setNewMessage]     = useState('');
     const [participants, setParticipants] = useState(initialParticipants || []);
     const [isManageModalOpen, setManageModalOpen]   = useState(false);
+    const [msgMenu, setMsgMenu]                     = useState(null); // { msg, isMine, rect }
+    const [forwardMsg, setForwardMsg]               = useState(null);
+    const [pinnedMessage, setPinnedMessage]         = useState(chatRoom?.pinned_message ?? null);
+    const isRoomCreator = String(chatRoom?.created_by) === String(currentUserId);
     const [isEditingRoomName, setIsEditingRoomName] = useState(false);
     const [editedRoomName, setEditedRoomName]       = useState(chatRoom?.name);
     const [isUploading, setIsUploading]   = useState(false);
@@ -281,6 +399,7 @@ export default function GroupChatWindow({
     const typingTimeoutRef   = useRef(null);
     const isWindowFocused    = useRef(true);
     const messageRefs        = useRef({});
+    const isInitialScroll    = useRef(true);
     const currentRoomId      = chatRoom?.id;
 
     const getSupabaseClient = useCallback(() => createClientComponentClient({
@@ -288,8 +407,12 @@ export default function GroupChatWindow({
         supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     }), []);
 
-    const scrollToBottom = useCallback(() => {
-        setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
+    const scrollToBottom = useCallback((instant = false) => {
+        if (instant) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        } else {
+            setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 50);
+        }
     }, []);
 
     const fetchUnreadCounts = useCallback(async () => {
@@ -313,7 +436,14 @@ export default function GroupChatWindow({
         if (isPopup && newMsgCount > 0) document.title = `(${newMsgCount}) ${chatRoom?.name}`;
     }, [isPopup, newMsgCount, chatRoom?.name]);
 
-    useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+    useEffect(() => {
+        if (isInitialScroll.current) {
+            scrollToBottom(true); // 첫 진입: 애니메이션 없이 즉시 이동
+            isInitialScroll.current = false;
+        } else {
+            scrollToBottom(false); // 새 메시지: smooth
+        }
+    }, [messages, scrollToBottom]);
 
     // 메시지 구독
     useEffect(() => {
@@ -478,6 +608,33 @@ export default function GroupChatWindow({
         }
     };
 
+    const handleDeleteMessage = async (msgId) => {
+        const { error } = await supabase.from('chat_messages').delete().eq('id', msgId);
+        if (!error) setMessages(prev => prev.filter(m => m.id !== msgId));
+        else toast.error('삭제에 실패했습니다.');
+    };
+
+    const handlePinMessage = async (msg) => {
+        const isAlreadyPinned = pinnedMessage?.id === msg.id;
+        if (isAlreadyPinned) {
+            const result = await unpinMessage(currentRoomId);
+            if (!result?.error) setPinnedMessage(null);
+            else toast.error(result.error);
+        } else {
+            let preview = msg.content;
+            if (msg.message_type === 'image') preview = '📷 사진';
+            if (msg.message_type === 'file') { try { preview = `📁 ${JSON.parse(msg.content).name}`; } catch { preview = '📁 파일'; } }
+            const data = { id: msg.id, content: preview, sender_name: msg.sender?.full_name || '', message_type: msg.message_type };
+            const result = await pinMessage(currentRoomId, data);
+            if (!result?.error) setPinnedMessage(data);
+            else toast.error(result.error);
+        }
+    };
+
+    const handleCopyMessage = (content) => {
+        navigator.clipboard.writeText(content).then(() => toast.success('복사했습니다.')).catch(() => toast.error('복사 실패'));
+    };
+
     const handleSaveRoomName = async () => {
         if (!editedRoomName.trim() || editedRoomName === chatRoom.name) { setIsEditingRoomName(false); return; }
         const { error } = await supabase.from('chat_rooms').update({ name: editedRoomName.trim() }).eq('id', currentRoomId);
@@ -551,7 +708,8 @@ export default function GroupChatWindow({
                         {!isMine && (
                             <div className="w-9 shrink-0 self-start mt-1">
                                 {isFirstInGroup ? (
-                                    <div className="w-9 h-9 rounded-full bg-[#1e293b] flex items-center justify-center text-white text-[12px] font-black">
+                                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[12px] font-black"
+                                        style={{ backgroundColor: getAvatarColor(msg.sender?.full_name || '') }}>
                                         {msg.sender?.full_name?.charAt(0)}
                                     </div>
                                 ) : (
@@ -571,10 +729,13 @@ export default function GroupChatWindow({
                             <div className={`flex items-end gap-1.5 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
                                 {/* 버블 */}
                                 <div
-                                    onClick={() => setReplyingTo(msg)}
-                                    className={`px-3.5 py-2.5 cursor-pointer transition-opacity hover:opacity-90
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMsgMenu({ msg, isMine, rect: e.currentTarget.getBoundingClientRect() });
+                                    }}
+                                    className={`px-3.5 py-2.5 cursor-pointer transition-opacity hover:opacity-80 select-none
                                         ${isMine
-                                            ? 'bg-[#1e293b] text-white rounded-2xl rounded-br-sm'
+                                            ? 'bg-[#E2E8F0] text-[#1A1A1A] rounded-2xl rounded-br-sm'
                                             : 'bg-white text-[#1A1A1A] rounded-2xl rounded-tl-sm shadow-sm'
                                         }`}>
                                     <MessageContent msg={msg} allMessages={messages} searchQuery={searchQuery} />
@@ -584,7 +745,7 @@ export default function GroupChatWindow({
                                 {showTime && (
                                     <div className={`flex flex-col gap-0.5 pb-0.5 shrink-0 ${isMine ? 'items-end' : 'items-start'}`}>
                                         {isMine && unread > 0 && (
-                                            <span className="text-[10px] font-black text-[#1e293b]">{unread}</span>
+                                            <span className="text-[10px] font-black text-[#64748B]">{unread}</span>
                                         )}
                                         <span className="text-[10px] text-[#888] whitespace-nowrap">
                                             {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true })}
@@ -687,12 +848,32 @@ export default function GroupChatWindow({
                     )}
                 </header>
 
+                {/* 고정 메시지 배너 */}
+                {pinnedMessage && (
+                    <div className="shrink-0 flex items-center gap-2.5 px-4 py-2 bg-slate-50 border-b border-slate-100">
+                        <Pin size={12} className="text-slate-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">고정된 메시지</p>
+                            <p className="text-[12px] font-semibold text-slate-700 truncate">{pinnedMessage.content}</p>
+                        </div>
+                        {isRoomCreator && (
+                            <button
+                                onClick={() => handlePinMessage({ id: pinnedMessage.id, sender: { full_name: pinnedMessage.sender_name }, content: pinnedMessage.content, message_type: pinnedMessage.message_type })}
+                                className="text-slate-300 hover:text-slate-500 shrink-0"
+                                title="고정 해제"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {/* 메시지 영역 */}
                 <div className="flex-1 relative overflow-hidden">
                     {showGallery && <GalleryPanel messages={messages} onClose={() => setShowGallery(false)} />}
 
                     {/* ✅ 카카오톡 배경 #F2F3F5 */}
-                    <div className="h-full overflow-y-auto py-3 bg-[#F2F3F5] relative"
+                    <div className="h-full overflow-y-auto py-3 bg-[#ECEEF1] relative"
                         onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
                         {isDragging && (
                             <div className="absolute inset-2 bg-blue-50/95 border-2 border-dashed border-blue-400 z-10 flex flex-col items-center justify-center rounded-2xl pointer-events-none">
@@ -736,7 +917,7 @@ export default function GroupChatWindow({
                             onClick={handleSendMessage}
                             disabled={!newMessage.trim() || isUploading}
                             className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0
-                                ${newMessage.trim() ? 'bg-[#1e293b] text-white' : 'bg-[#F2F3F5] text-[#CCC]'}`}>
+                                ${newMessage.trim() ? 'bg-[#475569] text-white' : 'bg-[#F2F3F5] text-[#CCC]'}`}>
                             <Send size={16} className={newMessage.trim() ? "translate-x-px -translate-y-px" : ""} />
                         </button>
                     </div>
@@ -746,6 +927,30 @@ export default function GroupChatWindow({
                     <ManageParticipantsModal isOpen={isManageModalOpen}
                         onClose={(c) => { setManageModalOpen(false); if (c) router.refresh(); }}
                         room={chatRoom} participants={participants} currentUser={currentUser} />
+                )}
+
+                {msgMenu && (
+                    <MessageActionMenu
+                        msg={msgMenu.msg}
+                        isMine={msgMenu.isMine}
+                        isCreator={isRoomCreator}
+                        isPinned={pinnedMessage?.id === msgMenu.msg.id}
+                        anchorRect={msgMenu.rect}
+                        onClose={() => setMsgMenu(null)}
+                        onReply={() => setReplyingTo(msgMenu.msg)}
+                        onCopy={() => handleCopyMessage(msgMenu.msg.content)}
+                        onForward={() => setForwardMsg(msgMenu.msg)}
+                        onDelete={() => handleDeleteMessage(msgMenu.msg.id)}
+                        onPin={() => handlePinMessage(msgMenu.msg)}
+                    />
+                )}
+
+                {forwardMsg && (
+                    <ForwardModal
+                        msg={forwardMsg}
+                        currentUserId={currentUserId}
+                        onClose={() => setForwardMsg(null)}
+                    />
                 )}
             </div>
         );
