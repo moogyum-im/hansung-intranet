@@ -199,9 +199,9 @@ function ChatLayoutInner({ children }) {
 
                 {/* 채팅 탭 */}
                 <button
-                    onClick={() => { setSideTab('chat'); setSearch(''); }}
+                    onClick={() => { setSideTab('chat'); setSearch(''); router.push('/chat-popup'); }}
                     className={`w-10 h-10 rounded-xl flex items-center justify-center relative transition-colors
-                        ${sideTab === 'chat' ? 'bg-white shadow-sm text-[#0A84FF]' : 'text-[#8E8E93] hover:bg-white/80'}`}
+                        ${sideTab === 'chat' && !selectedRoomId ? 'bg-white shadow-sm text-[#0A84FF]' : 'text-[#8E8E93] hover:bg-white/80'}`}
                     title="채팅"
                 >
                     <MessageSquare size={20} strokeWidth={2} />
@@ -214,9 +214,9 @@ function ChatLayoutInner({ children }) {
 
                 {/* 직원 탭 */}
                 <button
-                    onClick={() => { setSideTab('people'); setSearch(''); }}
+                    onClick={() => { setSideTab('people'); setSearch(''); router.push('/chat-popup'); }}
                     className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors
-                        ${sideTab === 'people' ? 'bg-white shadow-sm text-[#0A84FF]' : 'text-[#8E8E93] hover:bg-white/80'}`}
+                        ${sideTab === 'people' && !selectedRoomId ? 'bg-white shadow-sm text-[#0A84FF]' : 'text-[#8E8E93] hover:bg-white/80'}`}
                     title="직원 목록"
                 >
                     <Users size={20} strokeWidth={2} />
@@ -226,17 +226,18 @@ function ChatLayoutInner({ children }) {
 
                 {/* 설정 탭 */}
                 <button
-                    onClick={() => { setSideTab('settings'); setSearch(''); }}
+                    onClick={() => { setSideTab('settings'); setSearch(''); router.push('/chat-popup'); }}
                     className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors
-                        ${sideTab === 'settings' ? 'bg-white shadow-sm text-[#0A84FF]' : 'text-[#8E8E93] hover:bg-white/80'}`}
+                        ${sideTab === 'settings' && !selectedRoomId ? 'bg-white shadow-sm text-[#0A84FF]' : 'text-[#8E8E93] hover:bg-white/80'}`}
                     title="설정"
                 >
                     <Settings size={18} strokeWidth={2} />
                 </button>
             </div>
 
-            {/* ── 2. 목록 패널 (232px) ─────────────────────────────── */}
-            <aside className="w-[232px] shrink-0 flex flex-col bg-white border-r border-[#E5E5EA]">
+            {/* ── 2. 목록 패널 (채팅방 선택 시 숨김) ──────────────── */}
+            <aside className={`shrink-0 flex flex-col bg-white border-r border-[#E5E5EA] transition-all duration-200
+                ${selectedRoomId ? 'w-0 overflow-hidden' : 'w-[232px]'}`}>
 
                 {sideTab === 'settings' ? (
                     /* ── 설정 패널 ── */
