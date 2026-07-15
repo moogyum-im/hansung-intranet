@@ -31,14 +31,16 @@ export async function PATCH(request, { params }) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    adminSupabase.from('form_activity_log').insert({
-      form_id: params.id,
-      form_title: data.title,
-      user_id: user.id,
-      actor_name: profile?.full_name || '알 수 없음',
-      action: 'edit',
-      detail: { changes: Object.keys(body) },
-    }).catch(() => {});
+    try {
+      await adminSupabase.from('form_activity_log').insert({
+        form_id: params.id,
+        form_title: data.title,
+        user_id: user.id,
+        actor_name: profile?.full_name || '알 수 없음',
+        action: 'edit',
+        detail: { changes: Object.keys(body) },
+      });
+    } catch {}
 
     return NextResponse.json({ form: data });
   } catch (err) {
@@ -77,14 +79,16 @@ export async function DELETE(request, { params }) {
       await adminSupabase.storage.from('forms').remove(versions.map(v => v.file_path));
     }
 
-    await adminSupabase.from('form_activity_log').insert({
-      form_id: params.id,
-      form_title: form?.title || '',
-      user_id: user.id,
-      actor_name: profile?.full_name || '알 수 없음',
-      action: 'delete',
-      detail: {},
-    }).catch(() => {});
+    try {
+      await adminSupabase.from('form_activity_log').insert({
+        form_id: params.id,
+        form_title: form?.title || '',
+        user_id: user.id,
+        actor_name: profile?.full_name || '알 수 없음',
+        action: 'delete',
+        detail: {},
+      });
+    } catch {}
 
     const { error } = await adminSupabase.from('forms').delete().eq('id', params.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
