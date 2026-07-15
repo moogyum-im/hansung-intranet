@@ -19,6 +19,7 @@ const InternalApprovalView = dynamic(() => import('./InternalApprovalView'), { s
 const BusinessTripView = dynamic(() => import('./BusinessTripView'), { ssr: false });
 const ExpenseSettlementView = dynamic(() => import('./ExpenseSettlementView'), { ssr: false });
 const MeetingMinutesView = dynamic(() => import('./MeetingMinutesView'), { ssr: false });
+const PdfFormView = dynamic(() => import('./PdfFormView'), { ssr: false });
 
 const DOC_TYPE_TO_PATH = {
     resignation: '/approvals/resignation',
@@ -31,6 +32,7 @@ const DOC_TYPE_TO_PATH = {
     business_trip: '/approvals/business-trip',
     expense_settlement: '/approvals/expense-settlement',
     meeting_minutes: '/approvals/meeting-minutes',
+    pdf_form: '/approvals/pdf-upload',
 };
 
 export default function ApprovalDetailPage() {
@@ -146,6 +148,7 @@ export default function ApprovalDetailPage() {
             case 'business_trip': return <BusinessTripView {...commonProps} />;
             case 'expense_settlement': return <ExpenseSettlementView {...commonProps} />;
             case 'meeting_minutes': return <MeetingMinutesView {...commonProps} />;
+            case 'pdf_form': return <PdfFormView {...commonProps} />;
             default:
                 return (
                     <div className="flex flex-col items-center justify-center h-screen font-black">

@@ -938,10 +938,11 @@ export default function FormsClient() {
                 <span className="font-medium text-slate-600">작성 후 PDF 출력</span>
               </div>
               <span className="text-slate-300">→</span>
-              <div className="flex items-center gap-1.5">
+              <a href="/approvals/pdf-upload"
+                className="flex items-center gap-1.5 hover:underline text-blue-600 font-bold">
                 <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">3</span>
-                <span className="font-medium text-slate-600">전자결재에 첨부하여 결재 요청</span>
-              </div>
+                전자결재에 첨부하여 결재 요청 →
+              </a>
             </div>
           </div>
 
