@@ -24,6 +24,7 @@ export async function GET() {
       .select(`
         *,
         label:form_labels(id, name, color),
+        uploader:profiles!uploader_id(full_name, position, department),
         versions:form_versions(id, version_number, file_path, file_name, file_size, change_note, created_at),
         favorites:form_favorites(user_id)
       `)
@@ -132,7 +133,7 @@ export async function POST(request) {
       user_id: user.id,
       actor_name: profile?.full_name || '알 수 없음',
       action: 'create',
-      detail: { department: profile?.department || '알 수 없음' },
+      detail: { department: profile?.department || '알 수 없음', position: profile?.position || '' },
     });
   } catch {}
 

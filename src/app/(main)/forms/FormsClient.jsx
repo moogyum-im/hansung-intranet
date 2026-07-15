@@ -405,6 +405,24 @@ function FormDetailModal({ form, onClose, onFavorite }) {
             <div className="bg-slate-50 rounded-xl p-4 text-center text-sm text-slate-400">설명 없음</div>
           )}
 
+          {/* 등록자 정보 */}
+          {form.uploader && (
+            <div className="bg-slate-50 rounded-xl p-3">
+              <p className="text-[10px] text-slate-400 mb-1.5">등록자</p>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xs font-black shrink-0">
+                  {form.uploader.full_name?.charAt(0)}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-700">{form.uploader.full_name}</p>
+                  <p className="text-[11px] text-slate-400">
+                    {[form.uploader.position, form.uploader.department].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 메타 정보 */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-slate-50 rounded-xl p-3">
@@ -538,8 +556,10 @@ function ActivityModal({ form, onClose }) {
                             {log.detail?.change_note ? ` · ${log.detail.change_note}` : ''}
                           </span>
                         )}
-                        {log.action === 'create' && log.detail?.department && (
-                          <span className="text-slate-400"> · {log.detail.department}</span>
+                        {log.action === 'create' && (
+                          <span className="text-slate-400">
+                            {[log.detail?.position, log.detail?.department].filter(Boolean).join(' · ') && ` · ${[log.detail?.position, log.detail?.department].filter(Boolean).join(' · ')}`}
+                          </span>
                         )}
                       </p>
                       <p className="text-xs text-slate-400 mt-0.5">{timeAgo(log.created_at)}</p>
