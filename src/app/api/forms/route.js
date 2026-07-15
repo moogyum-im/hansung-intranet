@@ -66,11 +66,9 @@ export async function POST(request) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department')
+    .select('role, department, full_name')
     .eq('id', user.id)
     .single();
-
-  if (!isAdmin(profile)) return NextResponse.json({ error: '권한 없음' }, { status: 403 });
 
   const adminSupabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -126,6 +124,17 @@ export async function POST(request) {
     change_note: changeNote,
     uploader_id: user.id,
   });
+
+  try {
+    await adminSupabase.from('form_activity_log').insert({
+      form_id: newForm.id,
+      form_title: newForm.title,
+      user_id: user.id,
+      actor_name: profile?.full_name || '알 수 없음',
+      action: 'create',
+      detail: { department: profile?.department || '알 수 없음' },
+    });
+  } catch {}
 
   return NextResponse.json({ form: newForm }, { status: 201 });
   } catch (err) {

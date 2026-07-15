@@ -21,7 +21,7 @@ const ACCESS_LEVEL_COLORS = {
 };
 
 // ──────────────────────── 업로드 / 수정 모달 ────────────────────────
-function UploadModal({ labels, onClose, onSuccess, editForm = null }) {
+function UploadModal({ labels, onClose, onSuccess, editForm = null, isAdmin = false }) {
   const isEdit = !!editForm;
   const [title, setTitle] = useState(editForm?.title || '');
   const [description, setDescription] = useState(editForm?.description || '');
@@ -95,6 +95,13 @@ function UploadModal({ labels, onClose, onSuccess, editForm = null }) {
           <h2 className="text-base font-black text-slate-800">{isEdit ? '서식 수정' : '새 서식 등록'}</h2>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400"><X size={18} /></button>
         </div>
+        {!isEdit && (
+          <div className="mx-6 mt-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 leading-relaxed">
+            <span className="font-black">서식 공개 등급 안내</span><br />
+            서식을 등록하기 전 <span className="font-bold">소속 부서 장의 확인</span>을 받아 공개 등급을 설정해주세요.<br />
+            잘못된 등급으로 등록될 경우 정보가 외부에 노출될 수 있습니다.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {!isEdit && (
             <div>
@@ -531,8 +538,8 @@ function ActivityModal({ form, onClose }) {
                             {log.detail?.change_note ? ` · ${log.detail.change_note}` : ''}
                           </span>
                         )}
-                        {log.action === 'edit' && log.detail?.changes?.length > 0 && (
-                          <span className="text-slate-400"> ({log.detail.changes.join(', ')})</span>
+                        {log.action === 'create' && log.detail?.department && (
+                          <span className="text-slate-400"> · {log.detail.department}</span>
                         )}
                       </p>
                       <p className="text-xs text-slate-400 mt-0.5">{timeAgo(log.created_at)}</p>
@@ -774,14 +781,12 @@ export default function FormsClient() {
         </div>
 
         {/* 등록 버튼 */}
-        {isAdmin && (
-          <div className="px-3 mb-4">
-            <button onClick={() => { setEditTarget(null); setShowUpload(true); }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
-              <Plus size={16} /> 서식 등록
-            </button>
-          </div>
-        )}
+        <div className="px-3 mb-4">
+          <button onClick={() => { setEditTarget(null); setShowUpload(true); }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
+            <Plus size={16} /> 서식 등록
+          </button>
+        </div>
 
         {/* 내비게이션 */}
         <nav className="flex-1 overflow-y-auto px-2 space-y-0.5">
@@ -946,12 +951,10 @@ export default function FormsClient() {
                 <div className="flex flex-col items-center justify-center h-52 text-center">
                   <FolderOpen size={40} className="text-slate-200 mb-3" />
                   <p className="text-sm text-slate-400">서식이 없습니다</p>
-                  {isAdmin && (
-                    <button onClick={() => { setEditTarget(null); setShowUpload(true); }}
-                      className="mt-3 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors">
-                      <Plus size={14} /> 첫 서식 등록하기
-                    </button>
-                  )}
+                  <button onClick={() => { setEditTarget(null); setShowUpload(true); }}
+                    className="mt-3 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors">
+                    <Plus size={14} /> 첫 서식 등록하기
+                  </button>
                 </div>
               )}
         </div>
@@ -971,7 +974,7 @@ export default function FormsClient() {
         <ActivityModal form={activityTarget} onClose={() => setActivityTarget(null)} />
       )}
       {showUpload && (
-        <UploadModal labels={labels} editForm={editTarget}
+        <UploadModal labels={labels} editForm={editTarget} isAdmin={isAdmin}
           onClose={() => { setShowUpload(false); setEditTarget(null); }}
           onSuccess={handleModalSuccess} />
       )}
