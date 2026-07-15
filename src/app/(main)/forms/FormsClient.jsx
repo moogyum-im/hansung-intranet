@@ -381,6 +381,16 @@ function FormDetailModal({ form, onClose, onFavorite }) {
                     {form.label.name}
                   </span>
                 )}
+                {form.access_level && ACCESS_LEVEL_COLORS[form.access_level] && (
+                  <span className="px-2 py-0.5 text-[11px] font-bold rounded-full border"
+                    style={{
+                      backgroundColor: ACCESS_LEVEL_COLORS[form.access_level].bg,
+                      color: ACCESS_LEVEL_COLORS[form.access_level].text,
+                      borderColor: ACCESS_LEVEL_COLORS[form.access_level].text + '40',
+                    }}>
+                    {ACCESS_LEVEL_LABELS[form.access_level]}
+                  </span>
+                )}
                 {isExpired && (
                   <span className="px-2 py-0.5 bg-red-50 text-red-400 text-[11px] rounded-full border border-red-100">만료됨</span>
                 )}
@@ -598,6 +608,16 @@ function FormRow({ form, isAdmin, onFavorite, onEdit, onVersion, onDelete, onDet
             className="text-sm text-slate-800 truncate hover:text-blue-600 hover:underline text-left transition-colors">
             {form.title}
           </button>
+          {form.access_level && ACCESS_LEVEL_COLORS[form.access_level] && (
+            <span className="shrink-0 px-1.5 py-0.5 text-[10px] rounded font-bold border"
+              style={{
+                backgroundColor: ACCESS_LEVEL_COLORS[form.access_level].bg,
+                color: ACCESS_LEVEL_COLORS[form.access_level].text,
+                borderColor: ACCESS_LEVEL_COLORS[form.access_level].text + '40',
+              }}>
+              {ACCESS_LEVEL_LABELS[form.access_level]}
+            </span>
+          )}
           {isExpired && (
             <span className="shrink-0 px-1.5 py-0.5 bg-red-50 text-red-400 text-[10px] rounded font-medium">만료</span>
           )}
