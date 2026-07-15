@@ -204,7 +204,7 @@ export default function PdfFormView({ doc, employee, approvalHistory, referrerHi
                                         </a>
                                     </div>
                                     <iframe
-                                        src={attachmentSignedUrls[0].url}
+                                        src={`${attachmentSignedUrls[0].url}#navpanes=0&scrollbar=1&view=FitH`}
                                         className="w-full"
                                         style={{ height: '80vh' }}
                                         title="첨부 서류 PDF"

@@ -227,7 +227,7 @@ function PdfUploadPage() {
                                         </button>
                                     </div>
                                     <iframe
-                                        src={pdfPreviewUrl}
+                                        src={`${pdfPreviewUrl}#navpanes=0&scrollbar=1&view=FitH`}
                                         className="w-full"
                                         style={{ height: '72vh' }}
                                         title="PDF 미리보기"
