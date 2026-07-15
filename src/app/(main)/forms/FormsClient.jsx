@@ -1114,7 +1114,7 @@ export default function FormsClient() {
               <a href="/approvals/pdf-upload"
                 className="flex items-center gap-1.5 hover:underline text-blue-600 font-bold">
                 <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">3</span>
-                전자결재에 첨부하여 결재 요청 →
+                PDF 서식 결재로 결재 상신 →
               </a>
             </div>
           </div>
