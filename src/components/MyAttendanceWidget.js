@@ -6,12 +6,12 @@ import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 
 const STATUS_STYLES = {
-  '업무 중': { icon: '💼', color: 'bg-green-100 text-green-800' },
-  '회의 중': { icon: '💬', color: 'bg-blue-100 text-blue-800' },
-  '외근 중': { icon: '🚗', color: 'bg-yellow-100 text-yellow-800' },
-  '휴가': { icon: '🌴', color: 'bg-purple-100 text-purple-800' },
-  '식사 중': { icon: '🍽️', color: 'bg-orange-100 text-orange-800' },
-  '오프라인': { icon: '⚫', color: 'bg-gray-200 text-gray-700' },
+  '업무중':  { icon: '💼', color: 'bg-green-100 text-green-800'   },
+  '외근중':  { icon: '🚗', color: 'bg-blue-100 text-blue-800'     },
+  '회의중':  { icon: '💬', color: 'bg-amber-100 text-amber-800'   },
+  '휴가중':  { icon: '🌴', color: 'bg-orange-100 text-orange-800' },
+  '연차중':  { icon: '🏖️', color: 'bg-purple-100 text-purple-800' },
+  '오프라인': { icon: '⚫', color: 'bg-gray-200 text-gray-700'    },
 };
 
 const formatDuration = (milliseconds) => {
@@ -183,7 +183,7 @@ export default function MyAttendanceWidget({ currentUser }) {
             }
             toast.success('출근 처리 및 위치가 기록되었습니다.');
             setTodayRecord(newRecord);
-            await updateEmployeeStatus(currentUser.id, '업무 중');
+            await updateEmployeeStatus(currentUser.id, '업무중');
         }
     } catch (error) {
         console.error("출퇴근 처리 실패:", error);

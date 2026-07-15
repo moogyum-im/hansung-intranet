@@ -18,11 +18,13 @@ import {
 
 // --- 상태 표시 인디케이터 ---
 const StatusIndicator = ({ status }) => {
-    const styles = { 
-        '업무 중': 'bg-emerald-500 ring-emerald-100', 
-        '오프라인': 'bg-slate-300 ring-slate-100', 
-        '회의 중': 'bg-amber-500 ring-amber-100', 
-        '부재 중': 'bg-rose-500 ring-rose-100' 
+    const styles = {
+        '업무중':  'bg-emerald-500 ring-emerald-100',
+        '외근중':  'bg-blue-500 ring-blue-100',
+        '회의중':  'bg-amber-500 ring-amber-100',
+        '휴가중':  'bg-orange-500 ring-orange-100',
+        '연차중':  'bg-purple-500 ring-purple-100',
+        '오프라인': 'bg-slate-300 ring-slate-100',
     };
     const text = status || '오프라인';
     const statusStyle = styles[text] || 'bg-slate-300 ring-slate-100';
@@ -52,7 +54,7 @@ function DepartmentAccordion({ department, employees, onEmployeeClick }) {
                     </div>
                     <div>
                         <h2 className="font-black text-[15px] text-slate-800 tracking-tight">{department}</h2>
-                        <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{employees.length} Members</p>
+                        <p className="text-[11px] text-slate-400 font-bold tracking-wider">{employees.length}명</p>
                     </div>
                 </div>
                 <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
@@ -67,7 +69,7 @@ function DepartmentAccordion({ department, employees, onEmployeeClick }) {
                                 <th className="px-6 py-3 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">직책</th>
                                 <th className="px-6 py-3 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">연락처</th>
                                 <th className="px-6 py-3 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">현재 상태</th>
-                                <th className="px-6 py-3 text-right text-[11px] font-black text-slate-400 uppercase tracking-widest">액션</th>
+                                <th className="px-6 py-3 text-right text-[11px] font-black text-slate-400 uppercase tracking-widest"></th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-50">

@@ -38,7 +38,7 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
     const pathname = usePathname();
     const router = useRouter();
     
-    const { employee, loading, setEmployee, fetchEmployee } = useEmployee();
+    const { employee, loading, setEmployee, fetchEmployee, updateEmployeeStatus } = useEmployee();
     
     const [isWorkMenuOpen, setIsWorkMenuOpen] = useState(false);
     const [isDbMenuOpen, setIsDbMenuOpen] = useState(false);
@@ -50,7 +50,6 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
     const [pendingApprovals, setPendingApprovals] = useState(0);
     const [mailUnreadCount, setMailUnreadCount] = useState(0); // 하이웍스 API 연동 후 fetch 예정
     const [statusMenuOpen, setStatusMenuOpen] = useState(false);
-    const [currentStatus, setCurrentStatus] = useState('근무 중');
     // undefined = 아직 로딩 중 | null = 설정 없음(부서 기반 기본 규칙 적용) | Set = 허용된 메뉴 키 목록
     const [menuPermissions, setMenuPermissions] = useState(undefined);
 
@@ -100,9 +99,6 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
         if (!loading) fetchAccessibleBoards();
     }, [employee, loading]);
 
-    useEffect(() => {
-        if (employee?.status) setCurrentStatus(employee.status);
-    }, [employee]);
 
     const fetchTotalUnreadCount = useCallback(async () => {
         if (!employee) return;
@@ -144,30 +140,26 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
 
     const updateStatus = async (newStatus) => {
         if (!employee) return;
+        setStatusMenuOpen(false);
         try {
-            setCurrentStatus(newStatus);
-            setStatusMenuOpen(false);
-            const { error } = await supabase.from('profiles').update({ status: newStatus }).eq('id', employee.id);
-            if (error) throw error;
-            if (typeof setEmployee === 'function') setEmployee({ ...employee, status: newStatus });
+            await updateEmployeeStatus(employee.id, newStatus);
             toast.success(`상태가 '${newStatus}'(으)로 변경되었습니다.`, { position: 'bottom-left' });
-            setTimeout(() => window.location.reload(), 500);
         } catch (error) {
             console.error(error);
             toast.error('상태 변경에 실패했습니다.');
-            if (employee?.status) setCurrentStatus(employee.status);
         }
     };
 
     const statusOptions = [
-        { label: '근무 중',  color: 'text-emerald-500', bg: 'bg-emerald-500' },
-        { label: '자리 비움', color: 'text-amber-500',   bg: 'bg-amber-500'   },
-        { label: '회의 중',  color: 'text-rose-500',    bg: 'bg-rose-500'    },
-        { label: '외근/출장', color: 'text-blue-500',    bg: 'bg-blue-500'    },
-        { label: '퇴근',     color: 'text-slate-500',   bg: 'bg-slate-500'   },
+        { label: '업무중',  color: 'text-emerald-500', bg: 'bg-emerald-500' },
+        { label: '외근중',  color: 'text-blue-500',    bg: 'bg-blue-500'    },
+        { label: '회의중',  color: 'text-amber-500',   bg: 'bg-amber-500'   },
+        { label: '휴가중',  color: 'text-orange-500',  bg: 'bg-orange-500'  },
+        { label: '연차중',  color: 'text-purple-500',  bg: 'bg-purple-500'  },
+        { label: '오프라인', color: 'text-slate-400',   bg: 'bg-slate-400'   },
     ];
 
-    const currentStatusConfig = statusOptions.find(s => s.label === currentStatus) || statusOptions[0];
+    const currentStatusConfig = statusOptions.find(s => s.label === employee?.status) || statusOptions[statusOptions.length - 1];
 
     // ── 메뉴 권한 헬퍼 ──
     // menuPermissions=undefined: 로딩 중 → false 반환
@@ -414,7 +406,7 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
                                     key={status.label}
                                     onClick={() => updateStatus(status.label)}
                                     className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-colors
-                                        ${currentStatus === status.label ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'}`}
+                                        ${employee?.status === status.label ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'}`}
                                 >
                                     <span className={`w-2 h-2 rounded-full ${status.bg}`} />
                                     {status.label}
@@ -448,7 +440,7 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
                                 </div>
                                 <div className="flex items-center justify-between mt-0.5">
                                     <span className={`text-[10px] font-black ${currentStatusConfig.color}`}>
-                                        {currentStatus}
+                                        {employee?.status || '오프라인'}
                                     </span>
                                     <button onClick={handleLogout} className="text-[10px] font-medium text-slate-500 hover:text-red-400 flex items-center gap-1 transition-colors">
                                         <LogOut size={10} /> 로그아웃

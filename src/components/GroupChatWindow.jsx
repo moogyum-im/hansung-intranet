@@ -373,6 +373,7 @@ export default function GroupChatWindow({
     const [newMessage, setNewMessage]     = useState('');
     const [participants, setParticipants] = useState(initialParticipants || []);
     const [bubbleColor, setBubbleColor]   = useState('#0A84FF');
+    const [bgColor, setBgColor]           = useState('#FFFFFF');
     const [isManageModalOpen, setManageModalOpen]   = useState(false);
     const [msgMenu, setMsgMenu]                     = useState(null); // { msg, isMine, rect }
     const [forwardMsg, setForwardMsg]               = useState(null);
@@ -422,13 +423,20 @@ export default function GroupChatWindow({
         if (data) setUnreadCounts(data.reduce((acc, i) => { acc[i.message_id] = i.unread_count; return acc; }, {}));
     }, [currentRoomId, currentUserId]);
 
-    // 말풍선 색상 초기화 + 실시간 반영
+    // 말풍선·배경 색상 초기화 + 실시간 반영
     useEffect(() => {
-        const saved = localStorage.getItem('chatBubbleColor');
-        if (saved) setBubbleColor(saved);
+        const savedBubble = localStorage.getItem('chatBubbleColor');
+        if (savedBubble) setBubbleColor(savedBubble);
+        const savedBg = localStorage.getItem('chatBgColor');
+        if (savedBg) setBgColor(savedBg);
         const handleColorChange = (e) => setBubbleColor(e.detail);
+        const handleBgChange = (e) => setBgColor(e.detail);
         window.addEventListener('chatBubbleColorChanged', handleColorChange);
-        return () => window.removeEventListener('chatBubbleColorChanged', handleColorChange);
+        window.addEventListener('chatBgColorChanged', handleBgChange);
+        return () => {
+            window.removeEventListener('chatBubbleColorChanged', handleColorChange);
+            window.removeEventListener('chatBgColorChanged', handleBgChange);
+        };
     }, []);
 
     // 팝업 탭 제목
@@ -883,7 +891,8 @@ export default function GroupChatWindow({
                 <div className="flex-1 relative overflow-hidden">
                     {showGallery && <GalleryPanel messages={messages} onClose={() => setShowGallery(false)} />}
 
-                    <div className="h-full overflow-y-auto py-3 bg-white relative"
+                    <div className="h-full overflow-y-auto py-3 relative"
+                        style={{ backgroundColor: bgColor }}
                         onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
                         {isDragging && (
                             <div className="absolute inset-2 bg-blue-50/95 border-2 border-dashed border-blue-400 z-10 flex flex-col items-center justify-center rounded-2xl pointer-events-none">

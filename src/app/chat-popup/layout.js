@@ -18,6 +18,7 @@ const formatTime = (date) => {
     const d = new Date(date);
     if (isToday(d))     return format(d, 'a h:mm', { locale: ko });
     if (isYesterday(d)) return '어제';
+    if (d.getFullYear() !== new Date().getFullYear()) return format(d, 'yy.M.d');
     return format(d, 'M/d');
 };
 
@@ -30,20 +31,23 @@ const STATUS_MAP = {
     '오프라인':{ dot: '#9CA3AF', label: '오프라인' },
 };
 
-const BUBBLE_COLORS = [
-    { name: '블루',    value: '#0A84FF' },
-    { name: '인디고',  value: '#6366F1' },
-    { name: '그린',    value: '#22C55E' },
-    { name: '퍼플',    value: '#8B5CF6' },
-    { name: '다크',    value: '#334155' },
-    { name: '코랄',    value: '#F97316' },
+
+const CHAT_BG_COLORS = [
+    { name: '화이트',  value: '#FFFFFF' },
+    { name: '라이트블루', value: '#EFF6FF' },
+    { name: '민트',    value: '#F0FDF4' },
+    { name: '라벤더',  value: '#F5F3FF' },
+    { name: '피치',    value: '#FFF7ED' },
+    { name: '슬레이트', value: '#F1F5F9' },
+    { name: '아이보리', value: '#FFFBEB' },
+    { name: '로즈',    value: '#FFF1F2' },
 ];
 
 const AVATAR_COLORS = ['#64748B','#475569','#6366F1','#0A84FF','#10B981','#F59E0B','#EF4444','#8B5CF6'];
 const getAvatarColor = (name = '') => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 
 function ChatLayoutInner({ children }) {
-    const { employee } = useEmployee();
+    const { employee, updateEmployeeStatus } = useEmployee();
     const router   = useRouter();
     const pathname = usePathname();
 
@@ -55,22 +59,19 @@ function ChatLayoutInner({ children }) {
     const [isModalOpen, setModal]     = useState(false);
     const [search, setSearch]         = useState('');
     const [startingChat, setStartingChat] = useState(null);
-    const [currentStatus, setCurrentStatus] = useState('오프라인');
-    const [bubbleColor, setBubbleColor]     = useState('#0A84FF');
+    const [bubbleColor, setBubbleColor]   = useState('#0A84FF');
+    const [bgColor, setBgColor]           = useState('#FFFFFF');
     const bcRef = useRef(null);
 
     const selectedRoomId = pathname?.split('/chat-popup/')[1] ?? null;
 
-    // 버블 색상 초기화
+    // 버블·배경 색상 초기화
     useEffect(() => {
-        const saved = localStorage.getItem('chatBubbleColor');
-        if (saved) setBubbleColor(saved);
+        const savedBubble = localStorage.getItem('chatBubbleColor');
+        if (savedBubble) setBubbleColor(savedBubble);
+        const savedBg = localStorage.getItem('chatBgColor');
+        if (savedBg) setBgColor(savedBg);
     }, []);
-
-    // 직원 상태 초기화
-    useEffect(() => {
-        if (employee?.status) setCurrentStatus(employee.status);
-    }, [employee]);
 
     const fetchRooms = useCallback(async () => {
         if (!employee) return;
@@ -144,14 +145,23 @@ function ChatLayoutInner({ children }) {
 
     const handleStatusChange = async (newStatus) => {
         if (!employee) return;
-        setCurrentStatus(newStatus);
-        await supabase.from('profiles').update({ status: newStatus }).eq('id', employee.id);
+        try {
+            await updateEmployeeStatus(employee.id, newStatus);
+        } catch {
+            toast.error('상태 변경에 실패했습니다.');
+        }
     };
 
     const handleBubbleColorChange = (color) => {
         setBubbleColor(color);
         localStorage.setItem('chatBubbleColor', color);
         window.dispatchEvent(new CustomEvent('chatBubbleColorChanged', { detail: color }));
+    };
+
+    const handleBgColorChange = (color) => {
+        setBgColor(color);
+        localStorage.setItem('chatBgColor', color);
+        window.dispatchEvent(new CustomEvent('chatBgColorChanged', { detail: color }));
     };
 
     const totalUnread = rooms.reduce((s, r) => s + (r.unread_count || 0), 0);
@@ -183,7 +193,7 @@ function ChatLayoutInner({ children }) {
                     </div>
                     <span
                         className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[#F9F9F9]"
-                        style={{ backgroundColor: STATUS_MAP[currentStatus]?.dot || '#9CA3AF' }}
+                        style={{ backgroundColor: STATUS_MAP[employee?.status]?.dot || '#9CA3AF' }}
                     />
                 </div>
 
@@ -235,46 +245,42 @@ function ChatLayoutInner({ children }) {
                             <p className="text-[15px] font-black text-[#1C1C1E]">설정</p>
                         </div>
 
-                        {/* 업무 상태 */}
+                        {/* 말풍선 색상 */}
                         <div className="px-4 py-4 border-b border-[#E5E5EA] shrink-0">
-                            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest mb-2.5">업무 상태</p>
-                            <div className="space-y-0.5">
-                                {Object.entries(STATUS_MAP).map(([key, { dot, label }]) => (
-                                    <button
-                                        key={key}
-                                        onClick={() => handleStatusChange(key)}
-                                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-colors
-                                            ${currentStatus === key ? 'bg-[#EBF5FF]' : 'hover:bg-[#F9FAFB]'}`}
-                                    >
-                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: dot }} />
-                                        <span className={`text-[13px] font-semibold flex-1 text-left
-                                            ${currentStatus === key ? 'text-[#0A84FF]' : 'text-[#1C1C1E]'}`}>
-                                            {label}
-                                        </span>
-                                        {currentStatus === key && (
-                                            <span className="text-[#0A84FF] text-[13px] font-black">✓</span>
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
+                            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest mb-3">내 말풍선 색상</p>
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <div className="relative w-10 h-10 rounded-full shrink-0 ring-2 ring-[#E5E5EA] overflow-hidden"
+                                    style={{ backgroundColor: bubbleColor }}>
+                                    <input
+                                        type="color"
+                                        value={bubbleColor}
+                                        onChange={(e) => handleBubbleColorChange(e.target.value)}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    />
+                                </div>
+                                <div>
+                                    <p className="text-[13px] font-semibold text-[#1C1C1E]">{bubbleColor.toUpperCase()}</p>
+                                    <p className="text-[11px] text-[#8E8E93]">클릭해서 색상 선택</p>
+                                </div>
+                            </label>
                         </div>
 
-                        {/* 말풍선 색상 */}
+                        {/* 채팅 배경색 */}
                         <div className="px-4 py-4 shrink-0">
-                            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest mb-3">내 말풍선 색상</p>
-                            <div className="flex gap-2.5 flex-wrap">
-                                {BUBBLE_COLORS.map(({ value, name }) => (
+                            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest mb-3">채팅 배경색</p>
+                            <div className="grid grid-cols-4 gap-2">
+                                {CHAT_BG_COLORS.map(({ value, name }) => (
                                     <button
                                         key={value}
-                                        onClick={() => handleBubbleColorChange(value)}
+                                        onClick={() => handleBgColorChange(value)}
                                         title={name}
-                                        className={`w-9 h-9 rounded-full transition-all shrink-0
-                                            ${bubbleColor === value ? 'ring-[3px] ring-offset-2 ring-[#1C1C1E] scale-110' : 'hover:scale-110'}`}
+                                        className={`w-10 h-10 rounded-xl transition-all border
+                                            ${bgColor === value ? 'ring-[2px] ring-offset-1 ring-[#0A84FF] scale-105 border-[#0A84FF]' : 'border-[#E5E5EA] hover:scale-105'}`}
                                         style={{ backgroundColor: value }}
                                     />
                                 ))}
                             </div>
-                            <p className="text-[11px] text-[#8E8E93] mt-3">선택한 색상이 내 메시지 말풍선에 적용됩니다</p>
+                            <p className="text-[11px] text-[#8E8E93] mt-3">채팅방 배경색을 변경합니다</p>
                         </div>
                     </div>
                 ) : (
