@@ -779,52 +779,50 @@ function FormRow({ form, isAdmin, onFavorite, onForward, onEdit, onVersion, onDe
         ) : <span className="text-slate-300 text-xs">—</span>}
       </div>
 
-      <div style={{ width: 50, flexShrink: 0 }} className="text-center text-xs text-slate-500">
+      <div style={{ width: 34, flexShrink: 0 }} className="text-center text-xs text-slate-400">
         {form.latest_version ? `v${form.latest_version.version_number}` : 'v1'}
       </div>
 
-      <div style={{ width: 50, flexShrink: 0 }} className="text-center text-xs text-slate-400">
+      <div style={{ width: 30, flexShrink: 0 }} className="text-center text-xs text-slate-400">
         {form.download_count || 0}
       </div>
 
-      <div style={{ width: 72, flexShrink: 0 }} className="text-center text-xs text-slate-400">
+      <div style={{ width: 56, flexShrink: 0 }} className="text-center text-xs text-slate-400">
         {form.expires_at
           ? new Date(form.expires_at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
           : '—'}
       </div>
 
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ width: isAdmin ? 230 : 122, flexShrink: 0 }}>
+      <div className="flex items-center gap-1" style={{ width: isAdmin ? 252 : 140, flexShrink: 0 }}>
         <button onClick={() => onFavorite(form.id)}
-          className={`p-1.5 rounded-full transition-colors
-            ${form.is_favorite
-              ? 'text-amber-400 opacity-100'
-              : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'}`}>
+          className={`p-1.5 rounded-lg transition-colors shrink-0
+            ${form.is_favorite ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'}`}>
           <Star size={13} fill={form.is_favorite ? 'currentColor' : 'none'} />
         </button>
         <button onClick={() => onForward(form)}
-          className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-medium transition-colors">
-          <Send size={11} /> 전달
+          className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 hover:border-emerald-200 transition-colors shrink-0">
+          <Send size={10} /> 전달
         </button>
         <a href={`/api/forms/${form.id}/download`}
-          className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-medium transition-colors">
-          <Download size={11} /> 받기
+          className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg border border-blue-200 hover:border-blue-300 transition-colors shrink-0">
+          <Download size={10} /> 다운로드
         </a>
         {isAdmin && (
-          <div className="flex items-center gap-0">
+          <div className="flex items-center gap-0 ml-0.5">
             <button onClick={() => onActivity(form)} title="활동 이력"
-              className="p-1.5 rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors">
+              className="p-1.5 rounded-lg text-slate-300 hover:text-purple-500 hover:bg-purple-50 transition-colors">
               <ClipboardList size={13} />
             </button>
             <button onClick={() => onVersion(form)} title="버전 관리"
-              className="p-1.5 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+              className="p-1.5 rounded-lg text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors">
               <History size={13} />
             </button>
             <button onClick={() => onEdit(form)} title="수정"
-              className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+              className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors">
               <Edit2 size={13} />
             </button>
             <button onClick={() => onDelete(form.id)} title="삭제"
-              className="p-1.5 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
               <Trash2 size={13} />
             </button>
           </div>
@@ -1167,10 +1165,10 @@ export default function FormsClient() {
               <div style={{ width: 28, flexShrink: 0 }} />
               <div className="flex-1 text-[11px] font-medium text-slate-400">이름</div>
               <div style={{ width: 90, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400">분류</div>
-              <div style={{ width: 50, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">버전</div>
-              <div style={{ width: 50, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">다운</div>
-              <div style={{ width: 72, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">유효기한</div>
-              <div style={{ width: isAdmin ? 230 : 122, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400">액션</div>
+              <div style={{ width: 34, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">버전</div>
+              <div style={{ width: 30, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">다운</div>
+              <div style={{ width: 56, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">유효기한</div>
+              <div style={{ width: isAdmin ? 252 : 140, flexShrink: 0 }} />
             </div>
             <div className="mx-5 border-b border-slate-100 mb-1 shrink-0" />
 
