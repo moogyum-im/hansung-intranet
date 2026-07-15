@@ -5,9 +5,11 @@ import { useEmployee } from '@/contexts/EmployeeContext';
 import {
   FileText, Search, Upload, Star, Download, Pin, Clock,
   X, Plus, History, Trash2, Edit2, AlertTriangle,
-  FolderOpen, Tag, Loader2, ClipboardList, Building2, ChevronDown
+  FolderOpen, Tag, Loader2, ClipboardList, Building2, ChevronDown,
+  Send, BookMarked, Inbox,
 } from 'lucide-react';
 import { ACCESS_LEVEL_LABELS } from '@/lib/formAccessLevel';
+import { supabase } from '@/lib/supabase/client';
 import toast, { Toaster } from 'react-hot-toast';
 
 const DEPT_LIST = ['전략기획부', '공무부', '공사부', '관리부', '굴취팀'];
@@ -238,7 +240,6 @@ function VersionModal({ form, onClose, onSuccess }) {
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400"><X size={18} /></button>
         </div>
         <div className="p-6 space-y-5">
-          {/* 버전 이력 */}
           <div>
             <button onClick={() => setShowHistory(!showHistory)} className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-800 mb-3">
               <History size={13} /> 버전 이력 ({form.versions?.length || 0}개)
@@ -262,7 +263,6 @@ function VersionModal({ form, onClose, onSuccess }) {
               </div>
             )}
           </div>
-          {/* 새 버전 업로드 */}
           <form onSubmit={handleSubmit} className="space-y-3 pt-2 border-t border-slate-100">
             <p className="text-xs font-black text-slate-500">새 버전 업로드 (v{latestVer} → v{latestVer + 1})</p>
             <label className="flex flex-col items-center justify-center w-full h-20 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all">
@@ -358,14 +358,13 @@ function LabelManagerModal({ labels, onClose, onSuccess }) {
 }
 
 // ──────────────────────── 서식 상세 모달 ────────────────────────
-function FormDetailModal({ form, onClose, onFavorite }) {
+function FormDetailModal({ form, onClose, onFavorite, onForward }) {
   const now = new Date();
   const isExpired = form.expires_at && new Date(form.expires_at) < now;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-        {/* 헤더 */}
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -403,9 +402,7 @@ function FormDetailModal({ form, onClose, onFavorite }) {
           </div>
         </div>
 
-        {/* 본문 */}
         <div className="px-6 pb-6 space-y-4">
-          {/* 설명 */}
           {form.description ? (
             <div className="bg-slate-50 rounded-xl p-4">
               <p className="text-[11px] font-semibold text-slate-400 mb-2 uppercase tracking-wider">설명</p>
@@ -415,7 +412,6 @@ function FormDetailModal({ form, onClose, onFavorite }) {
             <div className="bg-slate-50 rounded-xl p-4 text-center text-sm text-slate-400">설명 없음</div>
           )}
 
-          {/* 등록자 정보 */}
           {form.uploader && (
             <div className="bg-slate-50 rounded-xl p-3">
               <p className="text-[10px] text-slate-400 mb-1.5">등록자</p>
@@ -428,7 +424,6 @@ function FormDetailModal({ form, onClose, onFavorite }) {
             </div>
           )}
 
-          {/* 메타 정보 */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-slate-50 rounded-xl p-3">
               <p className="text-[10px] text-slate-400 mb-1">현재 버전</p>
@@ -462,7 +457,6 @@ function FormDetailModal({ form, onClose, onFavorite }) {
             )}
           </div>
 
-          {/* 액션 버튼 */}
           <div className="flex items-center gap-2 pt-1">
             <button onClick={() => onFavorite(form.id)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm transition-colors
@@ -470,7 +464,11 @@ function FormDetailModal({ form, onClose, onFavorite }) {
                   ? 'border-amber-200 bg-amber-50 text-amber-600'
                   : 'border-slate-200 text-slate-500 hover:border-amber-200 hover:bg-amber-50'}`}>
               <Star size={14} fill={form.is_favorite ? 'currentColor' : 'none'} />
-              {form.is_favorite ? '즐겨찾기 해제' : '즐겨찾기'}
+              {form.is_favorite ? '저장됨' : '내 서식함'}
+            </button>
+            <button onClick={() => { onClose(); onForward(form); }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 text-sm transition-colors">
+              <Send size={14} /> 전달
             </button>
             <a href={`/api/forms/${form.id}/download`}
               className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
@@ -580,31 +578,171 @@ function ActivityModal({ form, onClose }) {
   );
 }
 
-// ──────────────────────── 서식 행 ────────────────────────
-const ROW_COLS = '28px 1fr 90px 50px 50px 72px';
+// ──────────────────────── 서식 전달 모달 ────────────────────────
+function ForwardModal({ form, employee, onClose }) {
+  const [deptMembers, setDeptMembers] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
 
-function FormRow({ form, isAdmin, onFavorite, onEdit, onVersion, onDelete, onDetail, onActivity }) {
+  useEffect(() => {
+    if (!employee?.department) return;
+    supabase
+      .from('profiles')
+      .select('id, full_name, position')
+      .eq('department', employee.department)
+      .eq('employment_status', '재직')
+      .neq('id', employee.id)
+      .order('full_name')
+      .then(({ data }) => { setDeptMembers(data || []); setFetching(false); });
+  }, [employee]);
+
+  const toggle = (id) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+
+  const handleSubmit = async () => {
+    if (selectedIds.length === 0) return toast.error('전달할 팀원을 선택하세요');
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/forms/${form.id}/forward`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient_ids: selectedIds, message: message.trim() || null }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || '전달 실패'); }
+      toast.success(`${selectedIds.length}명에게 전달했습니다`);
+      onClose();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-black text-slate-800">서식 전달</h2>
+            <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]">{form.title}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400"><X size={18} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <p className="text-xs font-black text-slate-500 mb-2">
+              전달할 팀원 <span className="text-slate-300 font-medium">({employee?.department})</span>
+            </p>
+            {fetching ? (
+              <div className="py-6 flex justify-center"><Loader2 className="animate-spin text-blue-500" size={20} /></div>
+            ) : deptMembers.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">같은 부서 팀원이 없습니다</p>
+            ) : (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {deptMembers.map(m => (
+                  <label key={m.id}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${selectedIds.includes(m.id) ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-slate-200 bg-white'}`}>
+                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${selectedIds.includes(m.id) ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                      {selectedIds.includes(m.id) && <span className="text-white text-[10px] font-black leading-none">✓</span>}
+                    </div>
+                    <input type="checkbox" checked={selectedIds.includes(m.id)} onChange={() => toggle(m.id)} className="sr-only" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-700">{m.full_name}</p>
+                      <p className="text-[11px] text-slate-400">{m.position}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-black text-slate-500 mb-1.5">메시지 <span className="text-slate-300 font-medium">(선택)</span></p>
+            <textarea value={message} onChange={e => setMessage(e.target.value)}
+              rows={2} placeholder="전달 시 메시지를 입력하세요"
+              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none" />
+          </div>
+
+          <button onClick={handleSubmit} disabled={loading || selectedIds.length === 0}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-sm hover:bg-emerald-700 transition-colors disabled:opacity-40">
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            {selectedIds.length > 0 ? `${selectedIds.length}명에게 전달` : '팀원을 선택하세요'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────── 전달받은 서식 행 ────────────────────────
+function ForwardedFormRow({ forward, onDetail, onFavorite }) {
+  const form = forward.form;
+  if (!form) return null;
+
+  return (
+    <div className="group flex items-center gap-3 px-3 py-2 mx-2 rounded-lg hover:bg-[#f1f3f4] transition-colors cursor-default">
+      <div style={{ width: 28, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+        <Inbox size={15} className="text-emerald-500" />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => onDetail(form)}
+            className="text-sm text-slate-800 truncate hover:text-blue-600 hover:underline text-left transition-colors">
+            {form.title}
+          </button>
+          {form.access_level && ACCESS_LEVEL_COLORS[form.access_level] && (
+            <span className="shrink-0 px-1.5 py-0.5 text-[10px] rounded font-bold border"
+              style={{
+                backgroundColor: ACCESS_LEVEL_COLORS[form.access_level].bg,
+                color: ACCESS_LEVEL_COLORS[form.access_level].text,
+                borderColor: ACCESS_LEVEL_COLORS[form.access_level].text + '40',
+              }}>
+              {form.access_level}등급
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-400 truncate leading-tight">
+          <span className="text-emerald-600 font-medium">{forward.sender_name}</span>님이 전달
+          {forward.message && <span className="text-slate-300"> · &ldquo;{forward.message}&rdquo;</span>}
+          <span className="text-slate-300"> · {new Date(forward.created_at).toLocaleDateString('ko-KR')}</span>
+        </p>
+      </div>
+
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={() => onFavorite(form.id)}
+          className={`p-1.5 rounded-full transition-colors ${form.is_favorite ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'}`}>
+          <Star size={13} fill={form.is_favorite ? 'currentColor' : 'none'} />
+        </button>
+        <a href={`/api/forms/${form.id}/download`}
+          className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-medium transition-colors">
+          <Download size={11} /> 받기
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────── 서식 행 ────────────────────────
+function FormRow({ form, isAdmin, onFavorite, onForward, onEdit, onVersion, onDelete, onDetail, onActivity }) {
   const now = new Date();
   const isExpired = form.expires_at && new Date(form.expires_at) < now;
   const isExpiringSoon = form.expires_at && !isExpired &&
     (new Date(form.expires_at) - now) < 1000 * 60 * 60 * 24 * 14;
 
   return (
-    <div
-      className={`group flex items-center gap-3 px-3 py-2 mx-2 rounded-lg hover:bg-[#f1f3f4] transition-colors cursor-default ${isExpired ? 'opacity-50' : ''}`}
-    >
-      {/* 아이콘 */}
+    <div className={`group flex items-center gap-3 px-3 py-2 mx-2 rounded-lg hover:bg-[#f1f3f4] transition-colors cursor-default ${isExpired ? 'opacity-50' : ''}`}>
       <div style={{ width: 28, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
         {form.is_pinned
           ? <Pin size={15} className="text-amber-400" />
           : <FileText size={17} className="text-blue-400" />}
       </div>
 
-      {/* 이름 */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => onDetail(form)}
+          <button onClick={() => onDetail(form)}
             className="text-sm text-slate-800 truncate hover:text-blue-600 hover:underline text-left transition-colors">
             {form.title}
           </button>
@@ -632,7 +770,6 @@ function FormRow({ form, isAdmin, onFavorite, onEdit, onVersion, onDelete, onDet
         )}
       </div>
 
-      {/* 분류 */}
       <div style={{ width: 90, flexShrink: 0 }}>
         {form.label ? (
           <span className="px-2 py-0.5 text-[11px] rounded-full font-medium"
@@ -642,38 +779,38 @@ function FormRow({ form, isAdmin, onFavorite, onEdit, onVersion, onDelete, onDet
         ) : <span className="text-slate-300 text-xs">—</span>}
       </div>
 
-      {/* 버전 */}
       <div style={{ width: 50, flexShrink: 0 }} className="text-center text-xs text-slate-500">
         {form.latest_version ? `v${form.latest_version.version_number}` : 'v1'}
       </div>
 
-      {/* 다운로드 */}
       <div style={{ width: 50, flexShrink: 0 }} className="text-center text-xs text-slate-400">
         {form.download_count || 0}
       </div>
 
-      {/* 유효기한 */}
       <div style={{ width: 72, flexShrink: 0 }} className="text-center text-xs text-slate-400">
         {form.expires_at
           ? new Date(form.expires_at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
           : '—'}
       </div>
 
-      {/* 액션 */}
-      <div className="flex items-center gap-0.5" style={{ width: isAdmin ? 196 : 88, flexShrink: 0 }}>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ width: isAdmin ? 230 : 122, flexShrink: 0 }}>
         <button onClick={() => onFavorite(form.id)}
           className={`p-1.5 rounded-full transition-colors
             ${form.is_favorite
-              ? 'text-amber-400'
-              : 'text-slate-300 opacity-0 group-hover:opacity-100 hover:text-amber-400 hover:bg-amber-50'}`}>
+              ? 'text-amber-400 opacity-100'
+              : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'}`}>
           <Star size={13} fill={form.is_favorite ? 'currentColor' : 'none'} />
         </button>
+        <button onClick={() => onForward(form)}
+          className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-medium transition-colors">
+          <Send size={11} /> 전달
+        </button>
         <a href={`/api/forms/${form.id}/download`}
-          className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-medium transition-colors opacity-0 group-hover:opacity-100">
+          className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-medium transition-colors">
           <Download size={11} /> 받기
         </a>
         {isAdmin && (
-          <div className="flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-0">
             <button onClick={() => onActivity(form)} title="활동 이력"
               className="p-1.5 rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors">
               <ClipboardList size={13} />
@@ -703,6 +840,7 @@ export default function FormsClient() {
 
   const [forms, setForms] = useState([]);
   const [labels, setLabels] = useState([]);
+  const [forwardedForms, setForwardedForms] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const isAdmin = useMemo(
@@ -711,8 +849,8 @@ export default function FormsClient() {
   );
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeLabel, setActiveLabel] = useState('all');
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  // viewMode: 'all' | 'favorites' | 'forwarded' | 'pinned' | `${labelId}`
+  const [viewMode, setViewMode] = useState('all');
 
   const [showUpload, setShowUpload] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -720,19 +858,25 @@ export default function FormsClient() {
   const [showLabelManager, setShowLabelManager] = useState(false);
   const [detailTarget, setDetailTarget] = useState(null);
   const [activityTarget, setActivityTarget] = useState(null);
+  const [forwardTarget, setForwardTarget] = useState(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [formsRes, labelsRes] = await Promise.all([
+      const [formsRes, labelsRes, fwdRes] = await Promise.all([
         fetch('/api/forms'),
         fetch('/api/form-labels'),
+        fetch('/api/form-forwards'),
       ]);
       if (!formsRes.ok || !labelsRes.ok) { toast.error('데이터를 불러오지 못했습니다'); return; }
       const formsData = await formsRes.json();
       const labelsData = await labelsRes.json();
       setForms(formsData.forms || []);
       setLabels(labelsData.labels || []);
+      if (fwdRes.ok) {
+        const fwdData = await fwdRes.json();
+        setForwardedForms(fwdData.forwards || []);
+      }
     } catch {
       toast.error('서버 연결에 실패했습니다');
     } finally {
@@ -748,6 +892,10 @@ export default function FormsClient() {
     const res = await fetch(`/api/forms/${formId}/favorite`, { method: 'POST' });
     const { is_favorite } = await res.json();
     setForms(prev => prev.map(f => f.id === formId ? { ...f, is_favorite } : f));
+    // 전달받은 서식에서도 즐겨찾기 상태 업데이트
+    setForwardedForms(prev => prev.map(fw =>
+      fw.form?.id === formId ? { ...fw, form: { ...fw.form, is_favorite } } : fw
+    ));
   };
 
   const handleDelete = async (formId) => {
@@ -766,20 +914,34 @@ export default function FormsClient() {
     const { is_favorite } = await res.json();
     setForms(prev => prev.map(f => f.id === formId ? { ...f, is_favorite } : f));
     setDetailTarget(prev => prev ? { ...prev, is_favorite } : null);
+    setForwardedForms(prev => prev.map(fw =>
+      fw.form?.id === formId ? { ...fw, form: { ...fw.form, is_favorite } } : fw
+    ));
   };
 
   const pinnedForms = useMemo(() => forms.filter(f => f.is_pinned), [forms]);
 
-  const filteredForms = useMemo(() => forms.filter(f => {
-    if (showFavoritesOnly && !f.is_favorite) return false;
-    if (activeLabel === 'pinned') return f.is_pinned;
-    if (activeLabel !== 'all' && f.label_id !== activeLabel) return false;
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      return f.title.toLowerCase().includes(q) || f.description?.toLowerCase().includes(q);
-    }
-    return true;
-  }), [forms, searchTerm, activeLabel, showFavoritesOnly]);
+  const filteredForms = useMemo(() => {
+    if (viewMode === 'forwarded') return [];
+    return forms.filter(f => {
+      if (viewMode === 'favorites' && !f.is_favorite) return false;
+      if (viewMode === 'pinned' && !f.is_pinned) return false;
+      if (viewMode !== 'all' && viewMode !== 'favorites' && viewMode !== 'pinned') {
+        if (f.label_id !== viewMode) return false;
+      }
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        return f.title.toLowerCase().includes(q) || f.description?.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [forms, searchTerm, viewMode]);
+
+  const filteredForwardedForms = useMemo(() => {
+    if (!searchTerm) return forwardedForms;
+    const q = searchTerm.toLowerCase();
+    return forwardedForms.filter(fw => fw.form?.title?.toLowerCase().includes(q));
+  }, [forwardedForms, searchTerm]);
 
   if (authLoading || loading) {
     return (
@@ -789,19 +951,19 @@ export default function FormsClient() {
     );
   }
 
-  const showPinned = pinnedForms.length > 0 && activeLabel === 'all' && !showFavoritesOnly && !searchTerm;
-  const normalForms = showPinned
-    ? filteredForms.filter(f => !f.is_pinned)
-    : filteredForms;
+  const showPinned = pinnedForms.length > 0 && viewMode === 'all' && !searchTerm;
+  const normalForms = showPinned ? filteredForms.filter(f => !f.is_pinned) : filteredForms;
 
-  // 현재 선택된 라벨 이름
-  const activeLabelName = showFavoritesOnly
-    ? '즐겨찾기'
-    : activeLabel === 'pinned'
-    ? '필수 서식'
-    : activeLabel === 'all'
-    ? '내 서식함'
-    : labels.find(l => l.id === activeLabel)?.name || '';
+  const VIEW_LABELS = {
+    all: '전체',
+    favorites: '즐겨찾기 서식',
+    forwarded: '전달받은 서식',
+    pinned: '필수 서식',
+  };
+  const activeLabelName = VIEW_LABELS[viewMode] || labels.find(l => l.id === viewMode)?.name || '';
+
+  const favoriteCount = forms.filter(f => f.is_favorite).length;
+  const forwardCount = forwardedForms.length;
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
@@ -809,13 +971,11 @@ export default function FormsClient() {
 
       {/* ── 좌측 사이드바 ── */}
       <aside className="w-56 shrink-0 flex flex-col py-4 border-r border-slate-100 bg-white">
-        {/* 로고 */}
         <div className="px-4 mb-4 flex items-center gap-2.5">
           <FolderOpen size={20} className="text-blue-600" />
           <span className="font-bold text-base text-slate-800">서식함</span>
         </div>
 
-        {/* 등록 버튼 */}
         <div className="px-3 mb-4">
           <button onClick={() => { setEditTarget(null); setShowUpload(true); }}
             className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
@@ -823,55 +983,75 @@ export default function FormsClient() {
           </button>
         </div>
 
-        {/* 내비게이션 */}
         <nav className="flex-1 overflow-y-auto px-2 space-y-0.5">
           {/* 전체 */}
           <button
-            onClick={() => { setActiveLabel('all'); setShowFavoritesOnly(false); }}
+            onClick={() => setViewMode('all')}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left
-              ${activeLabel === 'all' && !showFavoritesOnly ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
-            <FileText size={16} className={activeLabel === 'all' && !showFavoritesOnly ? 'text-blue-600' : 'text-slate-400'} />
+              ${viewMode === 'all' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <FileText size={16} className={viewMode === 'all' ? 'text-blue-600' : 'text-slate-400'} />
             <span className="flex-1">전체</span>
             <span className="text-xs text-slate-400">{forms.length}</span>
           </button>
 
-          {/* 즐겨찾기 */}
+          {/* 내 서식함 섹션 */}
+          <div className="pt-2 pb-0.5 px-3">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">내 서식함</span>
+          </div>
+
           <button
-            onClick={() => { setShowFavoritesOnly(true); setActiveLabel('all'); }}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left
-              ${showFavoritesOnly ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
-            <Star size={16} className={showFavoritesOnly ? 'text-amber-400' : 'text-slate-400'}
-              fill={showFavoritesOnly ? 'currentColor' : 'none'} />
-            <span className="flex-1">즐겨찾기</span>
-            <span className="text-xs text-slate-400">{forms.filter(f => f.is_favorite).length}</span>
+            onClick={() => setViewMode('favorites')}
+            className={`w-full flex items-center gap-3 pl-5 pr-3 py-2 rounded-lg text-sm transition-colors text-left
+              ${viewMode === 'favorites' ? 'bg-amber-50 text-amber-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <Star size={15} className={viewMode === 'favorites' ? 'text-amber-500' : 'text-slate-400'}
+              fill={viewMode === 'favorites' ? 'currentColor' : 'none'} />
+            <span className="flex-1">즐겨찾기 서식</span>
+            {favoriteCount > 0 && <span className="text-xs text-slate-400">{favoriteCount}</span>}
+          </button>
+
+          <button
+            onClick={() => setViewMode('forwarded')}
+            className={`w-full flex items-center gap-3 pl-5 pr-3 py-2 rounded-lg text-sm transition-colors text-left
+              ${viewMode === 'forwarded' ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <Inbox size={15} className={viewMode === 'forwarded' ? 'text-emerald-500' : 'text-slate-400'} />
+            <span className="flex-1">전달받은 서식</span>
+            {forwardCount > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${viewMode === 'forwarded' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                {forwardCount}
+              </span>
+            )}
           </button>
 
           {/* 필수 서식 */}
           {pinnedForms.length > 0 && (
-            <button
-              onClick={() => { setActiveLabel('pinned'); setShowFavoritesOnly(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left
-                ${activeLabel === 'pinned' ? 'bg-amber-50 text-amber-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
-              <Pin size={16} className={activeLabel === 'pinned' ? 'text-amber-500' : 'text-slate-400'} />
-              <span className="flex-1">필수 서식</span>
-              <span className="text-xs text-slate-400">{pinnedForms.length}</span>
-            </button>
+            <>
+              <div className="pt-2 pb-0.5 px-3">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">고정</span>
+              </div>
+              <button
+                onClick={() => setViewMode('pinned')}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left
+                  ${viewMode === 'pinned' ? 'bg-amber-50 text-amber-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+                <Pin size={16} className={viewMode === 'pinned' ? 'text-amber-500' : 'text-slate-400'} />
+                <span className="flex-1">필수 서식</span>
+                <span className="text-xs text-slate-400">{pinnedForms.length}</span>
+              </button>
+            </>
           )}
 
-          {/* 라벨 구분선 */}
+          {/* 분류 라벨 */}
           {labels.length > 0 && (
-            <div className="pt-3 pb-1 px-3">
+            <div className="pt-2 pb-0.5 px-3">
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">분류</span>
             </div>
           )}
 
-          {/* 라벨 목록 */}
           {labels.map(l => {
             const count = forms.filter(f => f.label_id === l.id).length;
-            const active = activeLabel === l.id && !showFavoritesOnly;
+            const active = viewMode === l.id;
             return (
               <button key={l.id}
-                onClick={() => { setActiveLabel(l.id); setShowFavoritesOnly(false); }}
+                onClick={() => setViewMode(l.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left
                   ${active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
                 <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
@@ -882,7 +1062,6 @@ export default function FormsClient() {
           })}
         </nav>
 
-        {/* 하단: 라벨 관리 + 사용자 */}
         <div className="px-2 mt-2 pt-3 border-t border-slate-100 space-y-1">
           {isAdmin && (
             <button onClick={() => setShowLabelManager(true)}
@@ -906,7 +1085,6 @@ export default function FormsClient() {
       {/* ── 우측 콘텐츠 ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* 상단 검색바 */}
         <header className="h-14 px-6 flex items-center gap-4 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2 bg-[#f1f3f4] hover:bg-[#e8eaed] px-4 py-2 rounded-full w-96 focus-within:bg-white focus-within:shadow-md focus-within:ring-1 focus-within:ring-slate-200 transition-all">
             <Search size={15} className="text-slate-400 shrink-0" />
@@ -921,11 +1099,9 @@ export default function FormsClient() {
           </div>
         </header>
 
-        {/* 제목 + 관리자 안내 */}
         <div className="px-6 pt-5 pb-2 shrink-0">
           <h1 className="text-lg font-medium text-slate-800 mb-3">{activeLabelName}</h1>
 
-          {/* 전자결재 연동 안내 */}
           <div className="flex items-center gap-4 bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-xl px-4 py-3 mb-3">
             <div className="flex items-center gap-2.5 text-[11px] text-slate-500 flex-wrap">
               <div className="flex items-center gap-1.5">
@@ -960,71 +1136,106 @@ export default function FormsClient() {
           )}
         </div>
 
-        {/* 컬럼 헤더 */}
-        <div className="flex items-center gap-3 px-5 pb-1.5 shrink-0">
-          <div style={{ width: 28, flexShrink: 0 }} />
-          <div className="flex-1 text-[11px] font-medium text-slate-400">이름</div>
-          <div style={{ width: 90, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400">분류</div>
-          <div style={{ width: 50, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">버전</div>
-          <div style={{ width: 50, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">다운</div>
-          <div style={{ width: 72, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">유효기한</div>
-          <div style={{ width: isAdmin ? 196 : 88, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400">즐겨찾기</div>
-        </div>
-        <div className="mx-5 border-b border-slate-100 mb-1 shrink-0" />
-
-        {/* 파일 목록 */}
-        <div className="flex-1 overflow-y-auto pb-6">
-          {showPinned && (
-            <>
-              <div className="flex items-center gap-2 px-5 py-2">
-                <Pin size={11} className="text-amber-400" />
-                <span className="text-[11px] font-medium text-amber-600">필수 서식</span>
-              </div>
-              {pinnedForms.map(form => (
-                <FormRow key={form.id} form={form} isAdmin={isAdmin}
-                  onFavorite={handleFavorite}
-                  onEdit={f => { setEditTarget(f); setShowUpload(true); }}
-                  onVersion={setVersionTarget}
-                  onDelete={handleDelete}
-                  onDetail={setDetailTarget}
-                  onActivity={setActivityTarget} />
-              ))}
-              {normalForms.length > 0 && <div className="mx-5 my-2 border-b border-slate-100" />}
-            </>
-          )}
-
-          {normalForms.length > 0
-            ? normalForms.map(form => (
-                <FormRow key={form.id} form={form} isAdmin={isAdmin}
-                  onFavorite={handleFavorite}
-                  onEdit={f => { setEditTarget(f); setShowUpload(true); }}
-                  onVersion={setVersionTarget}
-                  onDelete={handleDelete}
-                  onDetail={setDetailTarget}
-                  onActivity={setActivityTarget} />
-              ))
-            : !showPinned && (
+        {/* 전달받은 서식 뷰 */}
+        {viewMode === 'forwarded' ? (
+          <>
+            <div className="flex items-center gap-3 px-5 pb-1.5 shrink-0">
+              <div style={{ width: 28, flexShrink: 0 }} />
+              <div className="flex-1 text-[11px] font-medium text-slate-400">이름</div>
+              <div style={{ width: 122, flexShrink: 0 }} />
+            </div>
+            <div className="mx-5 border-b border-slate-100 mb-1 shrink-0" />
+            <div className="flex-1 overflow-y-auto pb-6">
+              {filteredForwardedForms.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-52 text-center">
-                  <FolderOpen size={40} className="text-slate-200 mb-3" />
-                  <p className="text-sm text-slate-400">서식이 없습니다</p>
-                  <button onClick={() => { setEditTarget(null); setShowUpload(true); }}
-                    className="mt-3 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors">
-                    <Plus size={14} /> 첫 서식 등록하기
-                  </button>
+                  <Inbox size={40} className="text-slate-200 mb-3" />
+                  <p className="text-sm text-slate-400">전달받은 서식이 없습니다</p>
                 </div>
+              ) : (
+                filteredForwardedForms.map(fw => (
+                  <ForwardedFormRow key={fw.id} forward={fw}
+                    onDetail={setDetailTarget}
+                    onFavorite={handleFavorite} />
+                ))
               )}
-        </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* 컬럼 헤더 */}
+            <div className="flex items-center gap-3 px-5 pb-1.5 shrink-0">
+              <div style={{ width: 28, flexShrink: 0 }} />
+              <div className="flex-1 text-[11px] font-medium text-slate-400">이름</div>
+              <div style={{ width: 90, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400">분류</div>
+              <div style={{ width: 50, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">버전</div>
+              <div style={{ width: 50, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">다운</div>
+              <div style={{ width: 72, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">유효기한</div>
+              <div style={{ width: isAdmin ? 230 : 122, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400">액션</div>
+            </div>
+            <div className="mx-5 border-b border-slate-100 mb-1 shrink-0" />
 
-        {/* 상태바 */}
+            {/* 파일 목록 */}
+            <div className="flex-1 overflow-y-auto pb-6">
+              {showPinned && (
+                <>
+                  <div className="flex items-center gap-2 px-5 py-2">
+                    <Pin size={11} className="text-amber-400" />
+                    <span className="text-[11px] font-medium text-amber-600">필수 서식</span>
+                  </div>
+                  {pinnedForms.map(form => (
+                    <FormRow key={form.id} form={form} isAdmin={isAdmin}
+                      onFavorite={handleFavorite}
+                      onForward={setForwardTarget}
+                      onEdit={f => { setEditTarget(f); setShowUpload(true); }}
+                      onVersion={setVersionTarget}
+                      onDelete={handleDelete}
+                      onDetail={setDetailTarget}
+                      onActivity={setActivityTarget} />
+                  ))}
+                  {normalForms.length > 0 && <div className="mx-5 my-2 border-b border-slate-100" />}
+                </>
+              )}
+
+              {normalForms.length > 0
+                ? normalForms.map(form => (
+                    <FormRow key={form.id} form={form} isAdmin={isAdmin}
+                      onFavorite={handleFavorite}
+                      onForward={setForwardTarget}
+                      onEdit={f => { setEditTarget(f); setShowUpload(true); }}
+                      onVersion={setVersionTarget}
+                      onDelete={handleDelete}
+                      onDetail={setDetailTarget}
+                      onActivity={setActivityTarget} />
+                  ))
+                : !showPinned && (
+                    <div className="flex flex-col items-center justify-center h-52 text-center">
+                      <FolderOpen size={40} className="text-slate-200 mb-3" />
+                      <p className="text-sm text-slate-400">서식이 없습니다</p>
+                      <button onClick={() => { setEditTarget(null); setShowUpload(true); }}
+                        className="mt-3 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors">
+                        <Plus size={14} /> 첫 서식 등록하기
+                      </button>
+                    </div>
+                  )}
+            </div>
+          </>
+        )}
+
         <div className="px-6 py-2 border-t border-slate-100 flex items-center justify-between shrink-0">
-          <span className="text-xs text-slate-400">전체 {forms.length}개 · 즐겨찾기 {forms.filter(f => f.is_favorite).length}개</span>
+          <span className="text-xs text-slate-400">
+            전체 {forms.length}개 · 즐겨찾기 {favoriteCount}개 · 전달받은 서식 {forwardCount}개
+          </span>
           <span className="text-xs text-slate-300">외부 유출 금지</span>
         </div>
       </div>
 
       {/* ── 모달들 ── */}
       {detailTarget && (
-        <FormDetailModal form={detailTarget} onClose={() => setDetailTarget(null)} onFavorite={handleFavoriteInDetail} />
+        <FormDetailModal
+          form={detailTarget}
+          onClose={() => setDetailTarget(null)}
+          onFavorite={handleFavoriteInDetail}
+          onForward={setForwardTarget} />
       )}
       {activityTarget && (
         <ActivityModal form={activityTarget} onClose={() => setActivityTarget(null)} />
@@ -1039,6 +1250,12 @@ export default function FormsClient() {
       )}
       {showLabelManager && (
         <LabelManagerModal labels={labels} onClose={() => setShowLabelManager(false)} onSuccess={handleModalSuccess} />
+      )}
+      {forwardTarget && (
+        <ForwardModal
+          form={forwardTarget}
+          employee={employee}
+          onClose={() => setForwardTarget(null)} />
       )}
     </div>
   );
