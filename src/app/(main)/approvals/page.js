@@ -630,14 +630,15 @@ function ApprovalsPageContent() {
     );
 
     const quickDrafts = [
-        { title: '휴가 신청서', href: '/approvals/leave', icon: '🌴', color: 'bg-emerald-50 text-emerald-600' },
-        { title: '출장 신청서', href: '/approvals/business-trip', icon: '✈️', color: 'bg-blue-50 text-blue-600' },
-        { title: '출장 여비 정산서', href: '/approvals/expense-settlement', icon: '🧾', color: 'bg-indigo-50 text-indigo-600' },
-        { title: '지출 결의서', href: '/approvals/expense', icon: '💳', color: 'bg-amber-50 text-amber-600' },
-        { title: '내부 결재서', href: '/approvals/internal', icon: '📑', color: 'bg-purple-50 text-purple-600' },
-        { title: '업무 보고서', href: '/approvals/work-report', icon: '📈', color: 'bg-cyan-50 text-cyan-600' },
-        { title: '회의록', href: '/approvals/meeting-minutes', icon: '📝', color: 'bg-teal-50 text-teal-600' },
-        { title: '시말서', href: '/approvals/apology', icon: '⚠️', color: 'bg-rose-50 text-rose-600' }
+        { title: '휴가 신청서', href: '/approvals/leave', sub: '연차 · 반차 · 병가 · 경조사' },
+        { title: '출장 신청서', href: '/approvals/business-trip', sub: '국내외 출장 사전 승인' },
+        { title: '출장 여비 정산서', href: '/approvals/expense-settlement', sub: '출장비 정산 및 청구' },
+        { title: '지출 결의서', href: '/approvals/expense', sub: '경비 지출 승인 요청' },
+        { title: '내부 결재서', href: '/approvals/internal', sub: '사내 업무 결재 요청' },
+        { title: '업무 보고서', href: '/approvals/work-report', sub: '업무 현황 및 완료 보고' },
+        { title: '회의록', href: '/approvals/meeting-minutes', sub: '회의 내용 기록 및 공유' },
+        { title: '시말서', href: '/approvals/apology', sub: '사고 경위 및 재발 방지' },
+        { title: 'PDF 서식 결재', href: '/approvals/pdf-upload', sub: '서식함 서류 작성 후 PDF 첨부', highlight: true },
     ];
 
     const isExecutive = employee?.department === '최고 경영진';
@@ -731,28 +732,32 @@ function ApprovalsPageContent() {
                 </section>
 
                 {!isExecutive && (
-                    <section className="space-y-4">
-                        <div className="flex items-center gap-3 px-2">
-                            <div className="w-2 h-6 bg-slate-800 rounded-full"></div>
-                            <h2 className="text-xl font-black text-slate-800">빠른 기안 작성</h2>
+                    <section className="space-y-3">
+                        <div className="px-1">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">빠른 기안 작성</p>
+                            <h2 className="text-[17px] font-bold text-slate-900 leading-tight">전자결재 양식</h2>
                         </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3">
+
+                        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden divide-y divide-slate-100">
                             {quickDrafts.map((form) => (
-                                <Link 
-                                    href={form.href} key={form.title} 
-                                    className="group bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm hover:border-blue-400 hover:shadow-md transition-all duration-200 flex items-center gap-4"
+                                <Link
+                                    href={form.href}
+                                    key={form.title}
+                                    className={`group flex items-center gap-3 px-4 py-3.5 transition-colors duration-150 ${
+                                        form.highlight
+                                            ? 'bg-blue-50/60 hover:bg-blue-100/70'
+                                            : 'hover:bg-slate-50'
+                                    }`}
                                 >
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-transform group-hover:scale-110 ${form.color}`}>
-                                        {form.icon}
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-[14px] font-semibold leading-snug truncate ${form.highlight ? 'text-blue-700' : 'text-slate-800'}`}>
+                                            {form.title}
+                                        </p>
+                                        {form.sub && (
+                                            <p className="text-[11px] text-slate-400 mt-0.5 truncate">{form.sub}</p>
+                                        )}
                                     </div>
-                                    <div className="flex-1">
-                                        <h3 className="font-black text-slate-700 group-hover:text-blue-600 transition-colors text-[14px] mb-0.5">{form.title}</h3>
-                                        <p className="text-[11px] font-bold text-slate-400">양식 작성하기</p>
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                        <ArrowRight size={14} strokeWidth={3} />
-                                    </div>
+                                    <ChevronRight size={15} className={`flex-shrink-0 transition-colors ${form.highlight ? 'text-blue-400 group-hover:text-blue-600' : 'text-slate-300 group-hover:text-slate-500'}`} />
                                 </Link>
                             ))}
                         </div>
