@@ -925,6 +925,26 @@ export default function FormsClient() {
         <div className="px-6 pt-5 pb-2 shrink-0">
           <h1 className="text-lg font-medium text-slate-800 mb-3">{activeLabelName}</h1>
 
+          {/* 전자결재 연동 안내 */}
+          <div className="flex items-center gap-4 bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-xl px-4 py-3 mb-3">
+            <div className="flex items-center gap-2.5 text-[11px] text-slate-500 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">1</span>
+                <span className="font-medium text-slate-600">서식 내려받기</span>
+              </div>
+              <span className="text-slate-300">→</span>
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">2</span>
+                <span className="font-medium text-slate-600">작성 후 PDF 출력</span>
+              </div>
+              <span className="text-slate-300">→</span>
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">3</span>
+                <span className="font-medium text-slate-600">전자결재에 첨부하여 결재 요청</span>
+              </div>
+            </div>
+          </div>
+
           {isAdmin && (
             <div className="flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-3">
               <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center shrink-0 mt-0.5">
