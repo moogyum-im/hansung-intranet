@@ -55,7 +55,11 @@ function UploadModal({ labels, onClose, onSuccess, editForm = null }) {
             expires_at: expiresAt || null,
           }),
         });
-        if (!res.ok) throw new Error((await res.json()).error);
+        if (!res.ok) {
+          let msg = '서식 수정에 실패했습니다';
+          try { msg = (await res.json()).error || msg; } catch {}
+          throw new Error(msg);
+        }
         toast.success('서식이 수정되었습니다');
       } else {
         const fd = new FormData();
@@ -69,7 +73,11 @@ function UploadModal({ labels, onClose, onSuccess, editForm = null }) {
         if (expiresAt) fd.append('expires_at', expiresAt);
         fd.append('change_note', changeNote || '최초 등록');
         const res = await fetch('/api/forms', { method: 'POST', body: fd });
-        if (!res.ok) throw new Error((await res.json()).error);
+        if (!res.ok) {
+          let msg = '서식 등록에 실패했습니다';
+          try { msg = (await res.json()).error || msg; } catch {}
+          throw new Error(msg);
+        }
         toast.success('서식이 등록되었습니다');
       }
       onSuccess();
