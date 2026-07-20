@@ -23,8 +23,20 @@ const formatNumber = (num) => {
 // --- 문서 공유 모달 컴포넌트 ---
 function ShareModal({ isOpen, onClose, doc, currentUser, allEmployees }) {
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedEmp, setSelectedEmp] = useState(null);
+    const [selectedEmps, setSelectedEmps] = useState([]);
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) setSelectedEmps([]);
+    }, [isOpen, doc?.id]);
+
+    const toggleEmp = (emp) => {
+        setSelectedEmps(prev =>
+            prev.some(e => e.id === emp.id)
+                ? prev.filter(e => e.id !== emp.id)
+                : [...prev, emp]
+        );
+    };
 
     const deptPriority = { '미지정': 0, '최고 경영진': 1, '공무부': 2, '관리부': 3, '전략기획부': 4 };
 
@@ -56,33 +68,44 @@ function ShareModal({ isOpen, onClose, doc, currentUser, allEmployees }) {
     }, [allEmployees, searchTerm, currentUser.id]);
 
     const handleShare = async () => {
-        if (!selectedEmp) return toast.error("공유할 직원을 선택하세요.");
+        if (selectedEmps.length === 0) return toast.error("공유할 직원을 선택하세요.");
         setLoading(true);
         try {
-            const { error: refError } = await supabase.from('approval_document_referrers').insert({
-                document_id: doc.id,
-                referrer_id: selectedEmp.id,
-                referrer_name: selectedEmp.full_name,
-                referrer_position: selectedEmp.position
-            });
+            const { error: refError } = await supabase.from('approval_document_referrers').insert(
+                selectedEmps.map(emp => ({
+                    document_id: doc.id,
+                    referrer_id: emp.id,
+                    referrer_name: emp.full_name,
+                    referrer_position: emp.position
+                }))
+            );
             if (refError) throw refError;
 
-            await supabase.from('approval_share_logs').insert({
-                doc_id: doc.id,
-                sender_id: currentUser.id,
-                receiver_id: selectedEmp.id,
-                reason: '문서 공유 전달'
-            });
+            const { error: logError } = await supabase.from('approval_share_logs').insert(
+                selectedEmps.map(emp => ({
+                    doc_id: doc.id,
+                    doc_title: doc.title,
+                    sender_id: currentUser.id,
+                    sender_name: currentUser.full_name,
+                    receiver_id: emp.id,
+                    receiver_name: emp.full_name,
+                    receiver_position: emp.position,
+                    reason: '문서 공유 전달'
+                }))
+            );
+            if (logError) console.error('공유 기록 저장 실패:', logError);
 
-            await supabase.from('notifications').insert({
-                recipient_id: selectedEmp.id,
-                type: 'document_shared',
-                content: `📢 [문서공유] ${currentUser.full_name}님이 '${doc.title}' 문서를 공유했습니다.`,
-                link: `/approvals/${doc.id}`,
-                is_read: false
-            });
+            await supabase.from('notifications').insert(
+                selectedEmps.map(emp => ({
+                    recipient_id: emp.id,
+                    type: 'document_shared',
+                    content: `📢 [문서공유] ${currentUser.full_name}님이 '${doc.title}' 문서를 공유했습니다.`,
+                    link: `/approvals/${doc.id}`,
+                    is_read: false
+                }))
+            );
 
-            toast.success(`${selectedEmp.full_name}님에게 공유되었습니다.`);
+            toast.success(`${selectedEmps.length}명에게 공유되었습니다.`);
             onClose();
         } catch (error) {
             console.error(error);
@@ -100,6 +123,9 @@ function ShareModal({ isOpen, onClose, doc, currentUser, allEmployees }) {
                 <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                     <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                         <Share2 size={20} className="text-blue-600"/> 문서 공유하기
+                        {selectedEmps.length > 0 && (
+                            <span className="text-[12px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{selectedEmps.length}명 선택</span>
+                        )}
                     </h3>
                     <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400"><X size={20}/></button>
                 </div>
@@ -124,18 +150,21 @@ function ShareModal({ isOpen, onClose, doc, currentUser, allEmployees }) {
                                     <div className="flex-1 h-px bg-blue-50" />
                                 </div>
                                 <div className="space-y-1">
-                                    {groupedEmployees[dept].map(emp => (
-                                        <button 
-                                            key={emp.id} 
-                                            onClick={() => setSelectedEmp(emp)}
-                                            className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${selectedEmp?.id === emp.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'hover:bg-slate-50 text-slate-700'}`}
-                                        >
-                                            <div className="text-left">
-                                                <span className="text-[14px] font-black block">{emp.full_name} {emp.position}</span>
-                                            </div>
-                                            {selectedEmp?.id === emp.id && <CheckCircle2 size={18} />}
-                                        </button>
-                                    ))}
+                                    {groupedEmployees[dept].map(emp => {
+                                        const checked = selectedEmps.some(e => e.id === emp.id);
+                                        return (
+                                            <button
+                                                key={emp.id}
+                                                onClick={() => toggleEmp(emp)}
+                                                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${checked ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'hover:bg-slate-50 text-slate-700'}`}
+                                            >
+                                                <div className="text-left">
+                                                    <span className="text-[14px] font-black block">{emp.full_name} {emp.position}</span>
+                                                </div>
+                                                {checked && <CheckCircle2 size={18} />}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )) : (
@@ -146,11 +175,11 @@ function ShareModal({ isOpen, onClose, doc, currentUser, allEmployees }) {
                         )}
                     </div>
                     
-                    <button 
-                        onClick={handleShare} disabled={loading || !selectedEmp}
+                    <button
+                        onClick={handleShare} disabled={loading || selectedEmps.length === 0}
                         className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-sm hover:bg-black transition-all disabled:opacity-30 shadow-xl active:scale-[0.98]"
                     >
-                        {loading ? "전송 중..." : "선택한 직원에게 문서 공유"}
+                        {loading ? "전송 중..." : selectedEmps.length > 0 ? `${selectedEmps.length}명에게 문서 공유` : "선택한 직원에게 문서 공유"}
                     </button>
                 </div>
             </div>
@@ -290,7 +319,7 @@ function ExecutiveApprovalsWidget({ toReview, approved, rejected, currentUserFul
 }
 
 // --- 일반 임직원용 기존 위젯 ---
-function StandardApprovalsWidget({ toReview, submitted, approved, rejected, referred, currentUserId, currentUserFullName, allEmployees, initialTab }) {
+function StandardApprovalsWidget({ toReview, submitted, approved, rejected, referred, sharedSent = [], sharedReceived = [], currentUserId, currentUserFullName, allEmployees, initialTab }) {
     const [activeMainTab, setActiveMainTab] = useState(initialTab || 'submitted');
     const [activeSubTab, setActiveSubTab] = useState('progress');
     const [lastViewed, setLastViewed] = useState({});
@@ -317,6 +346,10 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
         } else if (key === 'submitted') {
             setActiveSubTab('progress');
             updateLastViewed('progress');
+        } else if (key === 'referred') {
+            setActiveSubTab('all');
+            updateLastViewed('all');
+            updateLastViewed('referred');
         } else {
             updateLastViewed(key);
         }
@@ -363,11 +396,13 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
             if (activeSubTab === 'completed') currentData = myApproved;
             if (activeSubTab === 'rejected') currentData = myRejected;
         } else if (activeMainTab === 'referred') {
-            currentData = cleanReferred;
+            if (activeSubTab === 'shared_received') currentData = sharedReceived;
+            else if (activeSubTab === 'shared_sent') currentData = sharedSent;
+            else currentData = cleanReferred;
         }
 
         return currentData;
-    }, [activeMainTab, activeSubTab, toReview, submitted, othersApproved, othersRejected, myApproved, myRejected, cleanReferred, docSearchTerm, allUniqueDocs]);
+    }, [activeMainTab, activeSubTab, toReview, submitted, othersApproved, othersRejected, myApproved, myRejected, cleanReferred, sharedSent, sharedReceived, docSearchTerm, allUniqueDocs]);
 
     const getStatusChip = (status) => {
         const statusMap = { 
@@ -426,6 +461,12 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
             { key: 'completed', label: '완료된 결재', count: myApproved.length, icon: CheckSquare, data: myApproved },
             { key: 'rejected', label: '반려된 결재', count: myRejected.length, icon: FileX2, data: myRejected },
         ];
+    } else if (activeMainTab === 'referred') {
+        subTabs = [
+            { key: 'all', label: '참조결재', count: cleanReferred.length, icon: Share2, data: cleanReferred },
+            { key: 'shared_received', label: '공유받은 결재', count: sharedReceived.length, icon: Inbox, data: sharedReceived },
+            { key: 'shared_sent', label: '공유한 결재', count: sharedSent.length, icon: ArrowRight, data: sharedSent },
+        ];
     }
 
     return (
@@ -472,7 +513,7 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
                     <span className="text-[12px] font-black text-blue-700">전체 문서 통합 검색 결과 ({filteredData.length}건)</span>
                 </div>
             ) : (
-                (activeMainTab === 'received' || activeMainTab === 'submitted') && (
+                (activeMainTab === 'received' || activeMainTab === 'submitted' || activeMainTab === 'referred') && (
                     <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-3 overflow-x-auto custom-scrollbar shrink-0">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><CornerDownRight size={12} className="text-slate-300"/> 폴더</span>
                         <div className="w-px h-3 bg-slate-300" />
@@ -506,9 +547,12 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
                     filteredData.map(doc => {
                         const currentApprover = doc.current_approver_id ? allEmployees.find(e => e.id === doc.current_approver_id) : null;
                         const safeCreatorName = doc.creator_name || '알수없음';
+                        const creatorLabel = doc._shareRole
+                            ? (doc._shareRole === 'received' ? '공유자' : '공유대상')
+                            : (safeCreatorName === currentUserFullName ? '상신함' : '기안자');
 
                         return (
-                            <div key={doc.id} className="group bg-white border border-slate-200/60 rounded-2xl p-4 hover:border-blue-300 hover:shadow-md transition-all duration-200 flex items-center justify-between">
+                            <div key={doc._logId || doc.id} className="group bg-white border border-slate-200/60 rounded-2xl p-4 hover:border-blue-300 hover:shadow-md transition-all duration-200 flex items-center justify-between">
                                 <Link href={`/approvals/${doc.id}`} className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-3 mb-1.5 font-bold">
@@ -519,11 +563,11 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
                                                 <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-black text-slate-600 border border-slate-200">
                                                     {safeCreatorName.charAt(0)}
                                                 </div>
-                                                {safeCreatorName === currentUserFullName ? '상신함' : '기안자'}: {safeCreatorName}
+                                                {creatorLabel}: {safeCreatorName}
                                             </span>
                                             <span className="w-1 h-1 rounded-full bg-slate-300" />
                                             <span className="flex items-center gap-1.5"><Clock size={12} className="text-slate-400"/>{new Date(doc.created_at).toLocaleDateString()}</span>
-                                            
+
                                             {['진행중', 'pending', '대기'].includes(doc.status) && currentApprover && (
                                                 <>
                                                     <span className="w-1 h-1 rounded-full bg-slate-300" />
@@ -535,13 +579,17 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
                                         </div>
                                     </div>
                                     <div className="shrink-0 flex items-center justify-start sm:justify-end mt-2 sm:mt-0">
-                                        {getStatusChip(doc.status)}
+                                        {doc.status ? getStatusChip(doc.status) : (
+                                            <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 ring-1 ring-purple-500/30">
+                                                {doc._shareRole === 'sent' ? '공유함' : '공유받음'}
+                                            </span>
+                                        )}
                                     </div>
                                 </Link>
                                 
                                 <div className="flex items-center gap-2 pl-4 ml-4 border-l border-slate-100">
-                                    {activeMainTab === 'referred' && (
-                                        <button 
+                                    {['submitted', 'received', 'referred'].includes(activeMainTab) && (
+                                        <button
                                             onClick={() => setShareTarget(doc)}
                                             className="p-2 rounded-xl bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all border border-slate-200 flex items-center gap-1.5 text-[11px] font-black"
                                         >
@@ -566,7 +614,7 @@ function ApprovalsPageContent() {
     const { employee, loading: employeeLoading } = useEmployee();
     const searchParams = useSearchParams();
     const initialTab = searchParams.get('tab') === 'received' ? 'received' : undefined;
-    const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [], approved: [], rejected: [], referred: [] });
+    const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [], approved: [], rejected: [], referred: [], sharedSent: [], sharedReceived: [] });
     const [allEmployees, setAllEmployees] = useState([]);
     const [loadingApprovals, setLoadingApprovals] = useState(true);
 
@@ -601,14 +649,43 @@ function ApprovalsPageContent() {
                     return Array.from(uniqueMap.values());
                 };
 
+                const [{ data: sentLogs }, { data: receivedLogs }] = await Promise.all([
+                    supabase.from('approval_share_logs').select('*').eq('sender_id', currentEmployee.id).order('created_at', { ascending: false }),
+                    supabase.from('approval_share_logs').select('*').eq('receiver_id', currentEmployee.id).order('created_at', { ascending: false }),
+                ]);
+
+                const sharedSent = (sentLogs || []).map(log => ({
+                    id: log.doc_id,
+                    _logId: log.id,
+                    title: log.doc_title,
+                    creator_name: log.receiver_name,
+                    created_at: log.created_at,
+                    status: null,
+                    current_approver_id: null,
+                    _shareRole: 'sent',
+                }));
+
+                const sharedReceived = (receivedLogs || []).map(log => ({
+                    id: log.doc_id,
+                    _logId: log.id,
+                    title: log.doc_title,
+                    creator_name: log.sender_name,
+                    created_at: log.created_at,
+                    status: null,
+                    current_approver_id: null,
+                    _shareRole: 'received',
+                }));
+
                 setApprovalsData({
                     toReview: getUniqueDocs(appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려' && doc.my_approval_status !== '미결')),
                     submitted: getUniqueDocs(appData.filter(doc => doc.category === 'submitted' && doc.status !== '반려' && doc.status !== '승인' && doc.status !== '완료')),
-                    approved: getUniqueDocs(appData.filter(doc => 
+                    approved: getUniqueDocs(appData.filter(doc =>
                         (doc.status === '승인' || doc.status === '완료' || doc.my_approval_status === '승인') && doc.status !== '반려'
                     )),
                     rejected: getUniqueDocs(appData.filter(doc => doc.status === '반려' || doc.my_approval_status === '반려')),
                     referred: getUniqueDocs(appData.filter(doc => doc.category === 'referred')),
+                    sharedSent,
+                    sharedReceived,
                 });
             }
 
