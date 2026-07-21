@@ -5,6 +5,11 @@ import { Providers } from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
+// 전 페이지가 로그인/미들웨어 인증에 의존하는 인트라넷이므로 정적 사전 렌더링을 끔.
+// 정적(○) 페이지는 Next.js가 자체적으로 1년짜리 Cache-Control(s-maxage=31536000)을
+// 강제 부여해 배포 후에도 CDN에 구버전이 남는 문제의 원인이었음.
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'HANSUNG 인트라넷',
   description: '한성 인트라넷 시스템',

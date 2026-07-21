@@ -33,20 +33,6 @@ export default function MainLayoutClient({ children }) {
         return () => { authListener.subscription.unsubscribe(); };
     }, [router]);
 
-    useEffect(() => {
-        if (!('serviceWorker' in navigator)) return;
-        if (process.env.NODE_ENV === 'development') {
-            // 개발 환경에서는 등록된 SW를 모두 해제해서 CSS 캐시 깨짐 방지
-            navigator.serviceWorker.getRegistrations().then(regs => {
-                regs.forEach(r => r.unregister());
-            });
-            return;
-        }
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            window.location.reload();
-        });
-    }, []);
-
     return (
         <EmployeeProvider>
             <Toaster position="bottom-right" reverseOrder={false} />
