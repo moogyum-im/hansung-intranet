@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 import {
   Users, Search, Bell, ChevronDown, Wallet, ShieldAlert,
   CalendarDays, RefreshCw, Loader2, Save, Building2, CalendarRange, LayoutDashboard,
-  ShieldCheck, X, Check
+  ShieldCheck, X, Check, Zap
 } from 'lucide-react';
 
 const MENU_DEFS = [
@@ -38,6 +38,8 @@ export default function HRManagementPage() {
   const [menuPermModal, setMenuPermModal] = useState(null); // { empId, empName }
   const [empMenuPerms, setEmpMenuPerms] = useState(new Set());
   const [isSavingPerms, setIsSavingPerms] = useState(false);
+
+  const [isRunningAccrual, setIsRunningAccrual] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -219,6 +221,32 @@ export default function HRManagementPage() {
     }
   };
 
+  const handleRunAccrual = async () => {
+    if (!confirm('오늘 날짜 기준으로 월차/연차 자동 부여 대상자를 확인해 지급하시겠습니까?')) return;
+    setIsRunningAccrual(true);
+    try {
+      const res = await fetch('/api/cron/leave-accrual');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '실행 실패');
+      const grantedCount = data.granted?.length || 0;
+      if (grantedCount === 0) {
+        toast.success('오늘 자동 부여 대상자가 없습니다.');
+      } else {
+        const names = data.granted.map(g => `${g.name}(${g.type === 'monthly' ? '월차 +1' : `연차 ${g.amount}일`})`).join(', ');
+        toast.success(`${grantedCount}명 부여 완료: ${names}`);
+      }
+      if (data.errors?.length > 0) {
+        toast.error(`${data.errors.length}건 처리 실패 (콘솔 확인)`);
+        console.error('연차 자동부여 오류:', data.errors);
+      }
+      fetchData();
+    } catch (error) {
+      toast.error(error.message || '자동 부여 실행에 실패했습니다.');
+    } finally {
+      setIsRunningAccrual(false);
+    }
+  };
+
   const formatShortDate = (dateStr) => {
     const d = new Date(dateStr);
     return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
@@ -308,6 +336,9 @@ export default function HRManagementPage() {
             </div>
             <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-black rounded-xl shadow-sm transition-all active:scale-95">
               {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} 새로고침
+            </button>
+            <button onClick={handleRunAccrual} disabled={isRunningAccrual} className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-60">
+              {isRunningAccrual ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />} 연차 자동부여 실행
             </button>
           </div>
         </div>
