@@ -38,7 +38,10 @@ export function canAccessForm(form, profile) {
   const userMinLevel = getUserMinLevel(profile);
   if (form.access_level < userMinLevel) return false;
   if (form.allowed_departments && form.allowed_departments.length > 0) {
-    return form.allowed_departments.includes(profile.department);
+    if (!form.allowed_departments.includes(profile.department)) return false;
+  }
+  if (form.allowed_employment_types && form.allowed_employment_types.length > 0) {
+    if (!form.allowed_employment_types.includes(profile.employment_type || '정직원')) return false;
   }
   return true;
 }

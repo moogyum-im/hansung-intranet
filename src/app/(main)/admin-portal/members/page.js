@@ -57,7 +57,9 @@ export default function MembersManagementPage() {
     phone: '',
     birth_date: '',
     hire_date: '',
-    employment_status: '재직'
+    employment_status: '재직',
+    employment_type: '정직원',
+    employment_type_end_date: ''
   });
 
   const fetchEmployees = useCallback(async () => {
@@ -167,9 +169,10 @@ export default function MembersManagementPage() {
 
   const handleOpenRegisterModal = () => {
     setRegisterFormData({
-        email: '', password: '', full_name: '', 
-        department: departments.length > 0 ? departments[0] : '', 
-        role: 'user', position: '', phone: '', birth_date: '', hire_date: '', employment_status: '재직'
+        email: '', password: '', full_name: '',
+        department: departments.length > 0 ? departments[0] : '',
+        role: 'user', position: '', phone: '', birth_date: '', hire_date: '', employment_status: '재직',
+        employment_type: '정직원', employment_type_end_date: ''
     });
     setIsRegisterModalOpen(true);
   };
@@ -390,7 +393,12 @@ export default function MembersManagementPage() {
                             {(emp.full_name || '👤').charAt(0)}
                           </div>
                           <div className="flex flex-col">
-                            <span className={`text-base font-black transition-colors cursor-pointer ${activeTab === 'active' ? 'text-slate-900 group-hover:text-blue-600' : 'text-slate-500 group-hover:text-slate-700'}`} onClick={() => openHrProfile(emp.id)}>{emp.full_name || '이름 없음'}</span>
+                            <span className={`text-base font-black transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab === 'active' ? 'text-slate-900 group-hover:text-blue-600' : 'text-slate-500 group-hover:text-slate-700'}`} onClick={() => openHrProfile(emp.id)}>
+                              {emp.full_name || '이름 없음'}
+                              {emp.employment_type && emp.employment_type !== '정직원' && (
+                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100">{emp.employment_type}</span>
+                              )}
+                            </span>
                             <span className="text-[11px] font-bold text-slate-500 mt-0.5">{emp.department || '미지정'} · {emp.position || ''}</span>
                           </div>
                         </div>
@@ -553,6 +561,25 @@ export default function MembersManagementPage() {
                                 <option value="퇴사">퇴사</option>
                             </select>
                         </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-5 mb-5">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">고용 형태</label>
+                            <select name="employment_type" value={registerFormData.employment_type} onChange={handleRegisterInputChange} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none bg-white shadow-sm">
+                                <option value="정직원">정직원</option>
+                                <option value="수습직원">수습직원</option>
+                                <option value="계약직">계약직</option>
+                            </select>
+                        </div>
+                        {registerFormData.employment_type !== '정직원' && (
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                    {registerFormData.employment_type === '수습직원' ? '수습 만료(예정)일' : '계약 만료(예정)일'}
+                                </label>
+                                <input type="date" name="employment_type_end_date" value={registerFormData.employment_type_end_date} onChange={handleRegisterInputChange} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none shadow-sm bg-white" />
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-5 border-t border-slate-200 pt-5">

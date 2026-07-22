@@ -20,9 +20,10 @@ export async function registerEmployeeAction(formData) {
             }
         });
 
-        const { 
-            email, password, full_name, department, role, 
-            position, phone, hire_date, birth_date, employment_status 
+        const {
+            email, password, full_name, department, role,
+            position, phone, hire_date, birth_date, employment_status,
+            employment_type, employment_type_end_date
         } = formData;
 
         // 1. Supabase Auth에 신규 유저 생성
@@ -53,6 +54,8 @@ export async function registerEmployeeAction(formData) {
                     hire_date: hire_date || null,
                     birth_date: birth_date || null,
                     employment_status: employment_status || '재직',
+                    employment_type: employment_type || '정직원',
+                    employment_type_end_date: (employment_type && employment_type !== '정직원') ? (employment_type_end_date || null) : null,
                     total_leave_days: 0,
                     used_leave_days: 0,
                     leave_days_remaining: 0,

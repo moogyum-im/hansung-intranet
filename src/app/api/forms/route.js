@@ -15,7 +15,7 @@ export async function GET() {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, position, department, role')
+      .select('id, position, department, role, employment_type')
       .eq('id', user.id)
       .single();
 
@@ -83,6 +83,7 @@ export async function POST(request) {
   const labelId = formData.get('label_id') || null;
   const accessLevel = parseInt(formData.get('access_level') || '5');
   const allowedDepts = formData.get('allowed_departments');
+  const allowedEmploymentTypes = formData.get('allowed_employment_types');
   const isPinned = formData.get('is_pinned') === 'true';
   const expiresAt = formData.get('expires_at') || null;
   const changeNote = formData.get('change_note') || '최초 등록';
@@ -107,6 +108,7 @@ export async function POST(request) {
       label_id: labelId,
       access_level: accessLevel,
       allowed_departments: allowedDepts ? JSON.parse(allowedDepts) : null,
+      allowed_employment_types: allowedEmploymentTypes ? JSON.parse(allowedEmploymentTypes) : null,
       is_pinned: isPinned,
       expires_at: expiresAt,
       uploader_id: user.id,

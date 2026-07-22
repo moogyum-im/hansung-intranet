@@ -122,6 +122,8 @@ function HRProfileContent() {
             address: editedEmp.address || null,
             phone: editedEmp.phone || null,
             email: editedEmp.email || null,
+            employment_type: editedEmp.employment_type || '정직원',
+            employment_type_end_date: (editedEmp.employment_type && editedEmp.employment_type !== '정직원') ? (editedEmp.employment_type_end_date || null) : null,
             total_leave_days: totalLeave,
             used_leave_days: usedLeave,
             unused_leave_days: unusedLeave
@@ -275,6 +277,11 @@ function HRProfileContent() {
               <span className={`text-[11px] font-black px-3 py-1 rounded-full uppercase shadow-sm ${employee.employment_status === '재직' ? 'bg-blue-500 text-white' : 'bg-rose-500 text-white'}`}>
                 {employee.employment_status}
               </span>
+              {employee.employment_type && employee.employment_type !== '정직원' && (
+                <span className="text-[11px] font-black px-3 py-1 rounded-full uppercase shadow-sm bg-violet-500 text-white">
+                  {employee.employment_type}
+                </span>
+              )}
             </div>
             <p className="text-slate-500 font-bold text-lg">{employee.department}</p>
             <div className="flex flex-wrap justify-center md:justify-start gap-4 mt-4 text-sm font-bold text-slate-600">
@@ -368,8 +375,45 @@ function HRProfileContent() {
                                                 {employee.resignation_date && <InfoRow label="퇴사 일자" value={<span className="text-rose-600">{employee.resignation_date}</span>} />}
                                             </>
                                         )}
-                                        
+
                                         <InfoRow label="근속 기간" value={calculateTenure(isEditingInfo ? editedEmp.hire_date : employee.hire_date, isEditingInfo ? editedEmp.resignation_date : employee.resignation_date)} />
+
+                                        {isEditingInfo ? (
+                                            <>
+                                                <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                                                    <span className="text-xs font-bold text-slate-400">고용 형태</span>
+                                                    <select
+                                                      value={editedEmp.employment_type || '정직원'}
+                                                      onChange={(e) => setEditedEmp({ ...editedEmp, employment_type: e.target.value })}
+                                                      className="border rounded px-2 py-1 text-sm font-bold outline-none focus:border-blue-500 bg-white"
+                                                    >
+                                                      <option value="정직원">정직원</option>
+                                                      <option value="수습직원">수습직원</option>
+                                                      <option value="계약직">계약직</option>
+                                                    </select>
+                                                </div>
+                                                {editedEmp.employment_type && editedEmp.employment_type !== '정직원' && (
+                                                    <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                                                        <span className="text-xs font-bold text-slate-400">
+                                                          {editedEmp.employment_type === '수습직원' ? '수습 만료(예정)일' : '계약 만료(예정)일'}
+                                                        </span>
+                                                        <input
+                                                          type="date"
+                                                          value={editedEmp.employment_type_end_date || ''}
+                                                          onChange={(e) => setEditedEmp({ ...editedEmp, employment_type_end_date: e.target.value })}
+                                                          className="border rounded px-2 py-1 text-sm font-bold outline-none focus:border-blue-500 text-right"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <InfoRow label="고용 형태" value={employee.employment_type || '정직원'} />
+                                                {employee.employment_type && employee.employment_type !== '정직원' && employee.employment_type_end_date && (
+                                                    <InfoRow label={employee.employment_type === '수습직원' ? '수습 만료(예정)일' : '계약 만료(예정)일'} value={<span className="text-violet-600">{employee.employment_type_end_date}</span>} />
+                                                )}
+                                            </>
+                                        )}
                                         
                                         {/* 🚀 연차 현황 편집/표기 UI 추가 */}
                                         {isEditingInfo ? (

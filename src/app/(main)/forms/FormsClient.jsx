@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 
 const DEPT_LIST = ['전략기획부', '공무부', '공사부', '관리부', '굴취팀'];
+const EMPLOYMENT_TYPE_LIST = ['정직원', '수습직원', '계약직'];
 
 const ACCESS_LEVEL_COLORS = {
   5: { bg: '#eff6ff', text: '#3b82f6' },
@@ -30,6 +31,7 @@ function UploadModal({ labels, onClose, onSuccess, editForm = null, isAdmin = fa
   const [labelId, setLabelId] = useState(editForm?.label_id || '');
   const [accessLevel, setAccessLevel] = useState(editForm?.access_level ?? 5);
   const [allowedDepts, setAllowedDepts] = useState(editForm?.allowed_departments || []);
+  const [allowedEmploymentTypes, setAllowedEmploymentTypes] = useState(editForm?.allowed_employment_types || []);
   const [isPinned, setIsPinned] = useState(editForm?.is_pinned || false);
   const [expiresAt, setExpiresAt] = useState(editForm?.expires_at || '');
   const [changeNote, setChangeNote] = useState('');
@@ -38,6 +40,9 @@ function UploadModal({ labels, onClose, onSuccess, editForm = null, isAdmin = fa
 
   const toggleDept = (dept) =>
     setAllowedDepts(prev => prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]);
+
+  const toggleEmploymentType = (type) =>
+    setAllowedEmploymentTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,6 +58,7 @@ function UploadModal({ labels, onClose, onSuccess, editForm = null, isAdmin = fa
             title, description, label_id: labelId || null,
             access_level: accessLevel,
             allowed_departments: allowedDepts.length > 0 ? allowedDepts : null,
+            allowed_employment_types: allowedEmploymentTypes.length > 0 ? allowedEmploymentTypes : null,
             is_pinned: isPinned,
             expires_at: expiresAt || null,
           }),
@@ -71,6 +77,7 @@ function UploadModal({ labels, onClose, onSuccess, editForm = null, isAdmin = fa
         if (labelId) fd.append('label_id', labelId);
         fd.append('access_level', accessLevel);
         if (allowedDepts.length > 0) fd.append('allowed_departments', JSON.stringify(allowedDepts));
+        if (allowedEmploymentTypes.length > 0) fd.append('allowed_employment_types', JSON.stringify(allowedEmploymentTypes));
         fd.append('is_pinned', isPinned);
         if (expiresAt) fd.append('expires_at', expiresAt);
         fd.append('change_note', changeNote || '최초 등록');
@@ -171,6 +178,18 @@ function UploadModal({ labels, onClose, onSuccess, editForm = null, isAdmin = fa
                 <button type="button" key={dept} onClick={() => toggleDept(dept)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-black border-2 transition-all ${allowedDepts.includes(dept) ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
                   {dept}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-black text-slate-400 mb-2">고용형태 한정 공개 <span className="font-medium text-slate-300">(미선택 시 전체)</span></label>
+            <div className="flex flex-wrap gap-2">
+              {EMPLOYMENT_TYPE_LIST.map(type => (
+                <button type="button" key={type} onClick={() => toggleEmploymentType(type)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black border-2 transition-all ${allowedEmploymentTypes.includes(type) ? 'bg-violet-50 border-violet-500 text-violet-600' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                  {type}
                 </button>
               ))}
             </div>
@@ -443,6 +462,18 @@ function FormDetailModal({ form, onClose, onFavorite, onForward }) {
                 <div className="flex flex-wrap gap-1.5">
                   {form.allowed_departments.map(d => (
                     <span key={d} className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[11px] rounded-full border border-blue-100">{d}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {form.allowed_employment_types?.length > 0 && (
+              <div className="col-span-2 bg-slate-50 rounded-xl p-3">
+                <p className="text-[10px] text-slate-400 mb-1.5 flex items-center gap-1">
+                  <ClipboardList size={10} /> 공개 고용형태
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {form.allowed_employment_types.map(t => (
+                    <span key={t} className="px-2 py-0.5 bg-violet-50 text-violet-600 text-[11px] rounded-full border border-violet-100">{t}</span>
                   ))}
                 </div>
               </div>
