@@ -6,12 +6,13 @@ import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
-import { 
-  FileText, CheckCircle2, Clock, ArrowRight, 
-  Search, ChevronRight, AlertCircle, Share2, X, Search as SearchIcon, Users, 
+import {
+  FileText, CheckCircle2, Clock, ArrowRight,
+  Search, ChevronRight, AlertCircle, Share2, X, Search as SearchIcon, Users,
   LayoutDashboard, CheckSquare, FileX2, FileClock, Loader2,
-  FolderOpen, CornerDownRight, Inbox
+  FolderOpen, CornerDownRight, Inbox, Save, Trash2
 } from 'lucide-react';
+import { DRAFT_FORM_PATHS, DRAFT_TYPE_LABELS, deleteApprovalDraft } from '@/lib/approvalDraft';
 
 const formatNumber = (num) => {
     if (num === null || num === undefined || num === "" || isNaN(num) || Number(num.toString().replace(/,/g, '')) === 0) return "-";
@@ -319,12 +320,13 @@ function ExecutiveApprovalsWidget({ toReview, approved, rejected, currentUserFul
 }
 
 // --- 일반 임직원용 기존 위젯 ---
-function StandardApprovalsWidget({ toReview, submitted, approved, rejected, referred, sharedSent = [], sharedReceived = [], currentUserId, currentUserFullName, allEmployees, initialTab }) {
+function StandardApprovalsWidget({ toReview, submitted, approved, rejected, referred, sharedSent = [], sharedReceived = [], drafts = [], onDeleteDraft, currentUserId, currentUserFullName, allEmployees, initialTab }) {
     const [activeMainTab, setActiveMainTab] = useState(initialTab || 'submitted');
     const [activeSubTab, setActiveSubTab] = useState('progress');
     const [lastViewed, setLastViewed] = useState({});
     const [shareTarget, setShareTarget] = useState(null);
     const [docSearchTerm, setDocSearchTerm] = useState('');
+    const [deletingDraftId, setDeletingDraftId] = useState(null);
 
     useEffect(() => {
         const savedTime = localStorage.getItem('HANSUNG_APPROV_VIEW_V6');
@@ -399,10 +401,12 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
             if (activeSubTab === 'shared_received') currentData = sharedReceived;
             else if (activeSubTab === 'shared_sent') currentData = sharedSent;
             else currentData = cleanReferred;
+        } else if (activeMainTab === 'drafts') {
+            currentData = drafts;
         }
 
         return currentData;
-    }, [activeMainTab, activeSubTab, toReview, submitted, othersApproved, othersRejected, myApproved, myRejected, cleanReferred, sharedSent, sharedReceived, docSearchTerm, allUniqueDocs]);
+    }, [activeMainTab, activeSubTab, toReview, submitted, othersApproved, othersRejected, myApproved, myRejected, cleanReferred, sharedSent, sharedReceived, drafts, docSearchTerm, allUniqueDocs]);
 
     const getStatusChip = (status) => {
         const statusMap = { 
@@ -439,12 +443,19 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
             icon: Inbox, 
             hasUpdate: hasNewUpdate('pending', toReview) || hasNewUpdate('completed', othersApproved) || hasNewUpdate('rejected', othersRejected) 
         },
-        { 
-            key: 'referred', 
-            label: '참조 결재', 
-            count: cleanReferred.length, 
-            icon: Share2, 
-            hasUpdate: hasNewUpdate('referred', cleanReferred) 
+        {
+            key: 'referred',
+            label: '참조 결재',
+            count: cleanReferred.length,
+            icon: Share2,
+            hasUpdate: hasNewUpdate('referred', cleanReferred)
+        },
+        {
+            key: 'drafts',
+            label: '임시저장함',
+            count: drafts.length,
+            icon: Save,
+            hasUpdate: false,
         },
     ];
 
@@ -496,14 +507,14 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
                     })}
                 </nav>
                 
-                <div className="relative w-full sm:max-w-xs shrink-0">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                    <input 
-                        type="text" placeholder="전체 문서 제목 또는 기안자 검색" 
-                        className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[13px] font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder:text-slate-400"
+                <div className="relative w-full min-w-0 sm:w-40 sm:min-w-[140px]">
+                    <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                    <input
+                        type="text" placeholder="제목/기안자 검색"
+                        className="w-full pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[12px] font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder:text-slate-400"
                         value={docSearchTerm} onChange={(e) => setDocSearchTerm(e.target.value)}
                     />
-                    {docSearchTerm && <button onClick={() => setDocSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={14} /></button>}
+                    {docSearchTerm && <button onClick={() => setDocSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={13} /></button>}
                 </div>
             </div>
 
@@ -541,8 +552,49 @@ function StandardApprovalsWidget({ toReview, submitted, approved, rejected, refe
                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
                             {docSearchTerm ? <SearchIcon size={24} className="text-slate-300" /> : <FileText size={24} className="text-slate-300" />}
                         </div>
-                        {docSearchTerm ? '검색 결과가 없습니다.' : '해당하는 문서가 없습니다.'}
+                        {docSearchTerm ? '검색 결과가 없습니다.' : activeMainTab === 'drafts' ? '임시저장된 문서가 없습니다.' : '해당하는 문서가 없습니다.'}
                     </div>
+                ) : activeMainTab === 'drafts' && docSearchTerm.trim() === '' ? (
+                    filteredData.map(doc => {
+                        const formPath = DRAFT_FORM_PATHS[doc.document_type] || '/approvals';
+                        return (
+                            <div key={doc.id} className="group bg-white border border-slate-200/60 rounded-2xl p-4 hover:border-blue-300 hover:shadow-md transition-all duration-200 flex items-center justify-between">
+                                <Link href={`${formPath}?draftId=${doc.id}`} className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-3 mb-1.5 font-bold">
+                                            <p className="font-black text-[15px] text-slate-800 truncate group-hover:text-blue-600 transition-colors">{doc.title}</p>
+                                        </div>
+                                        <div className="flex items-center text-[12px] text-slate-500 gap-3 font-bold">
+                                            <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 whitespace-nowrap">
+                                                {DRAFT_TYPE_LABELS[doc.document_type] || doc.document_type}
+                                            </span>
+                                            <span className="w-1 h-1 rounded-full bg-slate-300" />
+                                            <span className="flex items-center gap-1.5"><Clock size={12} className="text-slate-400"/>{new Date(doc.last_saved_at || doc.created_at).toLocaleString()} 저장</span>
+                                        </div>
+                                    </div>
+                                </Link>
+                                <div className="flex items-center gap-2 pl-4 ml-4 border-l border-slate-100 shrink-0">
+                                    <Link href={`${formPath}?draftId=${doc.id}`} className="p-2 rounded-xl bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all border border-slate-200 flex items-center gap-1.5 text-[11px] font-black">
+                                        이어쓰기 <ChevronRight size={14} />
+                                    </Link>
+                                    <button
+                                        onClick={async () => {
+                                            if (!confirm('임시저장 문서를 삭제하시겠습니까?')) return;
+                                            setDeletingDraftId(doc.id);
+                                            try {
+                                                await deleteApprovalDraft(doc.id);
+                                                onDeleteDraft?.(doc.id);
+                                            } catch (e) { toast.error(e.message); } finally { setDeletingDraftId(null); }
+                                        }}
+                                        disabled={deletingDraftId === doc.id}
+                                        className="p-2 rounded-xl bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all border border-slate-200 disabled:opacity-50"
+                                    >
+                                        {deletingDraftId === doc.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })
                 ) : (
                     filteredData.map(doc => {
                         const currentApprover = doc.current_approver_id ? allEmployees.find(e => e.id === doc.current_approver_id) : null;
@@ -614,7 +666,7 @@ function ApprovalsPageContent() {
     const { employee, loading: employeeLoading } = useEmployee();
     const searchParams = useSearchParams();
     const initialTab = searchParams.get('tab') === 'received' ? 'received' : undefined;
-    const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [], approved: [], rejected: [], referred: [], sharedSent: [], sharedReceived: [] });
+    const [approvalsData, setApprovalsData] = useState({ toReview: [], submitted: [], approved: [], rejected: [], referred: [], sharedSent: [], sharedReceived: [], drafts: [] });
     const [allEmployees, setAllEmployees] = useState([]);
     const [loadingApprovals, setLoadingApprovals] = useState(true);
 
@@ -649,9 +701,10 @@ function ApprovalsPageContent() {
                     return Array.from(uniqueMap.values());
                 };
 
-                const [{ data: sentLogs }, { data: receivedLogs }] = await Promise.all([
+                const [{ data: sentLogs }, { data: receivedLogs }, { data: draftDocs }] = await Promise.all([
                     supabase.from('approval_share_logs').select('*').eq('sender_id', currentEmployee.id).order('created_at', { ascending: false }),
                     supabase.from('approval_share_logs').select('*').eq('receiver_id', currentEmployee.id).order('created_at', { ascending: false }),
+                    supabase.from('approval_documents').select('id, title, document_type, created_at, last_saved_at').eq('author_id', currentEmployee.id).eq('status', 'draft').order('last_saved_at', { ascending: false, nullsFirst: false }),
                 ]);
 
                 const sharedSent = (sentLogs || []).map(log => ({
@@ -677,15 +730,16 @@ function ApprovalsPageContent() {
                 }));
 
                 setApprovalsData({
-                    toReview: getUniqueDocs(appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려' && doc.my_approval_status !== '미결')),
-                    submitted: getUniqueDocs(appData.filter(doc => doc.category === 'submitted' && doc.status !== '반려' && doc.status !== '승인' && doc.status !== '완료')),
+                    toReview: getUniqueDocs(appData.filter(doc => doc.category === 'to_review' && doc.status !== '반려' && doc.status !== 'draft' && doc.my_approval_status !== '미결')),
+                    submitted: getUniqueDocs(appData.filter(doc => doc.category === 'submitted' && doc.status !== '반려' && doc.status !== '승인' && doc.status !== '완료' && doc.status !== 'draft')),
                     approved: getUniqueDocs(appData.filter(doc =>
                         (doc.status === '승인' || doc.status === '완료' || doc.my_approval_status === '승인') && doc.status !== '반려'
                     )),
                     rejected: getUniqueDocs(appData.filter(doc => doc.status === '반려' || doc.my_approval_status === '반려')),
-                    referred: getUniqueDocs(appData.filter(doc => doc.category === 'referred')),
+                    referred: getUniqueDocs(appData.filter(doc => doc.category === 'referred' && doc.status !== 'draft')),
                     sharedSent,
                     sharedReceived,
+                    drafts: draftDocs || [],
                 });
             }
 
@@ -796,6 +850,7 @@ function ApprovalsPageContent() {
                                 currentUserFullName={employee?.full_name}
                                 allEmployees={allEmployees}
                                 initialTab={initialTab}
+                                onDeleteDraft={(draftId) => setApprovalsData(prev => ({ ...prev, drafts: prev.drafts.filter(d => d.id !== draftId) }))}
                             />
                         )
                     ) : (

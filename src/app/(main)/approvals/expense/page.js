@@ -7,7 +7,8 @@ import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
-import { X, Plus, Loader2, Database, CheckCircle, Users, Calendar, Wallet, ImageIcon, CreditCard, UserPlus, Info, Bold, Palette, Highlighter } from 'lucide-react';
+import { X, Plus, Loader2, Database, CheckCircle, Users, Calendar, Wallet, ImageIcon, CreditCard, UserPlus, Info, Bold, Palette, Highlighter, Save } from 'lucide-react';
+import { saveApprovalDraft, loadApprovalDraft } from '@/lib/approvalDraft';
 
 // 🚀 사내 맞춤형 초경량 리치 텍스트 에디터
 const SimpleRichTextEditor = ({ value, onChange }) => {
@@ -185,7 +186,9 @@ function ExpenseReportPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const editId = searchParams.get('editId');
-    const [editLoading, setEditLoading] = useState(!!searchParams.get('editId'));
+    const draftId = searchParams.get('draftId');
+    const [editLoading, setEditLoading] = useState(!!searchParams.get('editId') || !!searchParams.get('draftId'));
+    const [savingDraft, setSavingDraft] = useState(false);
 
     const [allEmployees, setAllEmployees] = useState([]);
     const [formData, setFormData] = useState({
@@ -222,7 +225,7 @@ function ExpenseReportPage() {
     }, [allEmployees]);
 
     useEffect(() => {
-        if (editId) return;
+        if (editId || draftId) return;
         const saved = localStorage.getItem('expense_write_backup');
         if (saved) {
             try {
@@ -233,13 +236,27 @@ function ExpenseReportPage() {
                 if (parsed.referrers) setReferrers(parsed.referrers);
             } catch (e) { console.error("복구 실패", e); }
         }
-    }, [editId]);
+    }, [editId, draftId]);
 
     useEffect(() => {
-        if (editId) return;
+        if (editId || draftId) return;
         const dataToSave = { attachments, formData, approvers, referrers };
         localStorage.setItem('expense_write_backup', JSON.stringify(dataToSave));
-    }, [editId, attachments, formData, approvers, referrers]);
+    }, [editId, draftId, attachments, formData, approvers, referrers]);
+
+    useEffect(() => {
+        if (!draftId) return;
+        const load = async () => {
+            try {
+                const d = await loadApprovalDraft(draftId);
+                setFormData(prev => ({ ...prev, ...d.content }));
+                setApprovers(d.approvers);
+                setReferrers(d.referrers);
+                setAttachments(d.attachments);
+            } catch (e) { toast.error(e.message); } finally { setEditLoading(false); }
+        };
+        load();
+    }, [draftId]);
 
     useEffect(() => {
         if (!editId) return;
@@ -331,6 +348,23 @@ function ExpenseReportPage() {
     };
     const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
 
+    const handleSaveDraft = async () => {
+        setSavingDraft(true);
+        try {
+            const { id } = await saveApprovalDraft({
+                draftId,
+                document_type: 'expense_report',
+                title: `지출결의서-${formData.subject}`,
+                content: formData,
+                attachments,
+                approvers,
+                referrers: referrers.filter(r => r.id),
+            });
+            toast.success("임시저장 되었습니다.");
+            if (!draftId) router.replace(`/approvals/expense?draftId=${id}`);
+        } catch (e) { toast.error(e.message); } finally { setSavingDraft(false); }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.subject.trim()) return toast.error("지출 제목을 입력해주세요.");
@@ -360,7 +394,7 @@ function ExpenseReportPage() {
                 toast.success("문서가 수정되었습니다.");
                 router.push(`/approvals/${editId}`);
             } else {
-                const response = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData) });
+                const response = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...submissionData, draftId: draftId || undefined }) });
                 if (!response.ok) throw new Error('상신 실패');
                 localStorage.removeItem('expense_write_backup');
                 localStorage.removeItem('expense_temp_attachments');
@@ -386,9 +420,16 @@ function ExpenseReportPage() {
         <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none font-black">
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black font-black">
                 <div className="flex items-center gap-2"></div>
-                <button onClick={handleSubmit} disabled={loading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black text-[11px] shadow-lg transition-all active:scale-95 font-black disabled:opacity-60">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? <><Loader2 size={14} className="animate-spin" /> 업로드 중...</> : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 지출결의서 상신</>}
-                </button>
+                <div className="flex items-center gap-2">
+                    {!editId && (
+                        <button onClick={handleSaveDraft} disabled={savingDraft || loading} className="flex items-center gap-2 px-5 py-2 bg-white text-black border border-black text-[11px] shadow-sm transition-all active:scale-95 font-black disabled:opacity-60">
+                            {savingDraft ? <Loader2 size={14} className="animate-spin" /> : <><Save size={14} /> 임시저장</>}
+                        </button>
+                    )}
+                    <button onClick={handleSubmit} disabled={loading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black text-[11px] shadow-lg transition-all active:scale-95 font-black disabled:opacity-60">
+                        {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? <><Loader2 size={14} className="animate-spin" /> 업로드 중...</> : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 지출결의서 상신</>}
+                    </button>
+                </div>
             </div>
 
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">

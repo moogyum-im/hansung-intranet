@@ -7,15 +7,18 @@ import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
-import { X, Plus, Loader2, CheckCircle, FileIcon, Trash2, ChevronRight, Users, ImageIcon, Map, Info } from 'lucide-react';
+import { X, Plus, Loader2, CheckCircle, FileIcon, Trash2, ChevronRight, Users, ImageIcon, Map, Info, Save } from 'lucide-react';
+import { saveApprovalDraft, loadApprovalDraft } from '@/lib/approvalDraft';
 
 function ExpenseSettlementPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
     const searchParams = useSearchParams();
     const editId = searchParams.get('editId');
+    const draftId = searchParams.get('draftId');
     const [isRestored, setIsRestored] = useState(false);
     const [saveStatus, setSaveStatus] = useState('완료');
+    const [savingDraft, setSavingDraft] = useState(false);
     const isInitialMount = useRef(true);
 
     const [allEmployees, setAllEmployees] = useState([]); 
@@ -83,6 +86,15 @@ function ExpenseSettlementPage() {
                 }
                 if (approversData) setApprovers(approversData.map(a => ({ id: a.approver_id, full_name: a.approver?.full_name, position: a.approver?.position })));
                 if (referrersData) setReferrers(referrersData.map(r => ({ id: r.referrer_id, full_name: r.referrer?.full_name, position: r.referrer?.position })));
+            } else if (draftId) {
+                try {
+                    const d = await loadApprovalDraft(draftId);
+                    setFormData(prev => ({ ...prev, ...d.content }));
+                    if (d.content.mapAttachments) setMapAttachments(d.content.mapAttachments);
+                    if (d.content.receiptAttachments) setReceiptAttachments(d.content.receiptAttachments);
+                    setApprovers(d.approvers);
+                    setReferrers(d.referrers);
+                } catch (e) { toast.error(e.message); }
             } else {
                 const saved = localStorage.getItem('HANSUNG_DRAFT_EXPENSE_SETTLEMENT_FINAL_V3');
                 if (saved) {
@@ -99,10 +111,10 @@ function ExpenseSettlementPage() {
             setIsRestored(true);
         };
         init();
-    }, [editId]);
+    }, [editId, draftId]);
 
     useEffect(() => {
-        if (!isRestored || editId) return;
+        if (!isRestored || editId || draftId) return;
         if (isInitialMount.current) { isInitialMount.current = false; return; }
         setSaveStatus('저장중');
         const timeout = setTimeout(() => {
@@ -114,7 +126,7 @@ function ExpenseSettlementPage() {
             } catch (e) { setSaveStatus('에러'); }
         }, 300);
         return () => clearTimeout(timeout);
-    }, [editId, formData, approvers, referrers, mapAttachments, receiptAttachments, isRestored]);
+    }, [editId, draftId, formData, approvers, referrers, mapAttachments, receiptAttachments, isRestored]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -147,6 +159,29 @@ function ExpenseSettlementPage() {
         setReceiptAttachments(prev => [...prev, ...formatted]);
         setIsUploading(false);
     }, []);
+
+    const handleSaveDraft = async () => {
+        setSavingDraft(true);
+        try {
+            const { id } = await saveApprovalDraft({
+                draftId,
+                document_type: 'expense_settlement',
+                title: `${formData.title} (${employee?.full_name})`,
+                content: { ...formData, fuelAndDepreciation, otherTotal, totalAmount, mapAttachments, receiptAttachments },
+                attachments: [...mapAttachments, ...receiptAttachments],
+                approvers: approvers.map(a => {
+                    const emp = allEmployees.find(e => e.id === a.id);
+                    return { id: a.id, full_name: emp?.full_name, position: emp?.position };
+                }),
+                referrers: referrers.filter(r => r.id).map(r => {
+                    const emp = allEmployees.find(e => e.id === r.id);
+                    return { id: r.id, full_name: emp?.full_name, position: emp?.position };
+                }),
+            });
+            toast.success("임시저장 되었습니다.");
+            if (!draftId) router.replace(`/approvals/expense-settlement?draftId=${id}`);
+        } catch (e) { toast.error(e.message); } finally { setSavingDraft(false); }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -182,7 +217,7 @@ function ExpenseSettlementPage() {
                 toast.success("문서가 수정되었습니다.");
                 router.push(`/approvals/${editId}`);
             } else {
-                const res = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData) });
+                const res = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...submissionData, draftId: draftId || undefined }) });
                 if (!res.ok) throw new Error('상신 실패');
                 localStorage.removeItem('HANSUNG_DRAFT_EXPENSE_SETTLEMENT_FINAL_V3');
                 toast.success("결재 상신 완료!");
@@ -207,9 +242,16 @@ function ExpenseSettlementPage() {
         <div className="bg-[#f2f4f7] min-h-screen p-4 sm:p-6 flex flex-col items-center font-sans text-black font-black leading-none font-black">
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center no-print px-2 font-black">
                 <div className="flex items-center gap-2"></div>
-                <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 결재 상신하기</>}
-                </button>
+                <div className="flex items-center gap-2">
+                    {!editId && (
+                        <button onClick={handleSaveDraft} disabled={savingDraft || loading} className="flex items-center gap-2 px-5 py-2 bg-white text-black border border-black text-[11px] shadow-sm transition-all active:scale-95 font-black disabled:opacity-60">
+                            {savingDraft ? <Loader2 size={14} className="animate-spin" /> : <><Save size={14} /> 임시저장</>}
+                        </button>
+                    )}
+                    <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
+                        {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 결재 상신하기</>}
+                    </button>
+                </div>
             </div>
 
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">

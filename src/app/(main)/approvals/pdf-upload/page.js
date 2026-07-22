@@ -2,16 +2,21 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
-import { X, CheckCircle, Users, Loader2, FileText } from 'lucide-react';
+import { X, CheckCircle, Users, Loader2, FileText, Save } from 'lucide-react';
+import { saveApprovalDraft, loadApprovalDraft } from '@/lib/approvalDraft';
 
 function PdfUploadPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const draftId = searchParams.get('draftId');
+    const [draftLoading, setDraftLoading] = useState(!!searchParams.get('draftId'));
+    const [savingDraft, setSavingDraft] = useState(false);
 
     const [allEmployees, setAllEmployees] = useState([]);
     const [title, setTitle] = useState('');
@@ -42,6 +47,27 @@ function PdfUploadPage() {
                 .then(({ data }) => setAllEmployees(data || []));
         }
     }, [employee, employeeLoading]);
+
+    useEffect(() => {
+        if (!draftId) return;
+        const load = async () => {
+            try {
+                const d = await loadApprovalDraft(draftId);
+                setTitle(d.content.title || d.title || '');
+                setNote(d.content.note || '');
+                setApprovers(d.approvers);
+                setReferrers(d.referrers);
+                setAttachments(d.attachments);
+                const firstPdf = d.attachments.find(f => f.name?.toLowerCase().endsWith('.pdf')) || d.attachments[0];
+                if (firstPdf?.path) {
+                    const cleanPath = firstPdf.path.replace('approval_attachments/', '').trim();
+                    const { data } = await supabase.storage.from('approval_attachments').createSignedUrl(cleanPath, 3600);
+                    if (data?.signedUrl) setPdfPreviewUrl(data.signedUrl);
+                }
+            } catch (e) { toast.error(e.message); } finally { setDraftLoading(false); }
+        };
+        load();
+    }, [draftId]);
 
     const handleUploadComplete = useCallback(async (uploadedFiles) => {
         if (Array.isArray(uploadedFiles)) {
@@ -86,6 +112,23 @@ function PdfUploadPage() {
     };
     const removeReferrer = (index) => setReferrers(prev => prev.filter((_, i) => i !== index));
 
+    const handleSaveDraft = async () => {
+        setSavingDraft(true);
+        try {
+            const { id } = await saveApprovalDraft({
+                draftId,
+                document_type: 'pdf_form',
+                title,
+                content: { title, note },
+                attachments,
+                approvers,
+                referrers: referrers.filter(r => r.id),
+            });
+            toast.success('임시저장 되었습니다.');
+            if (!draftId) router.replace(`/approvals/pdf-upload?draftId=${id}`);
+        } catch (e) { toast.error(e.message); } finally { setSavingDraft(false); }
+    };
+
     const handleSubmit = async () => {
         if (!title.trim()) return toast.error('문서 제목을 입력해주세요.');
         if (attachments.length === 0) return toast.error('PDF 파일을 첨부해주세요.');
@@ -108,6 +151,7 @@ function PdfUploadPage() {
                     requester_department: employee.department,
                     requester_position: employee.position,
                     attachments,
+                    draftId: draftId || undefined,
                 }),
             });
             if (!res.ok) { const d = await res.json(); throw new Error(d.error || '상신 실패'); }
@@ -120,7 +164,7 @@ function PdfUploadPage() {
         }
     };
 
-    if (employeeLoading) return (
+    if (employeeLoading || draftLoading) return (
         <div className="min-h-screen flex items-center justify-center text-xs font-black animate-pulse uppercase tracking-widest">
             HANSUNG ERP SYNCING...
         </div>
@@ -131,10 +175,15 @@ function PdfUploadPage() {
             {/* 상단 버튼 */}
             <div className="w-full max-w-[1100px] mb-4 flex justify-between items-center px-2">
                 <div />
-                <button onClick={handleSubmit} disabled={loading || isUploading}
-                    className="flex items-center gap-2 px-6 py-2 bg-black text-white hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? '파일 업로드 중...' : <><CheckCircle size={14} /> 결재 상신</>}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={handleSaveDraft} disabled={savingDraft || loading} className="flex items-center gap-2 px-5 py-2 bg-white text-black border border-black text-[11px] shadow-sm transition-all active:scale-95 font-black disabled:opacity-60">
+                        {savingDraft ? <Loader2 size={14} className="animate-spin" /> : <><Save size={14} /> 임시저장</>}
+                    </button>
+                    <button onClick={handleSubmit} disabled={loading || isUploading}
+                        className="flex items-center gap-2 px-6 py-2 bg-black text-white hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
+                        {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? '파일 업로드 중...' : <><CheckCircle size={14} /> 결재 상신</>}
+                    </button>
+                </div>
             </div>
 
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

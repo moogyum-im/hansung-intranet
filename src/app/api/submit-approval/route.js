@@ -16,7 +16,7 @@ export async function POST(request) {
         const {
             title, content, document_type, approver_ids, referrer_ids,
             requester_id, requester_name, requester_department, requester_position,
-            attachments
+            attachments, draftId
         } = body;
 
         // [방어코드] 필수 데이터 검증 강화
@@ -24,27 +24,56 @@ export async function POST(request) {
             return NextResponse.json({ error: '필수 정보(제목, 문서 종류, 결재선)가 누락되었습니다.' }, { status: 400 });
         }
 
-        // 1. 메인 문서 생성 (approval_documents)
-        const { data: newDoc, error: docError } = await supabase
-            .from('approval_documents')
-            .insert({
-                title,
-                content: content || '{}',
-                document_type,
-                author_id: user.id, // 실제 기안자(로그인 유저)
-                requester_id: requester_id || user.id, // 요청자 (없으면 본인)
-                requester_name,
-                requester_department,
-                requester_position,
-                status: 'pending',
-                current_step: 1,
-                current_approver_id: approver_ids[0].id,
-                attachments: attachments || [] // null 방지
-            })
-            .select()
-            .single();
+        const docFields = {
+            title,
+            content: content || '{}',
+            document_type,
+            author_id: user.id, // 실제 기안자(로그인 유저)
+            requester_id: requester_id || user.id, // 요청자 (없으면 본인)
+            requester_name,
+            requester_department,
+            requester_position,
+            status: 'pending',
+            current_step: 1,
+            current_approver_id: approver_ids[0].id,
+            attachments: attachments || [], // null 방지
+            draft_approvers: [],
+            draft_referrers: [],
+        };
 
-        if (docError) throw new Error(`문서 생성 실패: ${docError.message}`);
+        let newDoc;
+        if (draftId) {
+            // 임시저장 문서를 상신 문서로 전환 (본인 소유의 draft 상태만 허용)
+            const { data: draftDoc, error: draftFetchError } = await supabase
+                .from('approval_documents')
+                .select('id, author_id, status')
+                .eq('id', draftId)
+                .single();
+
+            if (draftFetchError || !draftDoc) return NextResponse.json({ error: '임시저장 문서를 찾을 수 없습니다.' }, { status: 404 });
+            if (draftDoc.author_id !== user.id) return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
+            if (draftDoc.status !== 'draft') return NextResponse.json({ error: '이미 상신된 문서입니다.' }, { status: 400 });
+
+            const { data: updatedDoc, error: updateError } = await supabase
+                .from('approval_documents')
+                .update(docFields)
+                .eq('id', draftId)
+                .select()
+                .single();
+
+            if (updateError) throw new Error(`문서 상신 전환 실패: ${updateError.message}`);
+            newDoc = updatedDoc;
+        } else {
+            // 1. 메인 문서 생성 (approval_documents)
+            const { data: insertedDoc, error: docError } = await supabase
+                .from('approval_documents')
+                .insert(docFields)
+                .select()
+                .single();
+
+            if (docError) throw new Error(`문서 생성 실패: ${docError.message}`);
+            newDoc = insertedDoc;
+        }
 
         // 2. 결재선 등록 (approval_document_approvers)
         const approversToInsert = approver_ids.map((approver, index) => ({

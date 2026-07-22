@@ -7,7 +7,8 @@ import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
-import { X, Plus, Loader2, CheckCircle, Users, Camera, ArrowLeft, Info, Bold, Palette, Highlighter } from 'lucide-react';
+import { X, Plus, Loader2, CheckCircle, Users, Camera, ArrowLeft, Info, Bold, Palette, Highlighter, Save } from 'lucide-react';
+import { saveApprovalDraft, loadApprovalDraft } from '@/lib/approvalDraft';
 
 const SimpleRichTextEditor = ({ value, onChange, placeholder, minHeight = "200px" }) => {
     const editorRef = useRef(null);
@@ -55,7 +56,9 @@ function WorkReportPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const editId = searchParams.get('editId');
-    const [editLoading, setEditLoading] = useState(!!searchParams.get('editId'));
+    const draftId = searchParams.get('draftId');
+    const [editLoading, setEditLoading] = useState(!!searchParams.get('editId') || !!searchParams.get('draftId'));
+    const [savingDraft, setSavingDraft] = useState(false);
 
     const [allEmployees, setAllEmployees] = useState([]);
     const [approvers, setApprovers] = useState([]);
@@ -114,7 +117,7 @@ function WorkReportPage() {
     }, [allEmployees]);
 
     useEffect(() => {
-        if (editId) return;
+        if (editId || draftId) return;
         const saved = localStorage.getItem('work_report_draft_backup');
         if (saved) {
             try {
@@ -137,13 +140,29 @@ function WorkReportPage() {
                 localStorage.removeItem('work_report_draft_backup');
             }
         }
-    }, [editId]);
+    }, [editId, draftId]);
 
     useEffect(() => {
-        if (editId) return;
+        if (editId || draftId) return;
         const dataToSave = { formData, approvers, referrers, attachments, visibleSections };
         localStorage.setItem('work_report_draft_backup', JSON.stringify(dataToSave));
-    }, [editId, formData, approvers, referrers, attachments, visibleSections]);
+    }, [editId, draftId, formData, approvers, referrers, attachments, visibleSections]);
+
+    useEffect(() => {
+        if (!draftId) return;
+        const load = async () => {
+            try {
+                const d = await loadApprovalDraft(draftId);
+                const safeContent = { ...d.content, galleryItems: Array.isArray(d.content.galleryItems) ? d.content.galleryItems : [] };
+                setFormData(prev => ({ ...prev, ...safeContent }));
+                if (d.content.visibleSections) setVisibleSections(d.content.visibleSections);
+                setApprovers(d.approvers);
+                setReferrers(d.referrers);
+                setAttachments(d.attachments);
+            } catch (e) { toast.error(e.message); } finally { setEditLoading(false); }
+        };
+        load();
+    }, [draftId]);
 
     useEffect(() => {
         if (!editId) return;
@@ -276,6 +295,23 @@ function WorkReportPage() {
     };
     const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
 
+    const handleSaveDraft = async () => {
+        setSavingDraft(true);
+        try {
+            const { id } = await saveApprovalDraft({
+                draftId,
+                document_type: 'work_report',
+                title: `${formData.reportType} (${employee?.full_name})`,
+                content: { ...formData, visibleSections },
+                attachments,
+                approvers,
+                referrers: referrers.filter(r => r.id),
+            });
+            toast.success("임시저장 되었습니다.");
+            if (!draftId) router.replace(`/approvals/work-report?draftId=${id}`);
+        } catch (e) { toast.error(e.message); } finally { setSavingDraft(false); }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (isUploading) return toast.error("파일 업로드가 완료될 때까지 기다려주세요.");
@@ -309,7 +345,7 @@ function WorkReportPage() {
                 toast.success("문서가 수정되었습니다.");
                 router.push(`/approvals/${editId}`);
             } else {
-                const response = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData) });
+                const response = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...submissionData, draftId: draftId || undefined }) });
                 if (!response.ok) throw new Error('상신 실패');
                 localStorage.removeItem('work_report_draft_backup');
                 toast.success("상신 완료");
@@ -343,9 +379,16 @@ function WorkReportPage() {
                 <div className="flex items-center gap-4">
                     <button onClick={() => router.back()} className="text-black hover:bg-white/50 p-2 rounded-full transition-all"><ArrowLeft size={24}/></button>
                 </div>
-                <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 업무보고서 상신</>}
-                </button>
+                <div className="flex items-center gap-2">
+                    {!editId && (
+                        <button onClick={handleSaveDraft} disabled={savingDraft || loading} className="flex items-center gap-2 px-5 py-2 bg-white text-black border border-black text-[11px] shadow-sm transition-all active:scale-95 font-black disabled:opacity-60">
+                            {savingDraft ? <Loader2 size={14} className="animate-spin" /> : <><Save size={14} /> 임시저장</>}
+                        </button>
+                    )}
+                    <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
+                        {loading ? <Loader2 size={14} className="animate-spin" /> : editId ? <><CheckCircle size={14} /> 수정 저장</> : <><CheckCircle size={14} /> 업무보고서 상신</>}
+                    </button>
+                </div>
             </div>
 
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

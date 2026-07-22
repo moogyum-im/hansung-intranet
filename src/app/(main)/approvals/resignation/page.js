@@ -7,14 +7,17 @@ import { toast } from 'react-hot-toast';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import { supabase } from '@/lib/supabase/client';
 import FileUploadDnd from '@/components/FileUploadDnd';
-import { X, Plus, Loader2, Database, CheckCircle, FileIcon, ChevronRight, Users, Calendar, AlertCircle, ImageIcon } from 'lucide-react';
+import { X, Plus, Loader2, Database, CheckCircle, FileIcon, ChevronRight, Users, Calendar, AlertCircle, ImageIcon, Save } from 'lucide-react';
+import { saveApprovalDraft, loadApprovalDraft } from '@/lib/approvalDraft';
 
 function ResignationPage() {
     const { employee, loading: employeeLoading } = useEmployee();
     const router = useRouter();
     const searchParams = useSearchParams();
     const editId = searchParams.get('editId');
-    const [editLoading, setEditLoading] = useState(!!searchParams.get('editId'));
+    const draftId = searchParams.get('draftId');
+    const [editLoading, setEditLoading] = useState(!!searchParams.get('editId') || !!searchParams.get('draftId'));
+    const [savingDraft, setSavingDraft] = useState(false);
     const [allEmployees, setAllEmployees] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
@@ -29,9 +32,9 @@ function ResignationPage() {
     const [attachments, setAttachments] = useState([]);
     const [existingAttachments, setExistingAttachments] = useState([]);
 
-    // 1. [데이터 보존] 로컬 스토리지 복구 (수정 모드에서는 건너뜀)
+    // 1. [데이터 보존] 로컬 스토리지 복구 (수정/임시저장 모드에서는 건너뜀)
     useEffect(() => {
-        if (editId) return;
+        if (editId || draftId) return;
         const saved = localStorage.getItem('resignation_draft_backup');
         if (saved) {
             try {
@@ -42,14 +45,29 @@ function ResignationPage() {
                 setAttachments(parsed.attachments || []);
             } catch (e) { console.error("복구 실패", e); }
         }
-    }, [editId]);
+    }, [editId, draftId]);
 
-    // 2. [실시간 저장] 상태 변경 시 백업 (수정 모드에서는 건너뜀)
+    // 2. [실시간 저장] 상태 변경 시 백업 (수정/임시저장 모드에서는 건너뜀)
     useEffect(() => {
-        if (editId) return;
+        if (editId || draftId) return;
         const dataToSave = { formData, approvers, referrers, attachments };
         localStorage.setItem('resignation_draft_backup', JSON.stringify(dataToSave));
-    }, [editId, formData, approvers, referrers, attachments]);
+    }, [editId, draftId, formData, approvers, referrers, attachments]);
+
+    // 임시저장 문서 로드
+    useEffect(() => {
+        if (!draftId) return;
+        const load = async () => {
+            try {
+                const d = await loadApprovalDraft(draftId);
+                setFormData(prev => ({ ...prev, ...d.content }));
+                setApprovers(d.approvers);
+                setReferrers(d.referrers);
+                setAttachments(d.attachments);
+            } catch (e) { toast.error(e.message); } finally { setEditLoading(false); }
+        };
+        load();
+    }, [draftId]);
 
     // 수정 모드: 기존 문서 데이터 로드
     useEffect(() => {
@@ -130,6 +148,29 @@ function ResignationPage() {
     };
     const removeReferrer = (index) => setReferrers(referrers.filter((_, i) => i !== index));
 
+    const handleSaveDraft = async () => {
+        setSavingDraft(true);
+        try {
+            const { id } = await saveApprovalDraft({
+                draftId,
+                document_type: 'resignation',
+                title: `사직서 (${employee?.full_name})`,
+                content: formData,
+                attachments,
+                approvers: approvers.map(app => {
+                    const emp = allEmployees.find(e => e.id === app.id);
+                    return { id: app.id, full_name: emp?.full_name, position: emp?.position };
+                }),
+                referrers: referrers.filter(r => r.id).map(ref => {
+                    const emp = allEmployees.find(e => e.id === ref.id);
+                    return { id: ref.id, full_name: emp?.full_name, position: emp?.position };
+                }),
+            });
+            toast.success("임시저장 되었습니다.");
+            if (!draftId) router.replace(`/approvals/resignation?draftId=${id}`);
+        } catch (e) { toast.error(e.message); } finally { setSavingDraft(false); }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (isUploading) return toast.error("파일 업로드가 완료될 때까지 기다려주세요.");
@@ -167,7 +208,7 @@ function ResignationPage() {
                 toast.success("문서가 수정되었습니다.");
                 router.push(`/approvals/${editId}`);
             } else {
-                const response = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData) });
+                const response = await fetch('/api/submit-approval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...submissionData, draftId: draftId || undefined }) });
                 if (!response.ok) throw new Error('상신 실패');
                 localStorage.removeItem('resignation_draft_backup');
                 toast.success("사직서가 정상 상신되었습니다.");
@@ -185,9 +226,16 @@ function ResignationPage() {
                     <Database size={14} className="text-black" />
                     <span className="text-[10px] uppercase tracking-widest font-black text-black">HANSUNG ERP SYSTEM</span>
                 </div>
-                <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : editId ? <><CheckCircle size={14} /> 수정 저장</>  : <><CheckCircle size={14} /> 사직서 상신하기</>}
-                </button>
+                <div className="flex items-center gap-2">
+                    {!editId && (
+                        <button onClick={handleSaveDraft} disabled={savingDraft || loading} className="flex items-center gap-2 px-5 py-2 bg-white text-black border border-black text-[11px] shadow-sm transition-all active:scale-95 font-black disabled:opacity-60">
+                            {savingDraft ? <Loader2 size={14} className="animate-spin" /> : <><Save size={14} /> 임시저장</>}
+                        </button>
+                    )}
+                    <button onClick={handleSubmit} disabled={loading || isUploading} className="flex items-center gap-2 px-6 py-2 bg-black text-white border border-black hover:bg-slate-800 text-[11px] shadow-lg transition-all active:scale-95 font-black">
+                        {loading ? <Loader2 size={14} className="animate-spin" /> : isUploading ? "업로드 중..." : editId ? <><CheckCircle size={14} /> 수정 저장</>  : <><CheckCircle size={14} /> 사직서 상신하기</>}
+                    </button>
+                </div>
             </div>
 
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-black">
