@@ -6,6 +6,9 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// 이 날짜 이전 응당일은 관리부 수기 입력분이므로 자동부여 대상에서 제외 (기존 값 보존)
+const AUTOMATION_START_DATE = '2026-08-01';
+
 // 오늘 날짜(KST)를 'YYYY-MM-DD'로 반환
 function todayKST() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
@@ -51,6 +54,16 @@ export async function GET(request) {
     );
 
     const today = todayKST();
+
+    if (today < AUTOMATION_START_DATE) {
+      return NextResponse.json({
+        success: true,
+        date: today,
+        skipped: `자동부여 시작일(${AUTOMATION_START_DATE}) 이전이라 실행하지 않음`,
+        granted: [],
+        errors: [],
+      });
+    }
 
     const { data: employees, error } = await adminSupabase
       .from('profiles')
