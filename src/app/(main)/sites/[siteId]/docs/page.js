@@ -9,6 +9,12 @@ import {
     FilePlus, X, Save, Loader2, Activity, Clock
 } from 'lucide-react';
 
+const formatLogTime = (log) => {
+    const date = log?.created_at ? new Date(log.created_at) : null;
+    if (!date || isNaN(date.getTime())) return log?.log_time?.split(' ').slice(3).join(' ') || '';
+    return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
 export default function SiteDocumentsPage() {
     const { siteId } = useParams();
     const router = useRouter();
@@ -195,7 +201,7 @@ export default function SiteDocumentsPage() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex justify-between items-start">
                                             <span className="text-[12px] font-black text-slate-800">{log.user_name}</span>
-                                            <span className="text-[9px] text-slate-400 font-bold"><Clock size={10} className="inline mr-1"/>{log.log_time?.split(' ').slice(3).join(' ')}</span>
+                                            <span className="text-[9px] text-slate-400 font-bold"><Clock size={10} className="inline mr-1"/>{formatLogTime(log)}</span>
                                         </div>
                                         <p className="text-[10px] text-slate-500 font-bold leading-tight mt-0.5">{log.content}</p>
                                     </div>
