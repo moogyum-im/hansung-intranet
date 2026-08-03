@@ -34,6 +34,12 @@ function ApologyPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
     const [existingAttachments, setExistingAttachments] = useState([]);
+    const [originalRequester, setOriginalRequester] = useState(null);
+
+    // 수정 모드에서는 문서의 원래 기안자 정보를 유지하고, 새 문서 작성 시에만 로그인한 본인을 기안자로 표시한다.
+    const requesterInfo = editId && originalRequester ? originalRequester : {
+        id: employee?.id, full_name: employee?.full_name, department: employee?.department, position: employee?.position
+    };
 
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
@@ -95,6 +101,12 @@ function ApologyPage() {
                 setFormData(prev => ({ ...prev, ...content }));
                 setAttachments(doc.attachments || []);
                 setExistingAttachments(doc.attachments || []);
+                setOriginalRequester({
+                    id: doc.requester_id,
+                    full_name: doc.requester_name,
+                    department: doc.requester_department,
+                    position: doc.requester_position,
+                });
             }
             if (approversData) setApprovers(approversData.map(a => ({ id: a.approver_id, full_name: a.approver?.full_name, position: a.approver?.position })));
             if (referrersData) setReferrers(referrersData.map(r => ({ id: r.referrer_id, full_name: r.referrer?.full_name, position: r.referrer?.position })));
@@ -200,16 +212,16 @@ function ApologyPage() {
         setLoading(true);
         try {
             const submissionData = {
-                title: `시말서 (${employee?.full_name})`,
-                document_number: formData.document_number, 
-                content: JSON.stringify({ ...formData, requesterName: employee.full_name, requesterDepartment: employee.department, requesterPosition: employee.position }),
+                title: `시말서 (${requesterInfo.full_name})`,
+                document_number: formData.document_number,
+                content: JSON.stringify({ ...formData, requesterName: requesterInfo.full_name, requesterDepartment: requesterInfo.department, requesterPosition: requesterInfo.position }),
                 document_type: 'apology',
                 approver_ids: approvers,
                 referrer_ids: referrers.filter(r => r.id),
-                requester_id: employee.id,
-                requester_name: employee.full_name,
-                requester_department: employee.department,
-                requester_position: employee.position,
+                requester_id: requesterInfo.id,
+                requester_name: requesterInfo.full_name,
+                requester_department: requesterInfo.department,
+                requester_position: requesterInfo.position,
                 attachments: attachments,
             };
 
@@ -264,8 +276,8 @@ function ApologyPage() {
                         <div className="space-y-4 font-black">
                             <h1 className="text-4xl font-black tracking-tighter uppercase font-black font-black">시 말 서</h1>
                             <div className="flex flex-col text-[11px] space-y-1 font-black">
-                                <span>기안부서 : {employee?.department}</span>
-                                <span>기안자 : {employee?.full_name} {employee?.position}</span>
+                                <span>기안부서 : {requesterInfo.department}</span>
+                                <span>기안자 : {requesterInfo.full_name} {requesterInfo.position}</span>
                             </div>
                         </div>
 
@@ -285,7 +297,7 @@ function ApologyPage() {
                                     <tr className="h-20 font-black text-black">
                                         <td className="border border-black p-1 text-center align-middle font-black font-black">
                                             <div className="text-slate-300 font-black border-2 border-slate-200 rounded-full w-10 h-10 flex items-center justify-center mx-auto text-[7px] leading-tight uppercase font-black">Draft</div>
-                                            <div className="mt-1 font-black text-[9px] font-black">{employee?.full_name}</div>
+                                            <div className="mt-1 font-black text-[9px] font-black">{requesterInfo.full_name}</div>
                                         </td>
                                         {approvers.map((app, i) => (
                                             <td key={i} className="border border-black p-1 text-center align-middle font-black font-black">
@@ -355,7 +367,7 @@ function ApologyPage() {
                             <p className="text-[13px] font-black font-black font-black">위와 같이 시말서를 제출하며, 향후 재발 방지를 약속합니다.</p>
                             <div className="space-y-2 font-black">
                                 <p className="text-[14px] font-black underline underline-offset-4 decoration-1 font-mono font-black">{new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'})}</p>
-                                <p className="text-xl font-black uppercase tracking-widest mt-4 font-black">제출자: {employee?.full_name} (인)</p>
+                                <p className="text-xl font-black uppercase tracking-widest mt-4 font-black">제출자: {requesterInfo.full_name} (인)</p>
                             </div>
                         </div>
                     </div>

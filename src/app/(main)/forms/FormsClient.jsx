@@ -757,7 +757,7 @@ function ForwardedFormRow({ forward, onDetail, onFavorite }) {
 }
 
 // ──────────────────────── 서식 행 ────────────────────────
-function FormRow({ form, isAdmin, onFavorite, onForward, onEdit, onVersion, onDelete, onDetail, onActivity }) {
+function FormRow({ form, isAdmin, canViewActivity, onFavorite, onForward, onEdit, onVersion, onDelete, onDetail, onActivity }) {
   const now = new Date();
   const isExpired = form.expires_at && new Date(form.expires_at) < now;
   const isExpiringSoon = form.expires_at && !isExpired &&
@@ -824,7 +824,7 @@ function FormRow({ form, isAdmin, onFavorite, onForward, onEdit, onVersion, onDe
           : '—'}
       </div>
 
-      <div className="flex items-center gap-1" style={{ width: isAdmin ? 252 : 140, flexShrink: 0 }}>
+      <div className="flex items-center gap-1" style={{ width: rowActionsWidth(isAdmin, canViewActivity), flexShrink: 0 }}>
         <button onClick={() => onFavorite(form.id)}
           className={`p-1.5 rounded-lg transition-colors shrink-0
             ${form.is_favorite ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'}`}>
@@ -838,29 +838,43 @@ function FormRow({ form, isAdmin, onFavorite, onForward, onEdit, onVersion, onDe
           className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg border border-blue-200 hover:border-blue-300 transition-colors shrink-0">
           <Download size={10} /> 다운로드
         </a>
-        {isAdmin && (
+        {(isAdmin || canViewActivity) && (
           <div className="flex items-center gap-0 ml-0.5">
-            <button onClick={() => onActivity(form)} title="활동 이력"
-              className="p-1.5 rounded-lg text-slate-300 hover:text-purple-500 hover:bg-purple-50 transition-colors">
-              <ClipboardList size={13} />
-            </button>
-            <button onClick={() => onVersion(form)} title="버전 관리"
-              className="p-1.5 rounded-lg text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors">
-              <History size={13} />
-            </button>
-            <button onClick={() => onEdit(form)} title="수정"
-              className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors">
-              <Edit2 size={13} />
-            </button>
-            <button onClick={() => onDelete(form.id)} title="삭제"
-              className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
-              <Trash2 size={13} />
-            </button>
+            {/* 활동 이력은 임아름 본인에게만 노출 (다른 관리자에게도 비활성화) */}
+            {canViewActivity && (
+              <button onClick={() => onActivity(form)} title="활동 이력"
+                className="p-1.5 rounded-lg text-slate-300 hover:text-purple-500 hover:bg-purple-50 transition-colors">
+                <ClipboardList size={13} />
+              </button>
+            )}
+            {isAdmin && (
+              <>
+                <button onClick={() => onVersion(form)} title="버전 관리"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors">
+                  <History size={13} />
+                </button>
+                <button onClick={() => onEdit(form)} title="수정"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                  <Edit2 size={13} />
+                </button>
+                <button onClick={() => onDelete(form.id)} title="삭제"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+// isAdmin이면 4개 아이콘(활동이력·버전관리·수정·삭제), 임아름 단독이면 활동이력 1개만 노출되므로 폭을 맞춘다
+function rowActionsWidth(isAdmin, canViewActivity) {
+  if (isAdmin) return 252;
+  if (canViewActivity) return 168;
+  return 140;
 }
 
 // ──────────────────────── 메인 컴포넌트 ────────────────────────
@@ -876,6 +890,8 @@ export default function FormsClient() {
     () => employee?.role === 'admin' || employee?.department === '관리부',
     [employee]
   );
+  // 활동 이력은 다른 관리자에게도 노출하지 않고 임아름 본인에게만 노출한다
+  const canViewActivity = employee?.full_name === '임아름';
 
   const [searchTerm, setSearchTerm] = useState('');
   // viewMode: 'all' | 'favorites' | 'forwarded' | 'pinned' | `${labelId}`
@@ -1198,7 +1214,7 @@ export default function FormsClient() {
               <div style={{ width: 34, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">버전</div>
               <div style={{ width: 30, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">다운</div>
               <div style={{ width: 56, flexShrink: 0 }} className="text-[11px] font-medium text-slate-400 text-center">유효기한</div>
-              <div style={{ width: isAdmin ? 252 : 140, flexShrink: 0 }} />
+              <div style={{ width: rowActionsWidth(isAdmin, canViewActivity), flexShrink: 0 }} />
             </div>
             <div className="mx-5 border-b border-slate-100 mb-1 shrink-0" />
 
@@ -1211,7 +1227,7 @@ export default function FormsClient() {
                     <span className="text-[11px] font-medium text-amber-600">필수 서식</span>
                   </div>
                   {pinnedForms.map(form => (
-                    <FormRow key={form.id} form={form} isAdmin={isAdmin}
+                    <FormRow key={form.id} form={form} isAdmin={isAdmin} canViewActivity={canViewActivity}
                       onFavorite={handleFavorite}
                       onForward={setForwardTarget}
                       onEdit={f => { setEditTarget(f); setShowUpload(true); }}
@@ -1226,7 +1242,7 @@ export default function FormsClient() {
 
               {normalForms.length > 0
                 ? normalForms.map(form => (
-                    <FormRow key={form.id} form={form} isAdmin={isAdmin}
+                    <FormRow key={form.id} form={form} isAdmin={isAdmin} canViewActivity={canViewActivity}
                       onFavorite={handleFavorite}
                       onForward={setForwardTarget}
                       onEdit={f => { setEditTarget(f); setShowUpload(true); }}

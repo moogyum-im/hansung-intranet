@@ -1,7 +1,6 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { isAdmin } from '@/lib/formAccessLevel';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,11 +11,12 @@ export async function GET(request, { params }) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department')
+    .select('full_name')
     .eq('id', user.id)
     .single();
 
-  if (!isAdmin(profile)) return NextResponse.json({ error: '권한 없음' }, { status: 403 });
+  // 활동 이력은 임아름 본인만 조회 가능
+  if (profile?.full_name !== '임아름') return NextResponse.json({ error: '권한 없음' }, { status: 403 });
 
   const { data, error } = await supabase
     .from('form_activity_log')

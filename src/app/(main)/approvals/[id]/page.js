@@ -159,9 +159,15 @@ export default function ApprovalDetailPage() {
         }
     };
 
-    const isEditable =
+    // 상신자가 상신 직후(아무도 승인 안 함)에는 상신자 본인이,
+    // 이후로는 현재 결재 차례인 사람(current_approver_id)이 기존 내용을 열어 수정할 수 있다.
+    const isOwnerBeforeAnyApproval =
         document.status === 'pending' &&
         (employee?.id === document.requester_id || employee?.id === document.author_id);
+    const isCurrentApprover = !!document.current_approver_id && employee?.id === document.current_approver_id;
+    const isEditable =
+        !['완료', '반려'].includes(document.status) &&
+        (isOwnerBeforeAnyApproval || isCurrentApprover);
     const editPath = DOC_TYPE_TO_PATH[document.document_type];
 
     return (

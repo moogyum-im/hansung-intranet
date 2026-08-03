@@ -40,6 +40,12 @@ function BusinessTripWritePage() {
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
     const [existingAttachments, setExistingAttachments] = useState([]);
+    const [originalRequester, setOriginalRequester] = useState(null);
+
+    // 수정 모드에서는 문서의 원래 기안자 정보를 유지하고, 새 문서 작성 시에만 로그인한 본인을 기안자로 표시한다.
+    const requesterInfo = editId && originalRequester ? originalRequester : {
+        id: employee?.id, full_name: employee?.full_name, department: employee?.department, position: employee?.position
+    };
 
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
@@ -99,6 +105,12 @@ function BusinessTripWritePage() {
                 setFormData(prev => ({ ...prev, ...content }));
                 setAttachments(doc.attachments || []);
                 setExistingAttachments(doc.attachments || []);
+                setOriginalRequester({
+                    id: doc.requester_id,
+                    full_name: doc.requester_name,
+                    department: doc.requester_department,
+                    position: doc.requester_position,
+                });
             }
             if (approversData) setApprovers(approversData.map(a => ({ id: a.approver_id, full_name: a.approver?.full_name, position: a.approver?.position })));
             if (referrersData) setReferrers(referrersData.map(r => ({ id: r.referrer_id, full_name: r.referrer?.full_name, position: r.referrer?.position })));
@@ -201,16 +213,16 @@ function BusinessTripWritePage() {
         setLoading(true);
         try {
             const submissionData = {
-                title: `${formData.title} (${employee?.full_name})`,
+                title: `${formData.title} (${requesterInfo.full_name})`,
                 document_number: formData.document_number, // 🚀 문서번호 파라미터 추가
                 content: JSON.stringify({ ...formData, duration }),
                 document_type: 'business_trip',
                 approver_ids: approvers,
                 referrer_ids: referrers.filter(r => r.id).map(ref => ({ id: ref.id, full_name: ref.full_name, position: ref.position })),
-                requester_id: employee.id,
-                requester_name: employee.full_name,
-                requester_department: employee.department,
-                requester_position: employee.position,
+                requester_id: requesterInfo.id,
+                requester_name: requesterInfo.full_name,
+                requester_department: requesterInfo.department,
+                requester_position: requesterInfo.position,
                 attachments: attachments,
             };
 
@@ -264,7 +276,7 @@ function BusinessTripWritePage() {
                         <div className="space-y-4 font-black">
                             <h1 className="text-4xl font-black tracking-tighter uppercase font-black">출 장 신 청 서</h1>
                             <div className="flex flex-col text-[11px] space-y-1 font-black">
-                                <span>기안부서 : {employee?.department}</span>
+                                <span>기안부서 : {requesterInfo.department}</span>
                                 <span>작성일자 : {new Date().toLocaleDateString('ko-KR')}</span>
                             </div>
                         </div>
@@ -285,7 +297,7 @@ function BusinessTripWritePage() {
                                     <tr className="h-20 font-black text-black font-black">
                                         <td className="border border-black p-1 text-center align-middle font-black font-black">
                                             <div className="text-slate-300 font-black border-2 border-slate-200 rounded-full w-10 h-10 flex items-center justify-center mx-auto text-[7px] leading-tight uppercase font-black">Draft</div>
-                                            <div className="mt-1 font-black text-[9px] font-black">{employee?.full_name}</div>
+                                            <div className="mt-1 font-black text-[9px] font-black">{requesterInfo.full_name}</div>
                                         </td>
                                         {approvers.map((app, i) => (
                                             <td key={i} className="border border-black p-1 text-center align-middle font-black">

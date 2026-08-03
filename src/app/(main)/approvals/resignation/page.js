@@ -31,6 +31,12 @@ function ResignationPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [attachments, setAttachments] = useState([]);
     const [existingAttachments, setExistingAttachments] = useState([]);
+    const [originalRequester, setOriginalRequester] = useState(null);
+
+    // 수정 모드에서는 문서의 원래 기안자 정보를 유지하고, 새 문서 작성 시에만 로그인한 본인을 기안자로 표시한다.
+    const requesterInfo = editId && originalRequester ? originalRequester : {
+        id: employee?.id, full_name: employee?.full_name, department: employee?.department, position: employee?.position
+    };
 
     // 1. [데이터 보존] 로컬 스토리지 복구 (수정/임시저장 모드에서는 건너뜀)
     useEffect(() => {
@@ -81,6 +87,12 @@ function ResignationPage() {
                 setFormData(prev => ({ ...prev, ...content }));
                 setAttachments(doc.attachments || []);
                 setExistingAttachments(doc.attachments || []);
+                setOriginalRequester({
+                    id: doc.requester_id,
+                    full_name: doc.requester_name,
+                    department: doc.requester_department,
+                    position: doc.requester_position,
+                });
             }
             if (approversData) setApprovers(approversData.map(a => ({ id: a.approver_id, full_name: a.approver?.full_name, position: a.approver?.position })));
             if (referrersData) setReferrers(referrersData.map(r => ({ id: r.referrer_id, full_name: r.referrer?.full_name, position: r.referrer?.position })));
@@ -179,12 +191,12 @@ function ResignationPage() {
         setLoading(true);
         try {
             const submissionData = {
-                title: `사직서 (${employee?.full_name})`,
+                title: `사직서 (${requesterInfo.full_name})`,
                 content: JSON.stringify({
                     ...formData,
-                    requesterName: employee.full_name,
-                    requesterDepartment: employee.department,
-                    requesterPosition: employee.position,
+                    requesterName: requesterInfo.full_name,
+                    requesterDepartment: requesterInfo.department,
+                    requesterPosition: requesterInfo.position,
                 }),
                 document_type: 'resignation',
                 approver_ids: approvers.map(app => {
@@ -195,10 +207,10 @@ function ResignationPage() {
                     const emp = allEmployees.find(e => e.id === ref.id);
                     return { id: ref.id, full_name: emp?.full_name, position: emp?.position, department: emp?.department };
                 }),
-                requester_id: employee.id,
-                requester_name: employee.full_name,
-                requester_department: employee.department,
-                requester_position: employee.position,
+                requester_id: requesterInfo.id,
+                requester_name: requesterInfo.full_name,
+                requester_department: requesterInfo.department,
+                requester_position: requesterInfo.position,
                 attachments: attachments,
             };
 
@@ -250,9 +262,9 @@ function ResignationPage() {
                             <tbody>
                                 <tr className="border-b border-r border-black divide-x divide-black">
                                     <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase">기안부서</th>
-                                    <td className="p-3 font-black">{employee?.department}</td>
+                                    <td className="p-3 font-black">{requesterInfo.department}</td>
                                     <th className="bg-slate-50 p-3 w-24 text-left border-black font-black uppercase">기안자</th>
-                                    <td className="p-3 font-black">{employee?.full_name} {employee?.position}</td>
+                                    <td className="p-3 font-black">{requesterInfo.full_name} {requesterInfo.position}</td>
                                 </tr>
                                 <tr className="border-b border-r border-black divide-x divide-black font-black">
                                     <th className="bg-slate-50 p-3 text-left border-black font-black uppercase">작성일자</th>
@@ -309,7 +321,7 @@ function ResignationPage() {
                         </section>
 
                         <div className="pt-10 text-center font-black">
-                            <p className="text-xl font-black uppercase tracking-widest">기안자: {employee?.full_name} (인)</p>
+                            <p className="text-xl font-black uppercase tracking-widest">기안자: {requesterInfo.full_name} (인)</p>
                         </div>
                     </div>
                 </div>

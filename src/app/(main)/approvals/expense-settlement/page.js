@@ -47,6 +47,12 @@ function ExpenseSettlementPage() {
 
     const [approvers, setApprovers] = useState([]);
     const [referrers, setReferrers] = useState([]);
+    const [originalRequester, setOriginalRequester] = useState(null);
+
+    // 수정 모드에서는 문서의 원래 기안자 정보를 유지하고, 새 문서 작성 시에만 로그인한 본인을 기안자로 표시한다.
+    const requesterInfo = editId && originalRequester ? originalRequester : {
+        id: employee?.id, full_name: employee?.full_name, department: employee?.department, position: employee?.position
+    };
 
     const groupedEmployees = useMemo(() => {
         const groups = allEmployees.reduce((acc, emp) => {
@@ -83,6 +89,12 @@ function ExpenseSettlementPage() {
                     setFormData(prev => ({ ...prev, ...content }));
                     if (content.mapAttachments) setMapAttachments(content.mapAttachments);
                     if (content.receiptAttachments) setReceiptAttachments(content.receiptAttachments);
+                    setOriginalRequester({
+                        id: doc.requester_id,
+                        full_name: doc.requester_name,
+                        department: doc.requester_department,
+                        position: doc.requester_position,
+                    });
                 }
                 if (approversData) setApprovers(approversData.map(a => ({ id: a.approver_id, full_name: a.approver?.full_name, position: a.approver?.position })));
                 if (referrersData) setReferrers(referrersData.map(r => ({ id: r.referrer_id, full_name: r.referrer?.full_name, position: r.referrer?.position })));
@@ -192,7 +204,7 @@ function ExpenseSettlementPage() {
         setLoading(true);
         try {
             const submissionData = {
-                title: `${formData.title} (${employee?.full_name})`,
+                title: `${formData.title} (${requesterInfo.full_name})`,
                 document_number: formData.document_number, // 🚀 문서번호 파라미터 추가
                 content: JSON.stringify({ ...formData, fuelAndDepreciation, otherTotal, totalAmount, mapAttachments, receiptAttachments }),
                 document_type: 'expense_settlement',
@@ -204,10 +216,10 @@ function ExpenseSettlementPage() {
                     const emp = allEmployees.find(e => e.id === r.id);
                     return { id: r.id, full_name: emp?.full_name, position: emp?.position };
                 }),
-                requester_id: employee.id, 
-                requester_name: employee.full_name,
-                requester_department: employee.department, 
-                requester_position: employee.position,
+                requester_id: requesterInfo.id,
+                requester_name: requesterInfo.full_name,
+                requester_department: requesterInfo.department,
+                requester_position: requesterInfo.position,
                 attachments: [...mapAttachments, ...receiptAttachments],
             };
 
@@ -261,7 +273,7 @@ function ExpenseSettlementPage() {
                         <div className="space-y-4">
                             <h1 className="text-4xl font-black tracking-tighter uppercase font-black">출 장 여 비 정 산 서</h1>
                             <div className="flex flex-col text-[11px] space-y-1 font-black">
-                                <span>기안자 : {employee?.full_name} {employee?.position}</span>
+                                <span>기안자 : {requesterInfo.full_name} {requesterInfo.position}</span>
                                 <span>작성일자 : {new Date().toLocaleDateString('ko-KR')}</span>
                             </div>
                         </div>
@@ -282,7 +294,7 @@ function ExpenseSettlementPage() {
                                     <tr className="h-20 font-black text-black">
                                         <td className="border border-black p-1 text-center align-middle font-black">
                                             <div className="text-slate-300 font-black border-2 border-slate-200 rounded-full w-10 h-10 flex items-center justify-center mx-auto text-[7px] leading-tight uppercase font-black">Draft</div>
-                                            <div className="mt-1 font-black text-[9px] font-black">{employee?.full_name}</div>
+                                            <div className="mt-1 font-black text-[9px] font-black">{requesterInfo.full_name}</div>
                                         </td>
                                         {approvers.map((app, i) => (
                                             <td key={i} className="border border-black p-1 text-center align-middle font-black">
@@ -417,7 +429,7 @@ function ExpenseSettlementPage() {
 
                         <div className="pt-16 text-center space-y-4 font-black">
                             <p className="text-[14px] font-black underline underline-offset-4 decoration-1 font-mono font-black">{new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'})}</p>
-                            <p className="text-xl font-black uppercase tracking-widest mt-4 font-black">기안자: {employee?.full_name} (인)</p>
+                            <p className="text-xl font-black uppercase tracking-widest mt-4 font-black">기안자: {requesterInfo.full_name} (인)</p>
                         </div>
                     </div>
                 </div>
