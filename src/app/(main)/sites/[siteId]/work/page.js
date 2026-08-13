@@ -394,6 +394,17 @@ export default function DailyWorkPage() {
     const [tomorrowPhotos, setTomorrowPhotos] = useState([]);
     const maxPhotoRows = useMemo(() => Math.max(todayPhotos.length, tomorrowPhotos.length, 1), [todayPhotos, tomorrowPhotos]);
 
+    // 옛날 UI가 캐시되어 보이는 문제 방지: 페이지 접속 시 5초 후 1회 강제 새로고침
+    useEffect(() => {
+        const RELOAD_FLAG = 'workReportForceReloaded';
+        if (sessionStorage.getItem(RELOAD_FLAG)) return;
+        const timer = setTimeout(() => {
+            sessionStorage.setItem(RELOAD_FLAG, '1');
+            window.location.reload();
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, []);
+
     useEffect(() => {
         if (isReadOnly) {
             setExpandedSections({});
@@ -443,8 +454,7 @@ export default function DailyWorkPage() {
         if (!name) return null;
         const spec = (row.spec || '').trim();
         const vendor = (row.vendor || '').trim();
-        const price = row.price ? row.price.toString().replace(/,/g, '').trim() : '0';
-        return `${name}_${spec}_${vendor}_${price}`;
+        return `${name}_${spec}_${vendor}`;
     };
 
     const syncWithAllPastData = useCallback(async (currentData, isNewReport = false) => {
