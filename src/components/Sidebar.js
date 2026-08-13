@@ -207,9 +207,7 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
         menuItems.push({ name: '입사 안내', href: '/onboarding', icon: BookOpen, isOnboarding: true });
     }
 
-    if (employee && employee.position === '회장') {
-        menuItems.push({ name: '카이 발전량 데이터', href: 'https://kaienergy-intranet-31fc.vercel.app/database/generation', icon: Database, isExternal: true });
-    }
+    const isChairman = employee && employee.position === '회장';
 
     const canAccessDb = employee && checkMenu('db', employee.department === '전략기획부' && employee.full_name === '임아름');
     const canAccessBidRecords = employee && checkMenu('bid_records', employee.full_name === '임아름' || employee.full_name === '임무겸');
@@ -339,6 +337,29 @@ export default function Sidebar({ isOpen, onClose, openSidebar }) {
                             </Link>
                         );
                     })}
+
+                    {/* 카이 — 회장님만 노출 */}
+                    {isChairman && (
+                        <div className="mt-1 pt-2 space-y-0.5 border-t border-slate-700/50">
+                            {[
+                                { name: '카이 발전량 데이터', href: 'https://kaienergy-intranet-31fc.vercel.app/database/generation', icon: Database },
+                                { name: '카이 현장 보고', href: 'https://kaienergy-intranet-31fc.vercel.app/work/자은주민바람발전소', icon: Construction },
+                            ].map((item) => (
+                                <a
+                                    key={item.name}
+                                    href={item.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={onClose}
+                                    className="flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-all group relative bg-white/[0.03] hover:bg-slate-800 text-slate-300 hover:text-white"
+                                >
+                                    <item.icon size={18} className="mr-3 text-slate-400 group-hover:text-white" />
+                                    <span className="flex-1">{item.name}</span>
+                                    <ExternalLink size={12} className="text-slate-500 group-hover:text-slate-300" />
+                                </a>
+                            ))}
+                        </div>
+                    )}
                 </nav>
 
                 {/* 입찰 기록 관리 섹션 — 임아름, 임무겸만 노출 */}
