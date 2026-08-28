@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 import { 
   Users, Search, Bell, ChevronDown, Wallet, ShieldAlert, 
   CalendarDays, RefreshCw, Loader2, Eye, FileEdit, SendHorizontal, LayoutDashboard,
-  Save, X
+  Save, X, CreditCard
 } from 'lucide-react';
 
 const formatCurrency = (num) => num ? Number(num).toLocaleString('ko-KR') : '';
@@ -141,7 +141,8 @@ export default function PayrollManagementPage() {
       { name: '통합 대시보드', path: '/admin-portal', icon: LayoutDashboard },
       { name: '인사 관리', path: '/admin-portal/members', icon: Users },
       { name: '연차 관리', path: '/admin-portal/hr', icon: CalendarDays },
-      { name: '급여 정산', path: '/admin-portal/payroll', icon: Wallet }
+      { name: '급여 정산', path: '/admin-portal/payroll', icon: Wallet },
+      ...(employee?.full_name === '임아름' ? [{ name: '명함 신청', path: '/admin-portal/business-cards', icon: CreditCard }] : [])
     ];
 
     if (authLoading) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-blue-600" /></div>;

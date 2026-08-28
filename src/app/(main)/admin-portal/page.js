@@ -17,7 +17,8 @@ import {
   RefreshCw,
   Loader2,
   Receipt,
-  LayoutDashboard
+  LayoutDashboard,
+  CreditCard
 } from 'lucide-react';
 
 const formatNumber = (num) => {
@@ -138,7 +139,8 @@ export default function AdminPortalPage() {
     { name: '통합 대시보드', path: '/admin-portal', icon: LayoutDashboard },
     { name: '인사 관리', path: '/admin-portal/members', icon: Users },
     { name: '연차 관리', path: '/admin-portal/hr', icon: CalendarDays },
-    { name: '급여 정산', path: '/admin-portal/payroll', icon: Wallet }
+    { name: '급여 정산', path: '/admin-portal/payroll', icon: Wallet },
+    ...(employee?.full_name === '임아름' ? [{ name: '명함 신청', path: '/admin-portal/business-cards', icon: CreditCard }] : [])
   ];
 
   if (authLoading) return <div className="flex h-screen items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
