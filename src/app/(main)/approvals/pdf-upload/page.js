@@ -35,6 +35,8 @@ function PdfUploadPage() {
             acc[dept].push(emp);
             return acc;
         }, {});
+        const positionOrder = { '회장': 1, '사장': 2, '부사장': 3, '전무': 4, '상무': 5, '이사': 6, '부장': 7, '총괄팀장': 8, '차장': 9, '과장': 10, '대리': 11, '주임': 12, '사원': 13, '기사': 14 };
+        Object.values(groups).forEach(list => list.sort((a, b) => (positionOrder[a.position] || 99) - (positionOrder[b.position] || 99) || (a.full_name || '').localeCompare(b.full_name || '')));
         const priority = { '최고 경영진': 1, '공무부': 2, '관리부': 3, '전략기획부': 4 };
         return Object.keys(groups)
             .sort((a, b) => (priority[a] || 999) - (priority[b] || 999) || a.localeCompare(b))
