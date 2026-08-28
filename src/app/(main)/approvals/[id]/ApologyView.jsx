@@ -8,6 +8,7 @@ import {
     Printer, FileText, CheckCircle, XCircle, Users, Download, Trash2, Paperclip, ImageIcon, MessageSquare, ShieldAlert
 } from 'lucide-react';
 import { usePrintImageFit } from '@/hooks/usePrintImageFit';
+import { notifyApprovalAction } from '@/lib/approvalNotifications';
 
 export default function ApologyView({ doc, employee, approvalHistory, referrerHistory }) {
     usePrintImageFit();
@@ -79,6 +80,7 @@ export default function ApologyView({ doc, employee, approvalHistory, referrerHi
                 await supabase.from('approval_document_approvers').update({ status: '대기' }).eq('id', nextStep.id);
                 await supabase.from('approval_documents').update({ status: '진행중', current_approver_id: nextStep.approver_id }).eq('id', doc.id);
             }
+            await notifyApprovalAction({ doc, approvals: approvalHistory, referrers: referrerHistory, currentStep, newStatus, comment: approvalComment });
             window.location.reload();
         } catch (e) { toast.error("처리 중 오류"); } finally { setActionLoading(false); }
     };

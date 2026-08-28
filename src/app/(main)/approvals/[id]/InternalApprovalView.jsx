@@ -10,6 +10,7 @@ import {
     Settings, Users, ChevronRight, ImageIcon, FileText, MessageSquare, ShieldAlert
 } from 'lucide-react';
 import { usePrintImageFit } from '@/hooks/usePrintImageFit';
+import { notifyApprovalAction } from '@/lib/approvalNotifications';
 
 export default function InternalApprovalView({ doc, employee, approvalHistory, referrerHistory }) {
     usePrintImageFit();
@@ -105,6 +106,7 @@ export default function InternalApprovalView({ doc, employee, approvalHistory, r
                 await supabase.from('approval_document_approvers').update({ status: '대기' }).eq('id', nextStep.id);
                 await supabase.from('approval_documents').update({ status: '진행중', current_approver_id: nextStep.approver_id }).eq('id', doc.id);
             }
+            await notifyApprovalAction({ doc, approvals: approvalHistory, referrers: referrerHistory, currentStep, newStatus, comment: approvalComment });
             window.location.reload();
         } catch (error) { toast.error("처리 실패"); } finally { setActionLoading(false); }
     };

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
+import { notifyApprovalAction } from '@/lib/approvalNotifications';
 import {
     Printer, Download, FileText, Paperclip,
     CheckCircle, XCircle, Users, MessageSquare, ShieldAlert
@@ -76,6 +77,7 @@ export default function PdfFormView({ doc, employee, approvalHistory, referrerHi
                     .update({ status: '진행중', current_approver_id: nextStep.approver_id })
                     .eq('id', doc.id);
             }
+            await notifyApprovalAction({ doc, approvals: approvalHistory, referrers: referrerHistory, currentStep, newStatus, comment: approvalComment });
             window.location.reload();
         } catch { toast.error('처리 실패'); } finally { setActionLoading(false); }
     };
