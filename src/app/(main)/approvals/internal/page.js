@@ -13,6 +13,7 @@ import { saveApprovalDraft, loadApprovalDraft } from '@/lib/approvalDraft';
 // 🚀 [핵심 수정 1] 사내 맞춤형 초경량 리치 텍스트 에디터 (글자색, 배경색, 굵게)
 const SimpleRichTextEditor = ({ value, onChange, placeholder, minHeight = "400px" }) => {
     const editorRef = useRef(null);
+    const [isDragOver, setIsDragOver] = useState(false);
 
     useEffect(() => {
         if (editorRef.current && value && editorRef.current.innerHTML !== value) {
@@ -24,6 +25,55 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, minHeight = "400px
         document.execCommand(cmd, false, arg);
         editorRef.current.focus();
         onChange(editorRef.current.innerHTML);
+    };
+
+    // 드롭 지점(캡쳐 파일을 놓은 위치)에 커서를 맞춰야 엉뚱한 곳에 이미지가 삽입되지 않는다.
+    const setCaretFromPoint = (x, y) => {
+        let range = null;
+        if (document.caretRangeFromPoint) {
+            range = document.caretRangeFromPoint(x, y);
+        } else if (document.caretPositionFromPoint) {
+            const pos = document.caretPositionFromPoint(x, y);
+            if (pos) {
+                range = document.createRange();
+                range.setStart(pos.offsetNode, pos.offset);
+                range.collapse(true);
+            }
+        }
+        if (range) {
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    };
+
+    const insertImageFile = (file) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            editorRef.current.focus();
+            document.execCommand('insertHTML', false, `<img src="${ev.target.result}" style="max-width:100%;" />`);
+            onChange(editorRef.current.innerHTML);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+        if (files.length === 0) return;
+        setCaretFromPoint(e.clientX, e.clientY);
+        files.forEach(insertImageFile);
+    };
+
+    const handlePaste = (e) => {
+        const items = Array.from(e.clipboardData?.items || []);
+        const imageItem = items.find(item => item.type.startsWith('image/'));
+        if (imageItem) {
+            e.preventDefault();
+            insertImageFile(imageItem.getAsFile());
+        }
     };
 
     return (
@@ -39,13 +89,18 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, minHeight = "400px
                 <button type="button" onClick={(e) => { e.preventDefault(); execCmd('hiliteColor', 'yellow'); }} className="flex items-center gap-1 px-2 py-1 bg-yellow-100 border border-yellow-400 text-yellow-800 hover:bg-yellow-200 text-[10px] font-black rounded-sm transition-colors">
                     <Highlighter size={12} /> 형광펜
                 </button>
+                <span className="text-[9px] text-slate-400 ml-auto font-black">캡쳐 이미지를 이 영역에 드래그하거나 붙여넣기(Ctrl+V) 하세요</span>
             </div>
             <div
                 ref={editorRef}
                 style={{ minHeight }}
-                className="p-6 text-[13px] leading-relaxed outline-none focus:bg-slate-50/50 transition-all font-black whitespace-pre-wrap"
+                className={`p-6 text-[13px] leading-relaxed outline-none focus:bg-slate-50/50 transition-all font-black whitespace-pre-wrap ${isDragOver ? 'bg-blue-50 ring-2 ring-inset ring-blue-400' : ''}`}
                 contentEditable
                 onInput={() => onChange(editorRef.current.innerHTML)}
+                onDrop={handleDrop}
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onPaste={handlePaste}
                 placeholder={placeholder}
             />
         </div>
