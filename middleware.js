@@ -5,8 +5,12 @@ import { NextResponse } from 'next/server';
 export async function middleware(req) {
   const { pathname } = req.nextUrl;
 
-  // 공급업체 입력 페이지는 인증 없이 접근 허용
-  if (pathname.startsWith('/submit')) {
+  // 공급업체 입력 페이지, 비밀번호 찾기/재설정 페이지는 인증 없이 접근 허용
+  if (
+    pathname.startsWith('/submit') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password')
+  ) {
     return NextResponse.next();
   }
 

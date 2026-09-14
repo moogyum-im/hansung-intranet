@@ -95,6 +95,12 @@ export default function LoginPage() {
                             {isSubmitting ? '로그인 중...' : '로그인'}
                         </button>
                     </div>
+
+                    <div className="text-center">
+                        <Link href="/forgot-password" className="text-sm text-white/70 hover:text-white underline">
+                            비밀번호를 잊으셨나요?
+                        </Link>
+                    </div>
                 </form>
             </div>
         </div>

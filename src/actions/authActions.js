@@ -3,6 +3,7 @@ import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { translateAuthError } from '@/lib/authErrorMessages';
 
 export async function loginAction(formData) {
     const cookieStore = cookies();
@@ -18,7 +19,7 @@ export async function loginAction(formData) {
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (authError) {
-        return { success: false, error: '로그인 실패: ' + authError.message };
+        return { success: false, error: translateAuthError(authError, '로그인에 실패했습니다. 잠시 후 다시 시도해주세요.') };
     }
 
     // 2. 인증 성공 후, 재직 상태 확인
@@ -108,7 +109,7 @@ export async function updateUserPasswordAction(formData) {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
 
     if (error) {
-        return { success: false, error: '비밀번호 변경에 실패했습니다: ' + error.message };
+        return { success: false, error: translateAuthError(error, '비밀번호 변경에 실패했습니다. 잠시 후 다시 시도해주세요.') };
     }
 
     return { success: true, message: '비밀번호가 성공적으로 변경되었습니다.' };
