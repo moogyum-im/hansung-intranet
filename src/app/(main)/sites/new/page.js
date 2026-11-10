@@ -33,9 +33,9 @@ function NewSiteContent() {
         async function loadInitialData() {
             const { data: profiles } = await supabase
                 .from('profiles')
-                .select('id, full_name, department, position')
+                .select('id, full_name, department, position, employment_status')
                 .order('full_name', { ascending: true });
-            if (profiles) setAllUsers(profiles);
+            if (profiles) setAllUsers(profiles.filter(u => u.employment_status !== '퇴사' && u.employment_status !== '휴직'));
 
             if (siteId) {
                 const [{ data: siteData, error }, { data: extraAdmins }] = await Promise.all([
@@ -58,6 +58,16 @@ function NewSiteContent() {
         }
         loadInitialData();
     }, [siteId]);
+
+    const groupByDepartment = (users) => {
+        const groups = {};
+        users.forEach(user => {
+            const dept = user.department || '부서 미지정';
+            if (!groups[dept]) groups[dept] = [];
+            groups[dept].push(user);
+        });
+        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+    };
 
     const formatPrice = (value) => {
         if (!value) return "";
@@ -253,7 +263,11 @@ function NewSiteContent() {
                                 <label className="block text-[11px] font-black text-slate-400 mb-2 uppercase tracking-widest">현장 소장 (책임자)</label>
                                 <select name="pm_id" value={formData.pm_id} onChange={handleChange} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl font-bold outline-none font-sans">
                                     <option value="">-- 소장 선택 --</option>
-                                    {allUsers.map(user => <option key={user.id} value={user.id}>{user.full_name} ({user.department})</option>)}
+                                    {groupByDepartment(allUsers).map(([dept, users]) => (
+                                        <optgroup key={dept} label={dept}>
+                                            {users.map(user => <option key={user.id} value={user.id}>{user.full_name}</option>)}
+                                        </optgroup>
+                                    ))}
                                 </select>
                             </div>
                             <div className="md:col-span-2 font-sans">
@@ -290,31 +304,36 @@ function NewSiteContent() {
                                                 />
                                             </div>
                                             <div className="max-h-44 overflow-y-auto p-2 space-y-0.5">
-                                                {allUsers
-                                                    .filter(u => u.id !== formData.pm_id)
-                                                    .filter(u => !adminSearchTerm.trim() ||
-                                                        u.full_name.includes(adminSearchTerm.trim()) ||
-                                                        (u.department || '').includes(adminSearchTerm.trim()))
-                                                    .map(user => {
-                                                        const checked = additionalAdminIds.includes(user.id);
-                                                        return (
-                                                            <label key={user.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors font-sans ${checked ? 'bg-slate-800 text-white' : 'hover:bg-slate-50'}`}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={checked}
-                                                                    onChange={() => setAdditionalAdminIds(prev =>
-                                                                        prev.includes(user.id)
-                                                                            ? prev.filter(id => id !== user.id)
-                                                                            : [...prev, user.id]
-                                                                    )}
-                                                                    className="accent-white w-4 h-4 shrink-0"
-                                                                />
-                                                                <span className="text-[12px] font-bold truncate">{user.full_name}</span>
-                                                                <span className={`text-[10px] ml-auto shrink-0 ${checked ? 'text-slate-300' : 'text-slate-400'}`}>{user.department}</span>
-                                                            </label>
-                                                        );
-                                                    })
-                                                }
+                                                {groupByDepartment(
+                                                    allUsers
+                                                        .filter(u => u.id !== formData.pm_id)
+                                                        .filter(u => !adminSearchTerm.trim() ||
+                                                            u.full_name.includes(adminSearchTerm.trim()) ||
+                                                            (u.department || '').includes(adminSearchTerm.trim()))
+                                                ).map(([dept, users]) => (
+                                                    <div key={dept}>
+                                                        <div className="px-3 pt-2 pb-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">{dept}</div>
+                                                        {users.map(user => {
+                                                            const checked = additionalAdminIds.includes(user.id);
+                                                            return (
+                                                                <label key={user.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors font-sans ${checked ? 'bg-slate-800 text-white' : 'hover:bg-slate-50'}`}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={checked}
+                                                                        onChange={() => setAdditionalAdminIds(prev =>
+                                                                            prev.includes(user.id)
+                                                                                ? prev.filter(id => id !== user.id)
+                                                                                : [...prev, user.id]
+                                                                        )}
+                                                                        className="accent-white w-4 h-4 shrink-0"
+                                                                    />
+                                                                    <span className="text-[12px] font-bold truncate">{user.full_name}</span>
+                                                                    <span className={`text-[10px] ml-auto shrink-0 ${checked ? 'text-slate-300' : 'text-slate-400'}`}>{user.position}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ))}
                                             </div>
                                         </>
                                     )}

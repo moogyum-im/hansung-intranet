@@ -22,7 +22,11 @@ export default function PayrollManagementPage() {
     const [payrollData, setPayrollData] = useState({});
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [targetMonth, setTargetMonth] = useState('2026-03');
+    const [targetMonth, setTargetMonth] = useState(() => {
+        const now = new Date();
+        const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        return `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
+    });
 
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importSourceMonth, setImportSourceMonth] = useState('');
