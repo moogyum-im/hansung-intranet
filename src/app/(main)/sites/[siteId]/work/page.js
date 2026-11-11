@@ -33,6 +33,8 @@ const safeParseJSON = (data) => {
     }
 };
 
+const getTodayKST = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+
 const ManualLedgerTable = ({ list, readOnly, setFormData }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [colWidths, setColWidths] = useState({});
@@ -702,7 +704,7 @@ export default function DailyWorkPage() {
                 setTomorrowPhotos(buildPhotoArray('tomorrow'));
             } else {
                 const initialData = {
-                    report_date: new Date().toISOString().split('T')[0], weather: '맑음', report_category: categoryType, total_contract_amount: site?.budget || 0,
+                    report_date: getTodayKST(), weather: '맑음', report_category: categoryType, total_contract_amount: site?.budget || 0,
                     progress_plant_prev: '0.0000', progress_facility_prev: '0.0000', progress_plant: '0.0000', progress_facility: '0.0000',
                     settlement_costs: [{ item: '수목', prev: 0, today: 0, total: 0 }, { item: '자재납품 및 시공', prev: 0, today: 0, total: 0 }, { item: '자재비', prev: 0, today: 0, total: 0 }, { item: '장비대', prev: 0, today: 0, total: 0 }, { item: '노무비', prev: 0, today: 0, total: 0 }, { item: '운반비', prev: 0, today: 0, total: 0 }, { item: '기타경비', prev: 0, today: 0, total: 0 }],
                     labor_costs: [], material_costs: [], equipment_costs: [], tree_costs: [], transport_costs: [], subcontract_costs: [], etc_costs: [],
