@@ -510,10 +510,11 @@ export default function DailyWorkPage() {
                         const uKey = getUniqueKey(row);
                         if (!uKey) return;
 
-                        if (!historicalDataMap[key][uKey]) {
-                            historicalDataMap[key][uKey] = { ...row, count: 0, total: 0, prev_count: 0, accum: 0 };
-                        }
-                        historicalDataMap[key][uKey].prev_count += parseNumber(row.count);
+                        // 과거 보고서를 날짜 오름차순으로 순회하므로, 단가/직종 등 설명 필드는 매번 현재 행 값으로
+                        // 덮어써서 "가장 최근에 입력한 값"이 남도록 하고, 공수(prev_count)만 계속 누적한다.
+                        // (예전에는 uKey가 처음 등장한 날의 단가가 그대로 고정되어, 이후 단가가 올라도 반영되지 않는 문제가 있었음)
+                        const accumulatedPrevCount = parseNumber(historicalDataMap[key][uKey]?.prev_count) + parseNumber(row.count);
+                        historicalDataMap[key][uKey] = { ...row, count: 0, total: 0, accum: 0, prev_count: accumulatedPrevCount };
                     });
                 }
             });
