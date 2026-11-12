@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client'; 
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import { 
-    ArrowLeft, Search, Plus, ChevronRight, 
-    FileText, Briefcase, Info, User, Calendar, MapPin, Building2, Activity, Users, Clock, Eye, Leaf, Hammer
+import {
+    ArrowLeft, Search, Plus, ChevronRight,
+    FileText, Briefcase, Info, User, Calendar, MapPin, Building2, Activity, Users, Clock, Eye, Leaf, Hammer, Download, Loader2
 } from 'lucide-react';
 
 const formatLogTime = (log) => {
@@ -25,7 +25,10 @@ export default function SiteDetailPage() {
     const [activeTab, setActiveTab] = useState('board'); 
     const [searchTerm, setSearchTerm] = useState('');
     const [accessLogs, setAccessLogs] = useState([]);
-    
+    const [exportStart, setExportStart] = useState('');
+    const [exportEnd, setExportEnd] = useState('');
+    const [isExporting, setIsExporting] = useState(false);
+
     const hasTrackedInitial = useRef(false);
 
     const loadAccessLogs = useCallback(async () => {
@@ -103,6 +106,22 @@ export default function SiteDetailPage() {
         }
     };
 
+    const handleExportExcel = async () => {
+        if (!exportStart || !exportEnd) return toast.error("조회 기간을 설정해주세요.");
+        if (exportStart > exportEnd) return toast.error("시작일이 종료일보다 늦을 수 없습니다.");
+        setIsExporting(true);
+        const toastId = toast.loading("엑셀 파일을 생성하고 있습니다... (사진이 많으면 시간이 걸릴 수 있습니다)");
+        try {
+            const { exportDailyReportsExcel } = await import('@/lib/exportDailyReportsExcel');
+            const { count } = await exportDailyReportsExcel({ site, reports, startDate: exportStart, endDate: exportEnd });
+            toast.success(`작업일보 ${count}건을 엑셀로 내려받았습니다.`, { id: toastId });
+        } catch (e) {
+            toast.error(e.message || "엑셀 생성에 실패했습니다.", { id: toastId });
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     if (loading) return <div className="h-screen flex items-center justify-center text-[11px] font-black text-slate-400 bg-white tracking-[0.2em] font-sans uppercase">데이터 동기화 중...</div>;
 
     const filteredReports = reports.filter(r => r.report_date.includes(searchTerm));
@@ -158,6 +177,15 @@ export default function SiteDetailPage() {
                                         </div>
                                         <button onClick={() => router.push(`/sites/${siteId}/work`)} className="bg-slate-900 text-white px-5 py-2 rounded text-[11px] font-black hover:bg-black transition-all">작업일보 작성</button>
                                     </div>
+                                </div>
+                                <div className="flex items-center justify-end gap-2 mb-4 px-1">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">엑셀 다운로드 기간</span>
+                                    <input type="date" value={exportStart} onChange={e=>setExportStart(e.target.value)} className="px-3 py-2 bg-white border border-slate-200 rounded text-[11px] outline-none font-black focus:border-blue-600 transition-all" />
+                                    <span className="text-slate-300 font-black">~</span>
+                                    <input type="date" value={exportEnd} onChange={e=>setExportEnd(e.target.value)} className="px-3 py-2 bg-white border border-slate-200 rounded text-[11px] outline-none font-black focus:border-blue-600 transition-all" />
+                                    <button onClick={handleExportExcel} disabled={isExporting} className="bg-emerald-600 text-white px-5 py-2 rounded text-[11px] font-black hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-60">
+                                        {isExporting ? <Loader2 size={14} className="animate-spin"/> : <Download size={14}/>} 엑셀 다운로드
+                                    </button>
                                 </div>
                                 <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
                                     {filteredReports.map((r, idx) => (
