@@ -1446,7 +1446,7 @@ await supabase.from('construction_sites').update({
                             )}
 
                             <div className={`${visibleSections.manual_ledger ? 'col-span-4' : 'col-span-9'} bg-white flex flex-col justify-start h-full`}>
-                                <div className="bg-slate-800 text-white h-8 flex items-center justify-center text-[10px] uppercase font-black shrink-0">실시간 정산 내역 합계</div>
+                                <div className="bg-slate-800 text-white h-8 flex items-center justify-center text-[10px] uppercase font-black shrink-0">정산 내역 합계</div>
                                 <table className="w-full text-[10px] border-collapse" style={{ tableLayout: 'fixed' }}>
                                     <colgroup>
                                         <col style={{ width: '25%' }} />

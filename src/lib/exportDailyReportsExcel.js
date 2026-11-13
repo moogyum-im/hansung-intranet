@@ -345,7 +345,7 @@ export async function exportDailyReportsExcel({ site, reports, startDate, endDat
         const ledgerR = writeTable(sheet, blockStart, ledgerStart, ledgerSpan, { title: '식재 및 반입 수기 장부(금일분)', fields: LEDGER_MAP.fields, labels: LEDGER_MAP.labels }, todayLedgerRows);
 
         let settleR = blockStart;
-        settleR = band(sheet, settleR, settleStart, settleSpan, '▣ 실시간 정산 내역 합계', { fill: 'FFE2E8F0', size: 9 });
+        settleR = band(sheet, settleR, settleStart, settleSpan, '▣ 정산 내역 합계', { fill: 'FFE2E8F0', size: 9 });
         {
             const widths = distribute(settleSpan, [1, 1, 1, 1]);
             const offsets = offsetsOf(settleStart, widths);

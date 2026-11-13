@@ -305,7 +305,7 @@ export default function DailyReportSection({ siteId, onViewChange }) {
                                 <div className="flex flex-col font-black font-black"><div className="bg-blue-50 p-1.5 text-center border-b border-slate-400 text-[10px] font-black italic-none">금일 작업 요약</div><textarea className="w-full flex-1 p-2 text-xs outline-none font-black resize-none font-sans italic-none" value={formData?.today_work} onChange={e=>setFormData({...formData, today_work: e.target.value})} /></div>
                             </div>
                             <div className="col-span-4 border border-slate-400 h-full shadow-md overflow-hidden font-sans font-black italic-none font-black">
-                                <div className="bg-slate-900 text-white p-1 text-center text-[10px] font-black italic-none">실시간 정산 내역 합계</div>
+                                <div className="bg-slate-900 text-white p-1 text-center text-[10px] font-black italic-none">정산 내역 합계</div>
                                 <table className="w-full text-[9px] border-collapse font-sans font-black italic-none font-black font-black">
                                     <thead className="bg-slate-100 border-b border-slate-400 font-black"><tr><th className="p-0.5 border-r border-slate-400 font-black">항목</th><th className="border-r border-slate-400 font-black">전일누계</th><th className="border-r border-slate-400 font-black font-black">금일</th><th className="font-black">전체누계</th></tr></thead>
                                     <tbody>
